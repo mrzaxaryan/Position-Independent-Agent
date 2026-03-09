@@ -62,6 +62,38 @@ This project shares its CMake build system, VSCode configuration, and preset str
 └── runtime/                # PIR submodule (build system + runtime library)
 ```
 
+## Supported Commands
+
+All commands use a binary protocol over WebSocket. Each message starts with a `UINT8` command type byte followed by command-specific payload. Every response begins with a `UINT32` status code (`0` = success, non-zero = error).
+
+### `GetUUID` (0x00)
+
+Returns the agent's unique identifier.
+
+- **Request**: No payload (command type byte only)
+- **Response**: `UINT32 status` + `UUID` (16 bytes)
+
+### `GetDirectoryContent` (0x01)
+
+Lists all entries in a directory (excluding `.` and `..`).
+
+- **Request**: `WCHAR[] directoryPath` (null-terminated wide string)
+- **Response**: `UINT32 status` + `UINT64 entryCount` + `DirectoryEntry[entryCount]`
+
+### `GetFileContent` (0x02)
+
+Reads file content at a specified offset.
+
+- **Request**: `UINT64 readCount` + `UINT64 offset` + `WCHAR[] filePath`
+- **Response**: `UINT32 status` + `UINT64 bytesRead` + `UINT8[bytesRead]` (file data)
+
+### `GetFileChunkHash` (0x03)
+
+Computes a SHA-256 hash of a file chunk.
+
+- **Request**: `UINT64 chunkSize` + `UINT64 offset` + `WCHAR[] filePath`
+- **Response**: `UINT32 status` + `UINT8[32]` (SHA-256 digest)
+
 ## Configuration
 
 The agent UUID and server URL are configured in the source:
