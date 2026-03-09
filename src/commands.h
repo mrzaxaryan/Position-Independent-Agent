@@ -18,8 +18,6 @@ enum StatusCode : UINT32
     StatusUnknownCommand = 2
 };
 
-#define AGENT_UUID (PCCHAR) "12345678-9abc-def0-1234-56789abcdef0"_embed
-
 using CommandHandler = VOID (*)(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength);
 
 VOID Handle_GetUUIDCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength);

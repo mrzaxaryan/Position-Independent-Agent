@@ -8,6 +8,7 @@
 #include "sha2.h"
 #include "uuid.h"
 #include "vector.h"
+#include "machine_id.h"
 
 static VOID WriteErrorResponse(PPCHAR response, PUSIZE responseLength, StatusCode code)
 {
@@ -23,10 +24,10 @@ static BOOL IsDotEntry(const DirectoryEntry &entry)
 
 VOID Handle_GetUUIDCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength)
 {
-    auto result = UUID::FromString(AGENT_UUID);
+    auto result = GetMachineUUID();
     if (!result.IsOk())
     {
-        LOG_ERROR("Failed to parse agent UUID string");
+        LOG_ERROR("Failed to retrieve machine UUID from OS");
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
