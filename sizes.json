@@ -11,6 +11,8 @@
   "linux_i386_bin": "76.2 KB",
   "freebsd_i386_exe": "75.1 KB",
   "freebsd_i386_bin": "74.0 KB",
+  "uefi_x86_64_exe": "74.0 KB",
+  "uefi_x86_64_bin": "72.1 KB",
   "windows_x86_64_exe": "80.5 KB",
   "windows_x86_64_bin": "78.5 KB",
   "freebsd_aarch64_exe": "59.0 KB",
