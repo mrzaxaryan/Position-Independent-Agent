@@ -227,7 +227,10 @@ Compiles to fully position-independent, zero-dependency binaries that communicat
   - `GetDirectoryContent` - Lists directory entries for a given path
   - `GetFileContent` - Reads file content at a specified offset and length
   - `GetFileChunkHash` - Computes SHA-256 hash of a file chunk
-- **Cross-Platform** - Builds for Windows, Linux, macOS, UEFI, and Solaris across x86, x86_64, ARM, and AArch64 architectures
+  - `WriteShell` - Sends input to an interactive shell session
+  - `ReadShell` - Reads output from an interactive shell session
+- **Interactive Shell** - Spawns a persistent shell process (`cmd.exe` on Windows, `/bin/sh` on Unix) with piped I/O for remote command execution
+- **Cross-Platform** - Builds for Windows, Linux, macOS, FreeBSD, Solaris, UEFI, Android, and iOS across x86, x86_64, ARM, AArch64, RISC-V, and MIPS architectures
 - **Position-Independent** - Output binary is fully relocatable with no external dependencies
 
 ## Prerequisites
@@ -274,8 +277,10 @@ This project shares its CMake build system, VSCode configuration, and preset str
 ├── CMakePresets.json        # Build presets for all platform/arch combinations
 ├── src/
 │   ├── main.cc             # Entry point and WebSocket message loop
+│   ├── commands.h          # Command types and handler declarations
 │   ├── commandsHandler.cc  # Command handler implementations
-│   └── commands.h          # Command types and handler declarations
+│   ├── shell.h             # Shell abstraction (process + pipes)
+│   └── shell.cc            # Shell implementation (cmd.exe / /bin/sh)
 └── runtime/                # PIR submodule (build system + runtime library)
 ```
 
@@ -319,6 +324,20 @@ Computes a SHA-256 hash of a file chunk.
 
 - **Request**: `UINT64 chunkSize` + `UINT64 offset` + `CHAR16[] filePath`
 - **Response**: `UINT32 status` + `UINT8[32]` (SHA-256 digest)
+
+### `WriteShell` (0x04)
+
+Sends input to the interactive shell session. Creates the shell process on first use.
+
+- **Request**: `CHAR16[] input` (null-terminated UTF-16LE string)
+- **Response**: `UINT32 status`
+
+### `ReadShell` (0x05)
+
+Reads available output from the interactive shell session.
+
+- **Request**: No payload (command type byte only)
+- **Response**: `UINT32 status` + `UINT64 bytesRead` + `UINT8[bytesRead]` (shell output)
 
 ## Configuration
 
