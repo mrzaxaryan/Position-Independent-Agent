@@ -1,6 +1,7 @@
 #include "commands.h"
 #include "runtime.h"
 #include "websocket_client.h"
+#include "shell.h"
 
 INT32 start()
 {
