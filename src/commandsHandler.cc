@@ -306,3 +306,26 @@ VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
 
     LOG_INFO("ReadShell command handled successfully");
 }
+
+VOID Handle_GetDisplaysCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
+{
+    LOG_INFO("Handling GetDisplays command");
+
+    auto displays = Screen::GetDevices();
+    if (!displays)
+    {
+        LOG_ERROR("Failed to get display devices");
+        WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        return;
+    }
+
+    ScreenDeviceList &deviceList = displays.Value();
+    *responseLength += sizeof(deviceList.Count) + (USIZE)(deviceList.Count * sizeof(ScreenDevice));
+
+    *response = new CHAR[*responseLength];
+    *(PUINT32)*response = StatusCode::StatusSuccess;
+    Memory::Copy(*response + sizeof(UINT32), &deviceList.Count, sizeof(deviceList.Count));
+    Memory::Copy(*response + sizeof(UINT32) + sizeof(deviceList.Count), deviceList.Devices, (USIZE)(deviceList.Count * sizeof(ScreenDevice)));
+
+    LOG_INFO("GetDisplays command handled successfully with %u display(s)", deviceList.Count);
+}

