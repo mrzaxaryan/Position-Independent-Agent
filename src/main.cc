@@ -5,7 +5,7 @@
 
 INT32 start()
 {
-    auto url = "https://relay.nostdlib.workers.dev/agent";
+    const CHAR url[] = "https://relay.nostdlib.workers.dev/agent";
 
     Context context;
 
