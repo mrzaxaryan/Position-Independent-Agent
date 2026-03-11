@@ -86,8 +86,8 @@ static VOID WriteErrorResponse(PPCHAR response, PUSIZE responseLength, StatusCod
 
 static BOOL IsDotEntry(const DirectoryEntry &entry)
 {
-    return StringUtils::Equals((PWCHAR)entry.Name, (const WCHAR *)L"."_embed) ||
-           StringUtils::Equals((PWCHAR)entry.Name, (const WCHAR *)L".."_embed);
+    return StringUtils::Equals((PWCHAR)entry.Name, (const WCHAR *)L".") ||
+           StringUtils::Equals((PWCHAR)entry.Name, (const WCHAR *)L"..");
 }
 
 VOID Handle_GetDirectoryContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
