@@ -43,38 +43,38 @@
         },
         {
             "name": "windows-i386-debug",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/windows/i386/output.exe",
             "cwd": "${workspaceFolder}",
-            "internalConsoleOptions": "openOnSessionStart",
+            "console": "integratedTerminal",
             "preLaunchTask": "windows-i386-debug"
         },
         {
             "name": "windows-x86_64-debug",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/windows/x86_64/output.exe",
             "cwd": "${workspaceFolder}",
-            "internalConsoleOptions": "openOnSessionStart",
+            "console": "integratedTerminal",
             "preLaunchTask": "windows-x86_64-debug"
         },
         {
             "name": "windows-aarch64-debug",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/windows/aarch64/output.exe",
             "cwd": "${workspaceFolder}",
-            "internalConsoleOptions": "openOnSessionStart",
+            "console": "integratedTerminal",
             "preLaunchTask": "windows-aarch64-debug"
         },
         {
             "name": "windows-armv7a-debug",
-            "type": "lldb-dap",
+            "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/windows/armv7a/output.exe",
             "cwd": "${workspaceFolder}",
-            "internalConsoleOptions": "openOnSessionStart",
+            "console": "integratedTerminal",
             "preLaunchTask": "windows-armv7a-debug"
         },
         {
@@ -186,7 +186,7 @@
             "preLaunchTask": "linux-mips64-release"
         },
         {
-            "name": "linux-i386-debug",
+            "name": "linux-i386-debug (WSL)",
             "type": "lldb-dap",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/linux/i386/output.elf",
@@ -195,7 +195,7 @@
             "preLaunchTask": "linux-i386-debug"
         },
         {
-            "name": "linux-x86_64-debug",
+            "name": "linux-x86_64-debug (WSL)",
             "type": "lldb-dap",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/linux/x86_64/output.elf",
@@ -204,7 +204,7 @@
             "preLaunchTask": "linux-x86_64-debug"
         },
         {
-            "name": "linux-armv7a-debug",
+            "name": "linux-armv7a-debug (WSL)",
             "type": "lldb-dap",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/linux/armv7a/output.elf",
@@ -213,7 +213,7 @@
             "preLaunchTask": "linux-armv7a-debug"
         },
         {
-            "name": "linux-aarch64-debug",
+            "name": "linux-aarch64-debug (WSL)",
             "type": "lldb-dap",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/linux/aarch64/output.elf",
@@ -222,7 +222,7 @@
             "preLaunchTask": "linux-aarch64-debug"
         },
         {
-            "name": "linux-riscv32-debug",
+            "name": "linux-riscv32-debug (WSL)",
             "type": "lldb-dap",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/linux/riscv32/output.elf",
@@ -231,7 +231,7 @@
             "preLaunchTask": "linux-riscv32-debug"
         },
         {
-            "name": "linux-riscv64-debug",
+            "name": "linux-riscv64-debug (WSL)",
             "type": "lldb-dap",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/linux/riscv64/output.elf",
@@ -240,7 +240,7 @@
             "preLaunchTask": "linux-riscv64-debug"
         },
         {
-            "name": "linux-mips64-debug",
+            "name": "linux-mips64-debug (WSL)",
             "type": "lldb-dap",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/linux/mips64/output.elf",
@@ -412,7 +412,7 @@
             "preLaunchTask": "android-aarch64-release"
         },
         {
-            "name": "android-x86_64-debug",
+            "name": "android-x86_64-debug (WSL)",
             "type": "lldb-dap",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/android/x86_64/output.elf",
@@ -421,7 +421,7 @@
             "preLaunchTask": "android-x86_64-debug"
         },
         {
-            "name": "android-armv7a-debug",
+            "name": "android-armv7a-debug (WSL)",
             "type": "lldb-dap",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/android/armv7a/output.elf",
@@ -430,7 +430,7 @@
             "preLaunchTask": "android-armv7a-debug"
         },
         {
-            "name": "android-aarch64-debug",
+            "name": "android-aarch64-debug (WSL)",
             "type": "lldb-dap",
             "request": "launch",
             "program": "${workspaceFolder}/build/debug/android/aarch64/output.elf",
