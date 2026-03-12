@@ -229,6 +229,8 @@ Compiles to fully position-independent, zero-dependency binaries that communicat
   - `GetFileChunkHash` - Computes SHA-256 hash of a file chunk
   - `WriteShell` - Sends input to an interactive shell session
   - `ReadShell` - Reads output from an interactive shell session
+  - `GetDisplays` - Enumerates connected display devices with resolution and position info
+  - `GetScreenshot` - Captures a JPEG-encoded screenshot of a specified display
 - **Interactive Shell** - Spawns a persistent shell process (`cmd.exe` on Windows, `/bin/sh` on Unix) with piped I/O for remote command execution
 - **Cross-Platform** - Builds for Windows, Linux, macOS, FreeBSD, Solaris, UEFI, Android, and iOS across x86, x86_64, ARM, AArch64, RISC-V, and MIPS architectures
 - **Position-Independent** - Output binary is fully relocatable with no external dependencies
@@ -280,7 +282,8 @@ This project shares its CMake build system, VSCode configuration, and preset str
 │   ├── commands.h          # Command types and handler declarations
 │   ├── commandsHandler.cc  # Command handler implementations
 │   ├── shell.h             # Shell abstraction (process + pipes)
-│   └── shell.cc            # Shell implementation (cmd.exe / /bin/sh)
+│   ├── shell.cc            # Shell implementation (cmd.exe / /bin/sh)
+│   └── vnc.h               # VNC/display context and JPEG buffer types
 └── runtime/                # PIR submodule (build system + runtime library)
 ```
 
@@ -338,6 +341,30 @@ Reads available output from the interactive shell session.
 
 - **Request**: No payload (command type byte only)
 - **Response**: `UINT32 status` + `UINT64 bytesRead` + `UINT8[bytesRead]` (shell output)
+
+### `GetDisplays` (0x06)
+
+Enumerates all connected display devices with their geometry.
+
+- **Request**: No payload (command type byte only)
+- **Response**: `UINT32 status` + `UINT32 displayCount` + `ScreenDevice[displayCount]`
+
+`ScreenDevice` layout (packed):
+
+| Field     | Type     | Description                                  |
+|-----------|----------|----------------------------------------------|
+| `Left`    | `INT32`  | X position on the virtual desktop            |
+| `Top`     | `INT32`  | Y position on the virtual desktop            |
+| `Width`   | `UINT32` | Horizontal resolution in pixels              |
+| `Height`  | `UINT32` | Vertical resolution in pixels                |
+| `Primary` | `BOOL`   | Whether this is the primary display          |
+
+### `GetScreenshot` (0x07)
+
+Captures a JPEG-encoded screenshot of a specified display.
+
+- **Request**: `UINT32 displayIndex` + `UINT32 quality` (JPEG quality 1-100) + `UINT32 isFullScreen`
+- **Response**: `UINT32 status` + `UINT32 jpegSize` + `UINT8[jpegSize]` (JPEG data)
 
 ## Configuration
 
