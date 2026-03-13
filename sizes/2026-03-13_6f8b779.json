@@ -1,0 +1,15 @@
+{
+  "date": "2026-03-13",
+  "commit": "6f8b779",
+  "sizes": {
+    "linux_i386_bin": 95081,
+    "uefi_aarch64_bin": 72308,
+    "solaris_x86_64_bin": 77559,
+    "solaris_aarch64_bin": 67740,
+    "linux_riscv64_bin": 65872,
+    "freebsd_riscv64_bin": 72560,
+    "uefi_x86_64_bin": 84619,
+    "linux_mips64_bin": 98448,
+    "solaris_i386_bin": 86216
+  }
+}
