@@ -364,7 +364,18 @@ Enumerates all connected display devices with their geometry.
 Captures a JPEG-encoded screenshot of a specified display.
 
 - **Request**: `UINT32 displayIndex` + `UINT32 quality` (JPEG quality 1-100) + `UINT32 isFullScreen`
-- **Response**: `UINT32 status` + `UINT32 jpegSize` + `UINT8[jpegSize]` (JPEG data)
+- **Response**: `UINT32 status` + `UINT32 countOfSegments` + `Segments[countOfSegments]`
+
+| Field         | Type               | Description                        |
+|---------------|--------------------|------------------------------------|
+| `X`           | `UINT32`           | X position on the virtual desktop  |
+| `Y`           | `UINT32`           | Y position on the virtual desktop  |
+| `sizeOfData`  | `UINT32`           | Size of image                      |
+| `imageAsJpeg` | `CHAR[sizeOfData]` | Image                              |
+
+ UINT32 x;
+    UINT32 y;
+    UINT32 sizeOfData; // Size of the jpeg data in bytes
 
 ## Configuration
 
