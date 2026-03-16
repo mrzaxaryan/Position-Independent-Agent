@@ -189,7 +189,7 @@ VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused
 
     USIZE responseOffset = sizeof(UINT32) + sizeof(UINT64);
     (void)file.SetOffset((USIZE)offset);
-    LOG_INFO("Reading file content with offset: %llu and count: %llu.", offset, readCount);
+    
     auto readResult = file.Read(Span<UINT8>((UINT8 *)(*response + responseOffset), (USIZE)readCount));
     UINT32 bytesRead = readResult ? readResult.Value() : 0;
 
