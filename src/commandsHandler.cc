@@ -137,6 +137,7 @@ VOID Handle_GetDirectoryContentCommand([[maybe_unused]] PCHAR command, [[maybe_u
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
             return;
         }
+        LOG_INFO("Directory entry added: %ws", entry.Name);
     }
 
     // Prepare the response buffer - writing entry count, status code and array of WireDirectoryEntry structures
@@ -186,6 +187,7 @@ VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused
 
     USIZE responseOffset = sizeof(UINT32) + sizeof(UINT64);
     (void)file.SetOffset((USIZE)offset);
+    LOG_INFO("Reading file content with offset: %llu and count: %llu.", offset, readCount);
     auto readResult = file.Read(Span<UINT8>((UINT8 *)(*response + responseOffset), (USIZE)readCount));
     UINT32 bytesRead = readResult ? readResult.Value() : 0;
 
@@ -229,11 +231,13 @@ VOID Handle_GetFileChunkHashCommand([[maybe_unused]] PCHAR command, [[maybe_unus
     while (totalRead < chunkSize)
     {
         UINT64 bytesToRead = Math::Min(bufferSize, chunkSize - totalRead);
+        LOG_INFO("Reading file chunk with offset: %llu and count: %llu.", offset + totalRead, bytesToRead);
         (void)file.SetOffset((USIZE)(offset + totalRead));
         auto readResult = file.Read(Span<UINT8>(buffer, (USIZE)bytesToRead));
         UINT32 bytesRead = readResult ? readResult.Value() : 0;
         if (bytesRead == 0)
             break;
+        LOG_INFO("Reading %u bytes from file for hashing.", bytesRead);
 
         sha256.Update(Span<const UINT8>(buffer, bytesRead));
         totalRead += bytesRead;
@@ -339,7 +343,7 @@ VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
     *(PUINT32)*response = StatusCode::StatusSuccess;
     StringUtils::Copy(Span<CHAR>(*response + sizeof(UINT32), readResultLenght), Span<const CHAR>(buffer, readResultLenght));
 
-    LOG_INFO("ReadShell command handled successfully");
+    LOG_INFO("ReadShell command handled successfully with %u bytes read", readResult.Value());
 }
 
 // Gets the list of display devices and their information
@@ -358,10 +362,11 @@ VOID Handle_GetDisplaysCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] 
     auto displays = Screen::GetDevices();
     if (!displays)
     {
-        LOG_ERROR("Failed to get display devices");
+        LOG_ERROR("Failed to get display devices (error code: %e).", displays.Error());
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
-    }
+    }  
+    LOG_INFO("Display devices enumerated successfully with %u display(s)", displays.Value().Count);
 
     ScreenDeviceList &deviceList = displays.Value();
 
@@ -378,7 +383,7 @@ VOID Handle_GetDisplaysCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] 
 }
 
 // Callback function for JPEG encoding - called by the encoder to write encoded data chunks
-VOID JspegCallback(PVOID context, PVOID data, INT32 size)
+VOID JpegCallback(PVOID context, PVOID data, INT32 size)
 {
     JpegBuffer *jpegBuffer = (JpegBuffer *)context;
 
@@ -483,7 +488,7 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     {
         // Encode JPEG, validate the result and write to response
         JpegBuffer jpegBuffer;
-        auto encodeResult = JpegEncoder::Encode(JspegCallback, &jpegBuffer, (INT32)quality, (INT32)device.Width, (INT32)device.Height, 3, Span<const UINT8>((UINT8 *)graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB)));
+        auto encodeResult = JpegEncoder::Encode(JpegCallback, &jpegBuffer, (INT32)quality, (INT32)device.Width, (INT32)device.Height, 3, Span<const UINT8>((UINT8 *)graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB)));
         if (encodeResult.IsErr())
         {
             LOG_ERROR("Failed to encode JPEG image (error code: %e).", encodeResult.Error());
@@ -532,6 +537,7 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
             return;
         }
+        LOG_INFO("Contours found successfully, count: %u", contourResult.Value().ContourCount);
         auto &contours = contourResult.Value();
 
         // Number of contours
@@ -616,7 +622,7 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
                 // Prepare the JPEG buffer for encoding
                 jpegBuffer.offset = 0;
 
-                auto encodeResult = JpegEncoder::Encode(JspegCallback, &jpegBuffer, (INT32)quality, (INT32)rectWeight, (INT32)rectHeight, 3, Span<const UINT8>((UINT8 *)rectScan0, rectWeight * rectHeight * sizeof(RGB)));
+                auto encodeResult = JpegEncoder::Encode(JpegCallback, &jpegBuffer, (INT32)quality, (INT32)rectWeight, (INT32)rectHeight, 3, Span<const UINT8>((UINT8 *)rectScan0, rectWeight * rectHeight * sizeof(RGB)));
                 if (encodeResult.IsErr())
                 {
                     LOG_ERROR("Failed to encode JPEG image (error code: %e).", encodeResult.Error());
