@@ -189,7 +189,7 @@ VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused
 
     USIZE responseOffset = sizeof(UINT32) + sizeof(UINT64);
     (void)file.SetOffset((USIZE)offset);
-    
+
     auto readResult = file.Read(Span<UINT8>((UINT8 *)(*response + responseOffset), (USIZE)readCount));
     UINT32 bytesRead = readResult ? readResult.Value() : 0;
 
@@ -293,9 +293,11 @@ VOID Handle_WriteShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] U
             return;
         }
         context->shell = new Shell(static_cast<Shell &&>(shellResult.Value()));
+        LOG_INFO("Shell instance created successfully");
     }
 
     // Writing the command to the shell
+    LOG_INFO("Executing command in shell: %s", command);
     auto writeResult = context->shell->Write(command, commandLength - sizeof('\0'));
     if (!writeResult)
     {
@@ -309,7 +311,7 @@ VOID Handle_WriteShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] U
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = StatusCode::StatusSuccess;
 
-    LOG_INFO("WriteShell command handled successfully");
+    LOG_INFO("WriteShell command handled successfully.");
 }
 
 // Reads a chunk of data from the shell's stdout
@@ -328,7 +330,9 @@ VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
             return;
         }
         context->shell = new Shell(static_cast<Shell &&>(shellResult.Value()));
+        LOG_INFO("Shell instance created successfully");
     }
+
     // Buffer to hold the data read from the shell
     CHAR buffer[4096];
     // Attempt to read from the shell and validate the result
@@ -339,7 +343,7 @@ VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
-    LOG_INFO("Read from shell successful, bytes read: %llu", readResult.Value());
+    LOG_INFO("Data read from shell successfully, buffer: %s",buffer);
 
     // For null termination
     auto readResultLenght = readResult.Value() + 1;
