@@ -165,12 +165,13 @@ VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused
     // Getting parameters from command buffer: read count, offset and file path
     UINT64 readCount = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
+    LOG_INFO("Reading file content with offset: %llu and count: %llu.", offset, readCount);
 
     // Decoding file path from command buffer
     USIZE pathOffset = sizeof(UINT64) + sizeof(UINT64);
     WCHAR filePath[1024];
     DecodeWirePath(command + pathOffset, commandLength > pathOffset ? commandLength - pathOffset : 0, filePath, 1024);
-    LOG_INFO("Getting file content for path: %ws", filePath);
+    LOG_INFO("Getting file content for path %ws", filePath);
     // Attempt to open the file and validate the result
     auto openResult = File::Open(filePath, File::ModeRead);
     if (!openResult)
@@ -178,7 +179,8 @@ VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused
         LOG_ERROR("Failed to open file: %ws (error code: %e).", filePath, openResult.Error());
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
-    }
+    }   
+    LOG_INFO("File opened successfully: %ws", filePath);
 
     // Prepare the response buffer - writing status code, bytes read and file content chunk
     File &file = openResult.Value();
@@ -194,7 +196,7 @@ VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused
     *(PUINT32)*response = StatusCode::StatusSuccess;
     *(PUINT64)(*response + sizeof(UINT32)) = bytesRead;
 
-    LOG_INFO("File content read successfully for %llu bytes requested, %u bytes read", readCount, bytesRead);
+    LOG_INFO("File content read successfully for %llu bytes requested, %llu bytes read", readCount, bytesRead);
 }
 
 // Computes the SHA-256 hash of a file chunk
@@ -204,6 +206,8 @@ VOID Handle_GetFileChunkHashCommand([[maybe_unused]] PCHAR command, [[maybe_unus
     // Getting parameters from command buffer: chunk size, offset and file path
     UINT64 chunkSize = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
+
+    LOG_INFO("Computing file chunk hash with offset: %llu and chunk size: %llu.", offset, chunkSize);
 
     // Decoding file path from command buffer
     USIZE hashPathOffset = sizeof(UINT64) + sizeof(UINT64);
@@ -219,6 +223,7 @@ VOID Handle_GetFileChunkHashCommand([[maybe_unused]] PCHAR command, [[maybe_unus
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
+    LOG_INFO("File opened successfully: %ws", filePath);
 
     File &file = openResult.Value();
     // Allocating a buffer for reading file chunks.
@@ -298,6 +303,7 @@ VOID Handle_WriteShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] U
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
+    LOG_INFO("Command written to shell successfully, bytes written: %llu", writeResult.Value());
 
     // Prepare the response buffer - writing status code
     *response = new CHAR[*responseLength];
@@ -333,6 +339,7 @@ VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
+    LOG_INFO("Read from shell successful, bytes read: %llu", readResult.Value());
 
     // For null termination
     auto readResultLenght = readResult.Value() + 1;
@@ -343,7 +350,7 @@ VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
     *(PUINT32)*response = StatusCode::StatusSuccess;
     StringUtils::Copy(Span<CHAR>(*response + sizeof(UINT32), readResultLenght), Span<const CHAR>(buffer, readResultLenght));
 
-    LOG_INFO("ReadShell command handled successfully with %u bytes read", readResult.Value());
+    LOG_INFO("ReadShell command handled successfully with %llu bytes read", readResult.Value());
 }
 
 // Gets the list of display devices and their information
