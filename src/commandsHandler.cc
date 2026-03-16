@@ -92,6 +92,8 @@ static BOOL IsDotEntry(const DirectoryEntry &entry)
 
 VOID Handle_GetDirectoryContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
+    LOG_INFO("Handling GetDirectoryContentCommand.");
+
     WCHAR directoryPath[1024];
     DecodeWirePath(command, commandLength, directoryPath, 1024);
     LOG_INFO("Getting directory content for path: %ws", directoryPath);
@@ -99,7 +101,7 @@ VOID Handle_GetDirectoryContentCommand([[maybe_unused]] PCHAR command, [[maybe_u
     auto result = DirectoryIterator::Create(directoryPath);
     if (!result.IsOk())
     {
-        LOG_ERROR("Invalid directory path: %ws", directoryPath);
+        LOG_ERROR("Invalid directory path: %ws. Operation failed (error code: %e).", directoryPath, result.Error());
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
@@ -141,10 +143,12 @@ VOID Handle_GetDirectoryContentCommand([[maybe_unused]] PCHAR command, [[maybe_u
         Memory::Zero(&wireEntries[i], sizeof(WireDirectoryEntry));
         ToWireEntry(entries.Data[i], wireEntries[i]);
     }
+    LOG_INFO("Directory content retrieved successfully with %llu entries", entryCount);
 }
 
 VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
+    LOG_INFO("Handling GetFileContentCommand.");
     UINT64 readCount = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
 
@@ -156,7 +160,7 @@ VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused
     auto openResult = File::Open(filePath, File::ModeRead);
     if (!openResult)
     {
-        LOG_ERROR("Failed to open file: %ws", filePath);
+        LOG_ERROR("Failed to open file: %ws (error code: %e).", filePath, openResult.Error());
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
@@ -172,10 +176,13 @@ VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused
 
     *(PUINT32)*response = StatusCode::StatusSuccess;
     *(PUINT64)(*response + sizeof(UINT32)) = bytesRead;
+
+    LOG_INFO("File content read successfully for %llu bytes requested, %u bytes read", readCount, bytesRead);
 }
 
 VOID Handle_GetFileChunkHashCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
+    LOG_INFO("Handling GetFileChunkHashCommand.");
     UINT64 chunkSize = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
 
@@ -187,7 +194,7 @@ VOID Handle_GetFileChunkHashCommand([[maybe_unused]] PCHAR command, [[maybe_unus
     auto openResult = File::Open(filePath, File::ModeRead);
     if (!openResult)
     {
-        LOG_ERROR("Failed to open file: %ws", filePath);
+        LOG_ERROR("Failed to open file: %ws (error code: %e).", filePath, openResult.Error());
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
@@ -226,7 +233,7 @@ VOID Handle_GetFileChunkHashCommand([[maybe_unused]] PCHAR command, [[maybe_unus
 
 VOID Handle_GetSystemInfoCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
-    LOG_INFO("Getting system info");
+    LOG_INFO("Handling GetSystemInfoCommand.");
 
     SystemInfo info;
     GetSystemInfo(&info);
@@ -236,7 +243,7 @@ VOID Handle_GetSystemInfoCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     *(PUINT32)*response = StatusCode::StatusSuccess;
     Memory::Copy(*response + sizeof(UINT32), &info, sizeof(SystemInfo));
 
-    LOG_INFO("System info: hostname=%s, arch=%s, platform=%s", info.Hostname, info.Architecture, info.Platform);
+    LOG_INFO("System info: hostname=%s, arch=%s, platform=%s retrieved successfully", info.Hostname, info.Architecture, info.Platform);
 }
 
 VOID Handle_WriteShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
@@ -249,7 +256,7 @@ VOID Handle_WriteShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] U
 
         if (!shellResult)
         {
-            LOG_ERROR("Failed to create shell");
+            LOG_ERROR("Failed to create shell (error code: %e).", shellResult.Error());
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
             return;
         }
@@ -259,7 +266,7 @@ VOID Handle_WriteShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] U
     auto writeResult = context->shell->Write(command, commandLength - sizeof('\0'));
     if (!writeResult)
     {
-        LOG_ERROR("Failed to write to shell");
+        LOG_ERROR("Failed to write to shell (error code: %e).", writeResult.Error());
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
@@ -279,7 +286,7 @@ VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
         auto shellResult = Shell::Create();
         if (!shellResult)
         {
-            LOG_ERROR("Failed to create shell");
+            LOG_ERROR("Failed to create shell (error code: %e).", shellResult.Error());
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
             return;
         }
@@ -291,7 +298,7 @@ VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
     auto readResult = context->shell->Read(buffer, sizeof(buffer));
     if (!readResult)
     {
-        LOG_ERROR("Failed to read from shell");
+        LOG_ERROR("Failed to read from shell (error code: %e).", readResult.Error());
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
@@ -391,11 +398,12 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
         auto displays = Screen::GetDevices();
         if (!displays)
         {
-            LOG_ERROR("Failed to get display devices");
+            LOG_ERROR("Failed to get display devices (error code: %e).", displays.Error());
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
             return;
         }
         context->vncContext->DeviceList = displays.Value();
+        LOG_INFO("Display devices enumerated successfully with %u display(s)", context->vncContext->DeviceList.Count);
     }
 
     // For simplicity, we capture the first display device. This can be extended to specify which device to capture.
@@ -439,10 +447,11 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
         auto encodeResult = JpegEncoder::Encode(JspegCallback, &jpegBuffer, (INT32)quality, (INT32)device.Width, (INT32)device.Height, 3, Span<const UINT8>((UINT8 *)graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB)));
         if (encodeResult.IsErr())
         {
-            LOG_ERROR("Failed to encode JPEG");
+            LOG_ERROR("Failed to encode JPEG image (error code: %e).", encodeResult.Error());
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
             return;
         }
+        LOG_INFO("JPEG encoding successful, size: %u bytes", jpegBuffer.size);
 
         // copy into screenshot buffer for next comparison
         Memory::Copy(graphics.screenshot, graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB));
@@ -480,7 +489,7 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
                                                           (INT32)device.Height, (INT32)device.Width);
         if (contourResult.IsErr())
         {
-            LOG_ERROR("Failed to find contours in bidiff");
+            LOG_ERROR("Failed to find contours in bidiff image (error code: %e).", contourResult.Error());
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
             return;
         }
@@ -571,11 +580,10 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
                 auto encodeResult = JpegEncoder::Encode(JspegCallback, &jpegBuffer, (INT32)quality, (INT32)rectWeight, (INT32)rectHeight, 3, Span<const UINT8>((UINT8 *)rectScan0, rectWeight * rectHeight * sizeof(RGB)));
                 if (encodeResult.IsErr())
                 {
-                    LOG_ERROR("Failed to encode JPEG");
+                    LOG_ERROR("Failed to encode JPEG image (error code: %e).", encodeResult.Error());
                     WriteErrorResponse(response, responseLength, StatusCode::StatusError);
                     return;
                 }
-
                 LOG_INFO("Rectangle encoded with size: %d.", jpegBuffer.size);
 
                 LOG_INFO("Reallocating memory for packet.");
