@@ -343,6 +343,7 @@ VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
+    buffer[readResult.Value()] = '\0'; // Null-terminate the buffer for safe logging
     LOG_INFO("Data read from shell successfully, buffer: %s",buffer);
 
     // For null termination
