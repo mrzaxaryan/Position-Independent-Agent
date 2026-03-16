@@ -471,21 +471,9 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
 
     // Get the Graphics structure for the specified display index and initialize buffers if they are not already allocated
     Graphics &graphics = context->vncContext->GraphicsList.graphicsArray[displayIndex];
-    if (graphics.currentScreenshot == nullptr)
-    {
-        graphics.currentScreenshot = new RGB[device.Width * device.Height];
-        isFullScreen = true;
-    }
-    if (graphics.screenshot == nullptr)
-    {
-        graphics.screenshot = new RGB[device.Width * device.Height];
-        isFullScreen = true;
-    }
-    if (graphics.bidiff == nullptr)
-    {
-        graphics.bidiff = new UINT8[device.Width * device.Height];
-        isFullScreen = true;
-    }
+    
+    if(!graphics.IsInitialized())
+        graphics.Init(device);
 
     // Attempt to capture the screen and validate the result
     if (!Screen::Capture(device, Span<RGB>(graphics.currentScreenshot, device.Width * device.Height)))
@@ -649,10 +637,9 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
                 packetSize += jpegBuffer.size + sizeof(rect.x) + sizeof(rect.y) + sizeof(rect.sizeOfData);
 
                 // Reallocate memory for the packet to hold the new rectangle data
-                auto oldPacket = packet;
                 auto newPacket = new CHAR[packetSize];
-                Memory::Copy(newPacket, oldPacket, offset);
-                delete[] oldPacket;
+                Memory::Copy(newPacket, packet, offset);
+                delete[] packet;
                 packet = newPacket;
 
                 LOG_INFO("Memory allocated.");
