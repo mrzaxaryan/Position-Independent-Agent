@@ -25,7 +25,7 @@ struct Graphics
             bidiff = nullptr;
         }
     }
-
+  
     BOOL IsInitialized() const
     {
         return currentScreenshot != nullptr && screenshot != nullptr && bidiff != nullptr;
