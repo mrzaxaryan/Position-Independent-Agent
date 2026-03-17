@@ -1,13 +1,37 @@
 #pragma once
 #include "runtime.h"
 
+struct JpegBuffer
+{
+    PUINT8 outputBuffer = nullptr;
+    UINT32 size = 0;
+    UINT32 offset = 0;
+
+    /// @brief Reset offset for reuse without freeing the underlying buffer
+    VOID Reset()
+    {
+        offset = 0;
+    }
+
+    ~JpegBuffer()
+    {
+        if (outputBuffer)
+        {
+            delete[] outputBuffer;
+            outputBuffer = nullptr;
+        }
+    }
+};
+
 struct Graphics
 {
     PRGB currentScreenshot; // Pointer to the current screenshot
     PRGB screenshot;        // Pointer to the screenshot of the display
     PUCHAR bidiff;          // Pointer to the binary difference data
+    PRGB rectBuffer;        // Reusable buffer for rectangle extraction
+    JpegBuffer jpegBuffer;  // Reusable JPEG encoding buffer (persists across frames)
 
-    Graphics() : currentScreenshot(nullptr), screenshot(nullptr), bidiff(nullptr) {}
+    Graphics() : currentScreenshot(nullptr), screenshot(nullptr), bidiff(nullptr), rectBuffer(nullptr) {}
 
     ~Graphics()
     {
@@ -26,8 +50,13 @@ struct Graphics
             delete[] bidiff;
             bidiff = nullptr;
         }
+        if (rectBuffer)
+        {
+            delete[] rectBuffer;
+            rectBuffer = nullptr;
+        }
     }
-    
+
     BOOL IsInitialized() const
     {
         return currentScreenshot != nullptr && screenshot != nullptr && bidiff != nullptr;
@@ -35,17 +64,22 @@ struct Graphics
 
     Graphics& Init(const ScreenDevice &device)
     {
+        USIZE pixelCount = (USIZE)device.Width * device.Height;
         if (currentScreenshot == nullptr)
         {
-            currentScreenshot = new RGB[device.Width * device.Height];
+            currentScreenshot = new RGB[pixelCount];
         }
         if (screenshot == nullptr)
         {
-            screenshot = new RGB[device.Width * device.Height];
+            screenshot = new RGB[pixelCount];
         }
         if (bidiff == nullptr)
         {
-            bidiff = new UINT8[device.Width * device.Height];
+            bidiff = new UINT8[pixelCount];
+        }
+        if (rectBuffer == nullptr)
+        {
+            rectBuffer = new RGB[pixelCount];
         }
         return *this;
     }
@@ -134,21 +168,5 @@ struct Rectangle
         Memory::Copy(buffer + bytesWritten, data, sizeOfData);
         bytesWritten += sizeOfData;
         return bytesWritten;
-    }
-};
-
-struct JpegBuffer
-{
-    PUINT8 outputBuffer = nullptr;
-    UINT32 size = 0;
-    UINT32 offset = 0;
-
-    ~JpegBuffer()
-    {
-        if (outputBuffer)
-        {
-            delete[] outputBuffer;
-            outputBuffer = nullptr;
-        }
     }
 };

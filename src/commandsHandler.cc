@@ -427,8 +427,8 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     // In case of full screen request, encode the whole screenshot as JPEG and send it back
     if (isFullScreen)
     {
-        JpegBuffer jpegBuffer;
-        auto encodeResult = JpegEncoder::Encode(JpegCallback, &jpegBuffer, (INT32)quality, (INT32)device.Width, (INT32)device.Height, 3, Span<const UINT8>((UINT8 *)graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB)));
+        graphics.jpegBuffer.Reset();
+        auto encodeResult = JpegEncoder::Encode(JpegCallback, &graphics.jpegBuffer, (INT32)quality, (INT32)device.Width, (INT32)device.Height, 3, Span<const UINT8>((UINT8 *)graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB)));
         if (encodeResult.IsErr())
         {
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
@@ -437,13 +437,13 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
 
         Memory::Copy(graphics.screenshot, graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB));
 
-        Rectangle rect(0, 0, jpegBuffer.offset, jpegBuffer.outputBuffer);
+        Rectangle rect(0, 0, graphics.jpegBuffer.offset, graphics.jpegBuffer.outputBuffer);
 
         // We are sending the full JPEG data in one segment, so the segment count is 1
         UINT32 countOfSegments = 1;
 
         // Write response
-        *responseLength += sizeof(countOfSegments) + sizeof(rect.x) + sizeof(rect.y) + sizeof(rect.sizeOfData) + jpegBuffer.offset;
+        *responseLength += sizeof(countOfSegments) + sizeof(rect.x) + sizeof(rect.y) + sizeof(rect.sizeOfData) + graphics.jpegBuffer.offset;
         *response = new CHAR[*responseLength];
         *(PUINT32)*response = StatusCode::StatusSuccess;
         Memory::Copy(*response + sizeof(UINT32), &countOfSegments, sizeof(UINT32));
@@ -451,83 +451,54 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
         return;
     }
 
+    // Threshold of 24 ignores minor JPEG compression artifacts from prior frames
     ImageProcessor::CalculateBiDifference(Span<const RGB>(graphics.currentScreenshot, device.Width * device.Height),
                                           Span<const RGB>(graphics.screenshot, device.Width * device.Height),
                                           device.Width, device.Height,
-                                          Span<UCHAR>(graphics.bidiff, device.Width * device.Height));
+                                          Span<UCHAR>(graphics.bidiff, device.Width * device.Height),
+                                          24);
 
-    // Remove noises from bidiff
-    ImageProcessor::RemoveNoise(Span<UCHAR>(graphics.bidiff, device.Width * device.Height),
-                                device.Width, device.Height);
-
-    auto contourResult = ImageProcessor::FindContours(Span<INT8>((INT8 *)graphics.bidiff, device.Width * device.Height),
-                                                      (INT32)device.Height, (INT32)device.Width);
-    if (contourResult.IsErr())
+    // Find dirty rectangles using tile-based detection (replaces RemoveNoise + FindContours)
+    auto dirtyResult = ImageProcessor::FindDirtyRects(
+        Span<const UINT8>(graphics.bidiff, device.Width * device.Height),
+        device.Width, device.Height, 64);
+    if (dirtyResult.IsErr())
     {
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
-    auto &contours = contourResult.Value();
+    auto &dirtyRects = dirtyResult.Value();
 
-    UINT32 countOfContour = 0;
+    UINT32 countOfRects = 0;
     USIZE offset = sizeof(UINT32) + sizeof(UINT32);
 
-    PContourNode hierarchy = contours.Hierarchy;
-    PContour contoursArray = contours.Contours;
-    JpegBuffer jpegBuffer;
-
-    // Pre-allocate response buffer with generous initial capacity to avoid per-contour reallocation.
-    // Worst case: full screen JPEG at the given quality. A reasonable estimate is ~0.5 bytes/pixel.
+    // Pre-allocate response buffer with generous initial capacity to avoid per-rect reallocation.
     USIZE packetCapacity = *responseLength + sizeof(UINT32) + (USIZE)device.Width * device.Height / 2;
     PCHAR packet = new CHAR[packetCapacity];
 
-    // Pre-allocate a reusable rectangle buffer (sized to full screen as upper bound)
-    USIZE rectBufCapacity = (USIZE)device.Width * device.Height;
-    PRGB rectScan0 = new RGB[rectBufCapacity];
-
-    // Loop through the contours found to identify rectangles
-    for (INT32 i = 0; i < contours.ContourCount; i++)
+    for (UINT32 i = 0; i < dirtyRects.Count; i++)
     {
-        if (hierarchy[i].Parent != 1)
-            continue;
+        const DirtyRect &dr = dirtyRects.Rects[i];
+        INT32 rectWidth = (INT32)dr.Width;
+        INT32 rectHeight = (INT32)dr.Height;
 
-        INT32 minX = contoursArray[i].Points[0].Col;
-        INT32 minY = contoursArray[i].Points[0].Row;
-        INT32 maxX = 0, maxY = 0;
+        countOfRects++;
 
-        for (INT32 j = 0; j < contoursArray[i].Count; j++)
-        {
-            if (contoursArray[i].Points[j].Col < minX) minX = contoursArray[i].Points[j].Col;
-            if (contoursArray[i].Points[j].Col > maxX) maxX = contoursArray[i].Points[j].Col;
-            if (contoursArray[i].Points[j].Row < minY) minY = contoursArray[i].Points[j].Row;
-            if (contoursArray[i].Points[j].Row > maxY) maxY = contoursArray[i].Points[j].Row;
-        }
-
-        INT32 rectWidth = maxX - minX + 1;
-        INT32 rectHeight = maxY - minY + 1;
-
-        if (rectWidth % 4 != 0)
-            rectWidth -= rectWidth % 4;
-        if (rectHeight < 32 || rectWidth < 32)
-            continue;
-
-        countOfContour++;
-
-        // Copy rectangle region row-by-row using memcpy instead of per-pixel
+        // Copy rectangle region row-by-row
         for (INT32 j = 0; j < rectHeight; j++)
-            Memory::Copy(rectScan0 + j * rectWidth, graphics.currentScreenshot + (minY + j) * device.Width + minX, (USIZE)rectWidth * sizeof(RGB));
+            Memory::Copy(graphics.rectBuffer + j * rectWidth, graphics.currentScreenshot + (dr.Y + j) * device.Width + dr.X, (USIZE)rectWidth * sizeof(RGB));
 
-        jpegBuffer.offset = 0;
-        auto encodeResult = JpegEncoder::Encode(JpegCallback, &jpegBuffer, (INT32)quality, rectWidth, rectHeight, 3, Span<const UINT8>((UINT8 *)rectScan0, rectWidth * rectHeight * sizeof(RGB)));
+        graphics.jpegBuffer.Reset();
+        auto encodeResult = JpegEncoder::Encode(JpegCallback, &graphics.jpegBuffer, (INT32)quality, rectWidth, rectHeight, 3, Span<const UINT8>((UINT8 *)graphics.rectBuffer, rectWidth * rectHeight * sizeof(RGB)));
         if (encodeResult.IsErr())
         {
-            delete[] rectScan0;
             delete[] packet;
+            dirtyRects.Free();
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
             return;
         }
 
-        USIZE rectEntrySize = jpegBuffer.size + sizeof(UINT32) * 3; // x + y + sizeOfData + jpegData
+        USIZE rectEntrySize = graphics.jpegBuffer.offset + sizeof(UINT32) * 3; // x + y + sizeOfData + jpegData
         // Grow the packet buffer if needed (double capacity until it fits)
         if (offset + rectEntrySize > packetCapacity)
         {
@@ -541,19 +512,17 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
             packetCapacity = newCapacity;
         }
 
-        Rectangle rect((UINT32)minX, (UINT32)minY, jpegBuffer.size, jpegBuffer.outputBuffer);
+        Rectangle rect(dr.X, dr.Y, graphics.jpegBuffer.offset, graphics.jpegBuffer.outputBuffer);
         offset += rect.toBuffer((UINT8 *)packet + offset);
     }
-
-    delete[] rectScan0;
 
     // Copy the current screenshot to the screenshot buffer for the next comparison
     Memory::Copy(graphics.screenshot, graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB));
 
-    *(PUINT32)(packet + sizeof(UINT32)) = countOfContour;
+    *(PUINT32)(packet + sizeof(UINT32)) = countOfRects;
     *response = packet;
     *responseLength = offset;
     *(PUINT32)*response = StatusCode::StatusSuccess;
 
-    contours.Free();
+    dirtyRects.Free();
 }
