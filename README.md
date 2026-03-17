@@ -235,6 +235,14 @@ Compiles to fully position-independent, zero-dependency binaries that communicat
 - **Cross-Platform** - Builds for Windows, Linux, macOS, FreeBSD, Solaris, UEFI, Android, and iOS across x86, x86_64, ARM, AArch64, RISC-V, and MIPS architectures
 - **Position-Independent** - Output binary is fully relocatable with no external dependencies
 
+### Tested Features
+
+| Feature | Windows | Linux | Android |
+|---------|:-------:|:-----:|:-------:|
+| Desktop (display enumeration + screenshot) | :white_check_mark: | :white_check_mark: | |
+| File Manager (directory listing + file read + hash) | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+| Shell (interactive cmd.exe / /bin/sh) | :white_check_mark: | :white_check_mark: | :white_check_mark: |
+
 ## Prerequisites
 
 - [CMake](https://cmake.org/) 3.20+
