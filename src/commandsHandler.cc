@@ -465,10 +465,7 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
 
     // Ensure the VNC context exists - create it if it doesn't, and validate the result
     if (context->vncContext == nullptr)
-    {
-        auto vncResult = new VNCContext();
-        context->vncContext = vncResult;
-    }
+        context->vncContext = new VNCContext();
 
     // Getting the device list
     if (context->vncContext->DeviceList.Count == 0)
@@ -488,7 +485,7 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     const ScreenDevice &device = context->vncContext->DeviceList.Devices[displayIndex];
 
     // Check if graphics are initialized
-    if (context->vncContext->GraphicsList.count == 0)
+    if (!context->vncContext->GraphicsList.IsInitialized())
         context->vncContext->GraphicsList.Init(context->vncContext->DeviceList.Count);
     
     // Get the Graphics structure for the specified display index and initialize buffers if they are not already allocated
