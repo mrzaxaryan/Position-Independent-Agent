@@ -125,7 +125,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-linux-x86_64, path: . }
+        with: { name: build-linux-x86_64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
           for dir in release/*/; do
@@ -143,7 +143,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-linux-aarch64, path: . }
+        with: { name: build-linux-aarch64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
           for dir in release/*/; do
@@ -161,7 +161,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-android-x86_64, path: . }
+        with: { name: build-android-x86_64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
           for dir in release/*/; do
@@ -179,7 +179,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-android-aarch64, path: . }
+        with: { name: build-android-aarch64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
           for dir in release/*/; do
@@ -197,7 +197,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-windows-i386, path: . }
+        with: { name: build-windows-i386, path: release }
       - name: Test shellcode (PIC loader)
         shell: pwsh
         run: |
@@ -215,7 +215,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-windows-x86_64, path: . }
+        with: { name: build-windows-x86_64, path: release }
       - name: Test shellcode (PIC loader)
         shell: pwsh
         run: |
@@ -233,7 +233,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-windows-aarch64, path: . }
+        with: { name: build-windows-aarch64, path: release }
       - name: Test shellcode (PIC loader)
         shell: pwsh
         run: |
@@ -251,7 +251,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-macos-aarch64, path: . }
+        with: { name: build-macos-aarch64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
           for dir in release/*/; do
@@ -269,7 +269,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-macos-x86_64, path: . }
+        with: { name: build-macos-x86_64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
           for dir in release/*/; do
@@ -287,7 +287,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-ios-aarch64, path: . }
+        with: { name: build-ios-aarch64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
           for dir in release/*/; do
@@ -309,7 +309,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-linux-i386, path: . }
+        with: { name: build-linux-i386, path: release }
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
         with: { platforms: linux/386 }
@@ -335,7 +335,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-linux-riscv32, path: . }
+        with: { name: build-linux-riscv32, path: release }
       - name: Install QEMU user-static
         run: sudo apt-get update && sudo apt-get install -y qemu-user-static
       - name: Test ELF (QEMU riscv32)
@@ -360,7 +360,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-linux-armv7a, path: . }
+        with: { name: build-linux-armv7a, path: release }
       - name: Test shellcode (armv7 emulation)
         uses: uraimo/run-on-arch-action@v2
         with:
@@ -383,7 +383,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-linux-riscv64, path: . }
+        with: { name: build-linux-riscv64, path: release }
       - name: Test shellcode (riscv64 emulation)
         uses: uraimo/run-on-arch-action@v2
         with:
@@ -406,7 +406,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-android-armv7a, path: . }
+        with: { name: build-android-armv7a, path: release }
       - name: Test shellcode (armv7 emulation)
         uses: uraimo/run-on-arch-action@v2
         with:
@@ -434,7 +434,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-freebsd-x86_64, path: . }
+        with: { name: build-freebsd-x86_64, path: release }
       - name: Test shellcode (FreeBSD VM)
         uses: vmactions/freebsd-vm@v1
         with:
@@ -458,7 +458,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-freebsd-aarch64, path: . }
+        with: { name: build-freebsd-aarch64, path: release }
       - name: Test shellcode (FreeBSD VM)
         uses: vmactions/freebsd-vm@v1
         with:
@@ -483,7 +483,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-freebsd-i386, path: . }
+        with: { name: build-freebsd-i386, path: release }
       - name: Test ELF (FreeBSD VM)
         uses: vmactions/freebsd-vm@v1
         with:
@@ -508,7 +508,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-freebsd-riscv64, path: . }
+        with: { name: build-freebsd-riscv64, path: release }
       - name: Test ELF (FreeBSD VM)
         uses: vmactions/freebsd-vm@v1
         with:
@@ -537,7 +537,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-solaris-i386, path: . }
+        with: { name: build-solaris-i386, path: release }
       - name: Test ELF (Solaris VM)
         uses: vmactions/solaris-vm@v1
         with:
@@ -560,7 +560,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-solaris-x86_64, path: . }
+        with: { name: build-solaris-x86_64, path: release }
       - name: Test shellcode (Solaris VM)
         uses: vmactions/solaris-vm@v1
         with:
@@ -587,7 +587,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-uefi-x86_64, path: . }
+        with: { name: build-uefi-x86_64, path: release }
       - name: Install QEMU and OVMF
         run: |
           sudo apt-get update
@@ -625,7 +625,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
-        with: { name: build-uefi-aarch64, path: . }
+        with: { name: build-uefi-aarch64, path: release }
       - name: Install QEMU and UEFI firmware
         run: |
           sudo apt-get update
