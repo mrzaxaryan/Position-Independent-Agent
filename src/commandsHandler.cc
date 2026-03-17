@@ -424,6 +424,16 @@ VOID JpegCallback(PVOID context, PVOID data, INT32 size)
     jpegBuffer->offset += (UINT32)size;
 }
 
+VOID FullScreenEncode(const ScreenDevice &device, Graphics &graphics, VNCContext* VNCContext, JpegBuffer* buffer){
+    // Encode JPEG, validate the result and write to response
+    auto encodeResult = JpegEncoder::Encode(JpegCallback, buffer, (INT32)VNCContext->Quality, (INT32)device.Width, (INT32)device.Height, 3, Span<const UINT8>((UINT8 *)graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB)));
+    if (encodeResult.IsErr())
+    {
+        LOG_ERROR("Failed to encode JPEG image (error code: %e).", encodeResult.Error());
+        return;
+    }
+    LOG_INFO("JPEG encoding successful, size: %u bytes", buffer->size);
+}
 
 // Gets a screenshot of the specified display device
 VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
@@ -486,20 +496,11 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     // In case of full screen request, encode the whole screenshot as JPEG and send it back
     if (isFullScreen)
     {
-        // Encode JPEG, validate the result and write to response
-        JpegBuffer jpegBuffer;
-        auto encodeResult = JpegEncoder::Encode(JpegCallback, &jpegBuffer, (INT32)quality, (INT32)device.Width, (INT32)device.Height, 3, Span<const UINT8>((UINT8 *)graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB)));
-        if (encodeResult.IsErr())
-        {
-            LOG_ERROR("Failed to encode JPEG image (error code: %e).", encodeResult.Error());
-            WriteErrorResponse(response, responseLength, StatusCode::StatusError);
-            return;
-        }
-        LOG_INFO("JPEG encoding successful, size: %u bytes", jpegBuffer.size);
+        JpegBuffer jpegBuffer = {};
+        FullScreenEncode(device, graphics, context->vncContext, &jpegBuffer);
 
         // Copy into screenshot buffer for next comparison
         Memory::Copy(graphics.screenshot, graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB));
-
         Rectangle rect(0, 0, jpegBuffer.offset, jpegBuffer.outputBuffer);
 
         // We are sending the full JPEG data in one segment, so the segment count is 1
