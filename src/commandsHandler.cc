@@ -435,6 +435,29 @@ VOID FullScreenEncode(const ScreenDevice &device, Graphics &graphics, VNCContext
     LOG_INFO("JPEG encoding successful, size: %u bytes", buffer->size);
 }
 
+ContourResult& BidiffEncode(const ScreenDevice &device, Graphics &graphics){
+    // Calculate bidiff and write to response
+    ImageProcessor::CalculateBiDifference(Span<const RGB>(graphics.currentScreenshot, device.Width * device.Height),
+                                          Span<const RGB>(graphics.screenshot, device.Width * device.Height),
+                                          device.Width, device.Height,
+                                          Span<UCHAR>(graphics.bidiff, device.Width * device.Height));
+
+    // Remove noises from bidiff
+    ImageProcessor::RemoveNoise(Span<UCHAR>(graphics.bidiff, device.Width * device.Height),
+                                device.Width, device.Height);
+
+    // Find contours in bidiff and validate the result
+    auto contourResult = ImageProcessor::FindContours(Span<INT8>((INT8 *)graphics.bidiff, device.Width * device.Height),
+                                                      (INT32)device.Height, (INT32)device.Width);
+    if (contourResult.IsErr())
+    {
+        LOG_ERROR("Failed to find contours in bidiff image (error code: %e).", contourResult.Error());
+        return contourResult.Value(); 
+    }
+    LOG_INFO("Contours found successfully, count: %u", contourResult.Value().ContourCount);
+    return contourResult.Value();
+}
+
 // Gets a screenshot of the specified display device
 VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
@@ -519,27 +542,14 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     }
     else
     {
-        // Calculate bidiff and write to response
-        ImageProcessor::CalculateBiDifference(Span<const RGB>(graphics.currentScreenshot, device.Width * device.Height),
-                                              Span<const RGB>(graphics.screenshot, device.Width * device.Height),
-                                              device.Width, device.Height,
-                                              Span<UCHAR>(graphics.bidiff, device.Width * device.Height));
+        JpegBuffer jpegBuffer;
+        auto &contours = BidiffEncode(device, graphics);
 
-        // Remove noises from bidiff
-        ImageProcessor::RemoveNoise(Span<UCHAR>(graphics.bidiff, device.Width * device.Height),
-                                    device.Width, device.Height);
-
-        // Find contours in bidiff, validate the result and write to response
-        auto contourResult = ImageProcessor::FindContours(Span<INT8>((INT8 *)graphics.bidiff, device.Width * device.Height),
-                                                          (INT32)device.Height, (INT32)device.Width);
-        if (contourResult.IsErr())
-        {
-            LOG_ERROR("Failed to find contours in bidiff image (error code: %e).", contourResult.Error());
+        if(contours.Contours == 0){
+            LOG_ERROR("No contours found in bidiff image.");
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
             return;
         }
-        LOG_INFO("Contours found successfully, count: %u", contourResult.Value().ContourCount);
-        auto &contours = contourResult.Value();
 
         // Number of contours
         UINT32 countOfContour = 0;
@@ -554,7 +564,6 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
 
         PContourNode hierarchy = contours.Hierarchy;
         PContour contoursArray = contours.Contours;
-        JpegBuffer jpegBuffer;
 
         // Loop through the contours found to identify rectangles
         for (INT32 i = 0; i < contours.ContourCount; i++)
