@@ -470,13 +470,16 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     auto &contours = contourResult.Value();
 
     UINT32 countOfContour = 0;
-    USIZE packetSize = *responseLength + sizeof(UINT32);
-    PCHAR packet = new CHAR[packetSize];
     USIZE offset = sizeof(UINT32) + sizeof(UINT32);
 
     PContourNode hierarchy = contours.Hierarchy;
     PContour contoursArray = contours.Contours;
     JpegBuffer jpegBuffer;
+
+    // Pre-allocate response buffer with generous initial capacity to avoid per-contour reallocation.
+    // Worst case: full screen JPEG at the given quality. A reasonable estimate is ~0.5 bytes/pixel.
+    USIZE packetCapacity = *responseLength + sizeof(UINT32) + (USIZE)device.Width * device.Height / 2;
+    PCHAR packet = new CHAR[packetCapacity];
 
     // Pre-allocate a reusable rectangle buffer (sized to full screen as upper bound)
     USIZE rectBufCapacity = (USIZE)device.Width * device.Height;
@@ -519,18 +522,26 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
         if (encodeResult.IsErr())
         {
             delete[] rectScan0;
+            delete[] packet;
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
             return;
         }
 
+        USIZE rectEntrySize = jpegBuffer.size + sizeof(UINT32) * 3; // x + y + sizeOfData + jpegData
+        // Grow the packet buffer if needed (double capacity until it fits)
+        if (offset + rectEntrySize > packetCapacity)
+        {
+            USIZE newCapacity = packetCapacity;
+            while (offset + rectEntrySize > newCapacity)
+                newCapacity *= 2;
+            auto newPacket = new CHAR[newCapacity];
+            Memory::Copy(newPacket, packet, offset);
+            delete[] packet;
+            packet = newPacket;
+            packetCapacity = newCapacity;
+        }
+
         Rectangle rect((UINT32)minX, (UINT32)minY, jpegBuffer.size, jpegBuffer.outputBuffer);
-        packetSize += jpegBuffer.size + sizeof(rect.x) + sizeof(rect.y) + sizeof(rect.sizeOfData);
-
-        auto newPacket = new CHAR[packetSize];
-        Memory::Copy(newPacket, packet, offset);
-        delete[] packet;
-        packet = newPacket;
-
         offset += rect.toBuffer((UINT8 *)packet + offset);
     }
 
@@ -541,7 +552,7 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
 
     *(PUINT32)(packet + sizeof(UINT32)) = countOfContour;
     *response = packet;
-    *responseLength = packetSize;
+    *responseLength = offset;
     *(PUINT32)*response = StatusCode::StatusSuccess;
 
     contours.Free();
