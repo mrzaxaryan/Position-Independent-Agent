@@ -34,17 +34,15 @@ file(GLOB_RECURSE PIR_HEADERS CONFIGURE_DEPENDS
     "${PIR_ROOT_DIR}/src/lib/*.h"
 )
 
-# Append APP_DIR sources if provided (supports multiple directories)
-foreach(_app_dir IN LISTS PIR_APP_DIR)
-    list(APPEND PIR_INCLUDE_PATHS "${_app_dir}")
-    file(GLOB_RECURSE _app_sources CONFIGURE_DEPENDS "${_app_dir}/*.cc")
-    file(GLOB_RECURSE _app_headers CONFIGURE_DEPENDS "${_app_dir}/*.h")
-    list(LENGTH _app_sources _app_src_count)
-    list(LENGTH _app_headers _app_hdr_count)
-    pir_log_debug("APP_DIR ${_app_dir}: ${_app_src_count} sources, ${_app_hdr_count} headers")
-    list(APPEND PIR_SOURCES ${_app_sources})
-    list(APPEND PIR_HEADERS ${_app_headers})
-endforeach()
+# Append application layer sources (beacon or tests)
+list(APPEND PIR_INCLUDE_PATHS "${PIR_APP_DIR}")
+file(GLOB_RECURSE _app_sources CONFIGURE_DEPENDS "${PIR_APP_DIR}/*.cc")
+file(GLOB_RECURSE _app_headers CONFIGURE_DEPENDS "${PIR_APP_DIR}/*.h")
+list(LENGTH _app_sources _app_src_count)
+list(LENGTH _app_headers _app_hdr_count)
+pir_log_debug("App layer ${PIR_APP_DIR}: ${_app_src_count} sources, ${_app_hdr_count} headers")
+list(APPEND PIR_SOURCES ${_app_sources})
+list(APPEND PIR_HEADERS ${_app_headers})
 
 list(REMOVE_DUPLICATES PIR_INCLUDE_PATHS)
 

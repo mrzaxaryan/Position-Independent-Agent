@@ -138,7 +138,7 @@ pir_log_kv("Sources"       "${_final_src_count} sources, ${_final_hdr_count} hea
 pir_log_kv("pic-transform" "${_pt_mode}")
 pir_log_kv("Logging"       "${ENABLE_LOGGING}")
 pir_log_kv("Output"        "${PIR_OUTPUT_DIR}/output${PIR_EXT}")
-pir_log_kv("App dir"       "${APP_DIR}")
+pir_log_kv("App layer"     "$<IF:$<BOOL:${BUILD_TESTS}>,tests,beacon>")
 pir_log_footer()
 
 # Verbose: host system info and toolchain details
