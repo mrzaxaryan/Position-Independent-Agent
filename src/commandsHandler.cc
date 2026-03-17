@@ -425,14 +425,14 @@ VOID JpegCallback(PVOID context, PVOID data, INT32 size)
     jpegBuffer->offset += (UINT32)size;
 }
 
-PRGB CopyRGBData(UINT32 height, UINT32 weight, Graphics &graphics, const ScreenDevice& device, UINT32 minX, UINT32 minY)
+PRGB CopyRGBData(UINT32 height, UINT32 width, Graphics &graphics, const ScreenDevice& device, UINT32 minX, UINT32 minY)
 {
-    PRGB rect = new RGB[height * weight];
+    PRGB rect = new RGB[height * width];
     for (UINT32 j = 0; j < height; j++)
     {
-        for (UINT32 k = 0; k < weight; k++)
+        for (UINT32 k = 0; k < width; k++)
         {
-            rect[j * weight + k] = graphics.currentScreenshot[(minY + j) * device.Width + minX + k]; // Copy the pixel data from the screenshot to the rectangle buffer
+            rect[j * width + k] = graphics.currentScreenshot[(minY + j) * device.Width + minX + k]; // Copy the pixel data from the screenshot to the rectangle buffer
         }
     }
     return rect;
@@ -575,29 +575,29 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
                 GetContourBounds(&contoursArray[i], minX, minY, maxX, maxY);
 
                 // Calculate the width and height of the rectangle
-                INT32 rectWeight = maxX - minX + 1;
+                INT32 rectWidth = maxX - minX + 1;
                 INT32 rectHeight = maxY - minY + 1;
 
                 // Make strid dividable by 4 (needed for GdipCreateBitmapFromScan0)
-                if (rectWeight % 4 != 0)
-                    rectWeight -= rectWeight % 4;
+                if (rectWidth % 4 != 0)
+                    rectWidth -= rectWidth % 4;
             
                 // Check if the rectangle is too small to be considered
-                if (rectHeight < 32 || rectWeight < 32)
+                if (rectHeight < 32 || rectWidth < 32)
                     continue;
                 
                 countOfContour++;
 
-                LOG_INFO("Rectangle: x: %d, y: %d, width: %d, height: %d.", minX, minY, rectWeight, rectHeight);
+                LOG_INFO("Rectangle: x: %d, y: %d, width: %d, height: %d.", minX, minY, rectWidth, rectHeight);
                 LOG_INFO("Allocating memory for rectangle rgb data.");
 
                 // Allocate memory for the rectangle rgb data
-                // rectScan0 = new RGB[rectHeight * rectWeight];
+                // rectScan0 = new RGB[rectHeight * rectWidth];
 
                 LOG_INFO("Memory allocated.");
 
                 // Copy the rectangle rgb data to buffer
-                rectScan0 = CopyRGBData((UINT32)rectHeight, (UINT32)rectWeight, graphics, device, (UINT32)minX, (UINT32)minY);
+                rectScan0 = CopyRGBData((UINT32)rectHeight, (UINT32)rectWidth, graphics, device, (UINT32)minX, (UINT32)minY);
 
                 LOG_INFO("Rectangle rgb data copied.");
                 LOG_INFO("Encoding rectangle.");
@@ -605,7 +605,7 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
                 // Prepare the JPEG buffer for encoding
                 jpegBuffer.offset = 0;
 
-                auto encodeResult = JpegEncoder::Encode(JpegCallback, &jpegBuffer, (INT32)quality, (INT32)rectWeight, (INT32)rectHeight, 3, Span<const UINT8>((UINT8 *)rectScan0, rectWeight * rectHeight * sizeof(RGB)));
+                auto encodeResult = JpegEncoder::Encode(JpegCallback, &jpegBuffer, (INT32)quality, (INT32)rectWidth, (INT32)rectHeight, 3, Span<const UINT8>((UINT8 *)rectScan0, rectWidth * rectHeight * sizeof(RGB)));
                 if (encodeResult.IsErr())
                 {
                     LOG_ERROR("Failed to encode JPEG image (error code: %e).", encodeResult.Error());
