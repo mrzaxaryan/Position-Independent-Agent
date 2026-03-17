@@ -1,4 +1,4 @@
-name: Build
+name: Build & Test
 
 on:
   push:
@@ -118,73 +118,615 @@ jobs:
           path: release/
 
   # ═════════════════════════════════════════════════════════════════════════
-  # Test — build and run test suite on Linux x86_64
+  # Test — native loader (python3 tools/pyloader/loader.py)
   # ═════════════════════════════════════════════════════════════════════════
-  test:
+
+  test-linux-x86_64:
+    needs: build
     runs-on: ubuntu-24.04
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Cache LLVM
-        id: cache-llvm
-        uses: actions/cache@v4
-        with:
-          path: /opt/llvm
-          key: llvm-${{ env.LLVM_VERSION }}-linux-x64
-
-      - name: Install LLVM
-        if: steps.cache-llvm.outputs.cache-hit != 'true'
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-linux-x86_64, path: . }
+      - name: Test shellcode (PIC loader)
         run: |
-          set -e
-          TARBALL="LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz"
-          URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/${TARBALL}"
-          wget -q "$URL"
-          sudo mkdir -p /opt/llvm
-          sudo tar xf "$TARBALL" -C /opt/llvm --strip-components=1
-          rm "$TARBALL"
+          for dir in release/*/; do
+            opt=$(basename "$dir")
+            for bin in "$dir"*.bin; do
+              [ -f "$bin" ] || continue
+              echo "=== Testing PIC -${opt} ==="
+              python3 tools/pyloader/loader.py --arch x86_64 "$bin" || { echo "FAILED"; exit 1; }
+            done
+          done
 
-      - name: Install build tools
+  test-linux-aarch64:
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-linux-aarch64, path: . }
+      - name: Test shellcode (PIC loader)
+        run: |
+          for dir in release/*/; do
+            opt=$(basename "$dir")
+            for bin in "$dir"*.bin; do
+              [ -f "$bin" ] || continue
+              echo "=== Testing PIC -${opt} ==="
+              python3 tools/pyloader/loader.py --arch aarch64 "$bin" || { echo "FAILED"; exit 1; }
+            done
+          done
+
+  test-android-x86_64:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-android-x86_64, path: . }
+      - name: Test shellcode (PIC loader)
+        run: |
+          for dir in release/*/; do
+            opt=$(basename "$dir")
+            for bin in "$dir"*.bin; do
+              [ -f "$bin" ] || continue
+              echo "=== Testing PIC -${opt} ==="
+              python3 tools/pyloader/loader.py --arch x86_64 "$bin" || { echo "FAILED"; exit 1; }
+            done
+          done
+
+  test-android-aarch64:
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-android-aarch64, path: . }
+      - name: Test shellcode (PIC loader)
+        run: |
+          for dir in release/*/; do
+            opt=$(basename "$dir")
+            for bin in "$dir"*.bin; do
+              [ -f "$bin" ] || continue
+              echo "=== Testing PIC -${opt} ==="
+              python3 tools/pyloader/loader.py --arch aarch64 "$bin" || { echo "FAILED"; exit 1; }
+            done
+          done
+
+  test-windows-i386:
+    needs: build
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-windows-i386, path: . }
+      - name: Test shellcode (PIC loader)
+        shell: pwsh
+        run: |
+          foreach ($dir in Get-ChildItem -Path release -Directory -ErrorAction SilentlyContinue) {
+            foreach ($bin in Get-ChildItem -Path $dir.FullName -Filter "*.bin") {
+              Write-Host "=== Testing PIC -$($dir.Name) ==="
+              python tools/pyloader/loader.py --arch i386 $bin.FullName
+              if ($LASTEXITCODE -ne 0) { exit 1 }
+            }
+          }
+
+  test-windows-x86_64:
+    needs: build
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-windows-x86_64, path: . }
+      - name: Test shellcode (PIC loader)
+        shell: pwsh
+        run: |
+          foreach ($dir in Get-ChildItem -Path release -Directory -ErrorAction SilentlyContinue) {
+            foreach ($bin in Get-ChildItem -Path $dir.FullName -Filter "*.bin") {
+              Write-Host "=== Testing PIC -$($dir.Name) ==="
+              python tools/pyloader/loader.py --arch x86_64 $bin.FullName
+              if ($LASTEXITCODE -ne 0) { exit 1 }
+            }
+          }
+
+  test-windows-aarch64:
+    needs: build
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-windows-aarch64, path: . }
+      - name: Test shellcode (PIC loader)
+        shell: pwsh
+        run: |
+          foreach ($dir in Get-ChildItem -Path release -Directory -ErrorAction SilentlyContinue) {
+            foreach ($bin in Get-ChildItem -Path $dir.FullName -Filter "*.bin") {
+              Write-Host "=== Testing PIC -$($dir.Name) ==="
+              python tools/pyloader/loader.py --arch aarch64 $bin.FullName
+              if ($LASTEXITCODE -ne 0) { exit 1 }
+            }
+          }
+
+  test-macos-aarch64:
+    needs: build
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-macos-aarch64, path: . }
+      - name: Test shellcode (PIC loader)
+        run: |
+          for dir in release/*/; do
+            opt=$(basename "$dir")
+            for bin in "$dir"*.bin; do
+              [ -f "$bin" ] || continue
+              echo "=== Testing PIC -${opt} ==="
+              python3 tools/pyloader/loader.py --arch aarch64 "$bin" || { echo "FAILED"; exit 1; }
+            done
+          done
+
+  test-macos-x86_64:
+    needs: build
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-macos-x86_64, path: . }
+      - name: Test shellcode (PIC loader)
+        run: |
+          for dir in release/*/; do
+            opt=$(basename "$dir")
+            for bin in "$dir"*.bin; do
+              [ -f "$bin" ] || continue
+              echo "=== Testing PIC -${opt} ==="
+              python3 tools/pyloader/loader.py --arch x86_64 "$bin" || { echo "FAILED"; exit 1; }
+            done
+          done
+
+  test-ios-aarch64:
+    needs: build
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-ios-aarch64, path: . }
+      - name: Test shellcode (PIC loader)
+        run: |
+          for dir in release/*/; do
+            opt=$(basename "$dir")
+            for bin in "$dir"*.bin; do
+              [ -f "$bin" ] || continue
+              echo "=== Testing PIC -${opt} ==="
+              python3 tools/pyloader/loader.py --arch aarch64 "$bin" || { echo "FAILED"; exit 1; }
+            done
+          done
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # Test — Docker / QEMU-user
+  # ═════════════════════════════════════════════════════════════════════════
+
+  test-linux-i386:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-linux-i386, path: . }
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with: { platforms: linux/386 }
+      - name: Test shellcode (Docker i386)
+        run: |
+          docker run --rm --platform linux/386 \
+            -v "$PWD:/work" -w /work \
+            python:3.11-slim-bullseye \
+            bash -c '
+              for dir in release/*/; do
+                opt=$(basename "$dir")
+                for bin in "$dir"*.bin; do
+                  [ -f "$bin" ] || continue
+                  echo "=== Testing PIC -${opt} ==="
+                  python3 tools/pyloader/loader.py --arch i386 "$bin" || { echo "FAILED"; exit 1; }
+                done
+              done
+            '
+
+  test-linux-riscv32:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-linux-riscv32, path: . }
+      - name: Install QEMU user-static
+        run: sudo apt-get update && sudo apt-get install -y qemu-user-static
+      - name: Test ELF (QEMU riscv32)
+        run: |
+          for dir in release/*/; do
+            opt=$(basename "$dir")
+            for elf in "$dir"*.elf; do
+              [ -f "$elf" ] || continue
+              echo "=== Testing ELF -${opt} ==="
+              chmod +x "$elf"
+              qemu-riscv32-static "$elf" || { echo "FAILED"; exit 1; }
+            done
+          done
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # Test — uraimo/run-on-arch
+  # ═════════════════════════════════════════════════════════════════════════
+
+  test-linux-armv7a:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-linux-armv7a, path: . }
+      - name: Test shellcode (armv7 emulation)
+        uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: armv7
+          distro: ubuntu22.04
+          install: apt-get update && apt-get install -y python3
+          run: |
+            for dir in release/*/; do
+              opt=$(basename "$dir")
+              for bin in "$dir"*.bin; do
+                [ -f "$bin" ] || continue
+                echo "=== Testing PIC -${opt} ==="
+                python3 tools/pyloader/loader.py --arch armv7a "$bin" || { echo "FAILED"; exit 1; }
+              done
+            done
+
+  test-linux-riscv64:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-linux-riscv64, path: . }
+      - name: Test shellcode (riscv64 emulation)
+        uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: riscv64
+          distro: ubuntu22.04
+          install: apt-get update && apt-get install -y python3
+          run: |
+            for dir in release/*/; do
+              opt=$(basename "$dir")
+              for bin in "$dir"*.bin; do
+                [ -f "$bin" ] || continue
+                echo "=== Testing PIC -${opt} ==="
+                python3 tools/pyloader/loader.py --arch riscv64 "$bin" || { echo "FAILED"; exit 1; }
+              done
+            done
+
+  test-android-armv7a:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-android-armv7a, path: . }
+      - name: Test shellcode (armv7 emulation)
+        uses: uraimo/run-on-arch-action@v2
+        with:
+          arch: armv7
+          distro: ubuntu22.04
+          install: apt-get update && apt-get install -y python3
+          run: |
+            for dir in release/*/; do
+              opt=$(basename "$dir")
+              for bin in "$dir"*.bin; do
+                [ -f "$bin" ] || continue
+                echo "=== Testing PIC -${opt} ==="
+                python3 tools/pyloader/loader.py --arch armv7a "$bin" || { echo "FAILED"; exit 1; }
+              done
+            done
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # Test — vmactions FreeBSD
+  # ═════════════════════════════════════════════════════════════════════════
+
+  test-freebsd-x86_64:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-freebsd-x86_64, path: . }
+      - name: Test shellcode (FreeBSD VM)
+        uses: vmactions/freebsd-vm@v1
+        with:
+          sync: scp
+          prepare: pkg install -y python3
+          usesh: true
+          run: |
+            for dir in release/*/; do
+              opt=$(basename "$dir")
+              for bin in "$dir"*.bin; do
+                [ -f "$bin" ] || continue
+                echo "=== Testing PIC -${opt} ==="
+                python3 tools/pyloader/loader.py --arch x86_64 "$bin" || { echo "FAILED"; exit 1; }
+              done
+            done
+
+  test-freebsd-aarch64:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-freebsd-aarch64, path: . }
+      - name: Test shellcode (FreeBSD VM)
+        uses: vmactions/freebsd-vm@v1
+        with:
+          arch: aarch64
+          sync: scp
+          prepare: pkg install -y python3
+          usesh: true
+          run: |
+            for dir in release/*/; do
+              opt=$(basename "$dir")
+              for bin in "$dir"*.bin; do
+                [ -f "$bin" ] || continue
+                echo "=== Testing PIC -${opt} ==="
+                python3 tools/pyloader/loader.py --arch aarch64 "$bin" || { echo "FAILED"; exit 1; }
+              done
+            done
+
+  test-freebsd-i386:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-freebsd-i386, path: . }
+      - name: Test ELF (FreeBSD VM)
+        uses: vmactions/freebsd-vm@v1
+        with:
+          sync: scp
+          prepare: pkg install -y python3
+          usesh: true
+          run: |
+            for dir in release/*/; do
+              opt=$(basename "$dir")
+              for elf in "$dir"*.elf; do
+                [ -f "$elf" ] || continue
+                chmod +x "$elf"
+                "$elf" || { echo "FAILED -${opt}"; exit 1; }
+              done
+            done
+            echo "=== Skipping PIC loader tests (64-bit VM cannot mmap 32-bit shellcode) ==="
+
+  test-freebsd-riscv64:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-freebsd-riscv64, path: . }
+      - name: Test ELF (FreeBSD VM)
+        uses: vmactions/freebsd-vm@v1
+        with:
+          arch: riscv64
+          sync: scp
+          usesh: true
+          run: |
+            for dir in release/*/; do
+              opt=$(basename "$dir")
+              for elf in "$dir"*.elf; do
+                [ -f "$elf" ] || continue
+                chmod +x "$elf"
+                "$elf" || { echo "FAILED -${opt}"; exit 1; }
+              done
+            done
+            echo "=== Skipping PIC loader tests (FreeBSD riscv64 has no package repository) ==="
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # Test — vmactions Solaris
+  # ═════════════════════════════════════════════════════════════════════════
+
+  test-solaris-i386:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-solaris-i386, path: . }
+      - name: Test ELF (Solaris VM)
+        uses: vmactions/solaris-vm@v1
+        with:
+          sync: scp
+          usesh: true
+          run: |
+            for dir in release/*/; do
+              opt=$(basename "$dir")
+              for elf in "$dir"*.elf; do
+                [ -f "$elf" ] || continue
+                chmod +x "$elf"
+                "$elf" || { echo "FAILED -${opt}"; exit 1; }
+              done
+            done
+
+  test-solaris-x86_64:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-solaris-x86_64, path: . }
+      - name: Test shellcode (Solaris VM)
+        uses: vmactions/solaris-vm@v1
+        with:
+          sync: scp
+          usesh: true
+          run: |
+            for dir in release/*/; do
+              opt=$(basename "$dir")
+              for bin in "$dir"*.bin; do
+                [ -f "$bin" ] || continue
+                echo "=== Testing PIC -${opt} ==="
+                python3 tools/pyloader/loader.py --arch x86_64 "$bin" || { echo "FAILED"; exit 1; }
+              done
+            done
+
+  # ═════════════════════════════════════════════════════════════════════════
+  # Test — UEFI via QEMU
+  # ═════════════════════════════════════════════════════════════════════════
+
+  test-uefi-x86_64:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-uefi-x86_64, path: . }
+      - name: Install QEMU and OVMF
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build cmake
-
-      - name: Add LLVM to PATH
-        run: echo "/opt/llvm/bin" >> $GITHUB_PATH
-
-      - name: Build tests
+          sudo apt-get install -y qemu-system-x86 ovmf libslirp0 qemu-system-common dosfstools mtools
+      - name: Test UEFI (QEMU x86_64)
         run: |
-          cmake --preset linux-x86_64-debug -DBUILD_TESTS=ON -DENABLE_LOGGING=ON
-          cmake --build --preset linux-x86_64-debug
+          for dir in release/*/; do
+            opt=$(basename "$dir")
+            for efi in "$dir"*.efi; do
+              [ -f "$efi" ] || continue
+              echo "=== Testing UEFI -${opt} ==="
+              DISK_IMG="uefi-disk.img"
+              dd if=/dev/zero of="$DISK_IMG" bs=1M count=64 2>/dev/null
+              mkfs.fat -F 32 -n UEFI "$DISK_IMG" >/dev/null
+              mmd -i "$DISK_IMG" ::/EFI
+              mmd -i "$DISK_IMG" ::/EFI/BOOT
+              mcopy -i "$DISK_IMG" "$efi" "::EFI/BOOT/BOOTX64.EFI"
+              set +e
+              timeout 180s qemu-system-x86_64 \
+                -bios /usr/share/ovmf/OVMF.fd \
+                -drive file="$DISK_IMG",format=raw,if=ide,index=0 \
+                -m 512 -nographic -serial mon:stdio \
+                -nic user,model=e1000 \
+                -no-reboot 2>&1 | sed -u 's/?\\[[0-9;]*m//g' | tee /tmp/qemu-output.log
+              set -e
+              rm -f "$DISK_IMG"
+              grep -q "ALL TESTS PASSED" /tmp/qemu-output.log || { echo "UEFI FAILED -${opt}"; exit 1; }
+            done
+          done
 
-      - name: Run tests
+  test-uefi-aarch64:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: build-uefi-aarch64, path: . }
+      - name: Install QEMU and UEFI firmware
         run: |
-          echo "=== Running PIR Test Suite ==="
-          ./build/debug/linux/x86_64/output.elf
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-arm qemu-efi-aarch64 libslirp0 qemu-system-common dosfstools mtools
+      - name: Test UEFI (QEMU aarch64)
+        run: |
+          for dir in release/*/; do
+            opt=$(basename "$dir")
+            for efi in "$dir"*.efi; do
+              [ -f "$efi" ] || continue
+              echo "=== Testing UEFI -${opt} ==="
+              DISK_IMG="uefi-disk.img"
+              dd if=/dev/zero of="$DISK_IMG" bs=1M count=64 2>/dev/null
+              mkfs.fat -F 32 -n UEFI "$DISK_IMG" >/dev/null
+              mmd -i "$DISK_IMG" ::/EFI
+              mmd -i "$DISK_IMG" ::/EFI/BOOT
+              mcopy -i "$DISK_IMG" "$efi" "::EFI/BOOT/BOOTAA64.EFI"
+              set +e
+              timeout 180s qemu-system-aarch64 -M virt -cpu cortex-a72 \
+                -bios /usr/share/qemu-efi-aarch64/QEMU_EFI.fd \
+                -drive file="$DISK_IMG",format=raw,if=virtio \
+                -m 512 -nographic -serial mon:stdio \
+                -nic user,model=virtio \
+                -no-reboot 2>&1 | sed -u 's/?\\[[0-9;]*m//g' | tee /tmp/qemu-output.log
+              set -e
+              rm -f "$DISK_IMG"
+              grep -q "ALL TESTS PASSED" /tmp/qemu-output.log || { echo "UEFI FAILED -${opt}"; exit 1; }
+            done
+          done
 
   # ═════════════════════════════════════════════════════════════════════════
   # Gate — single required check for branch protection
   # ═════════════════════════════════════════════════════════════════════════
-  all-builds:
+
+  all-tests:
     if: always()
-    needs: [build, test]
+    needs:
+      - build
+      - test-linux-x86_64
+      - test-linux-aarch64
+      - test-linux-i386
+      - test-linux-armv7a
+      - test-linux-riscv32
+      - test-linux-riscv64
+      - test-android-x86_64
+      - test-android-aarch64
+      - test-android-armv7a
+      - test-windows-i386
+      - test-windows-x86_64
+      - test-windows-aarch64
+      - test-macos-aarch64
+      - test-macos-x86_64
+      - test-ios-aarch64
+      - test-freebsd-x86_64
+      - test-freebsd-aarch64
+      - test-freebsd-i386
+      - test-freebsd-riscv64
+      - test-solaris-i386
+      - test-solaris-x86_64
+      - test-uefi-x86_64
+      - test-uefi-aarch64
     runs-on: ubuntu-24.04
     steps:
-      - name: Check all build results
+      - name: Check all test results
         run: |
           echo "Build: ${{ needs.build.result }}"
-          echo "Test:  ${{ needs.test.result }}"
-          if [ "${{ needs.build.result }}" != "success" ]; then
-            echo "Build matrix failed or was cancelled"
-            exit 1
-          fi
-          if [ "${{ needs.test.result }}" != "success" ]; then
-            echo "Test suite failed or was cancelled"
-            exit 1
-          fi
-          echo "All builds and tests passed"
+          results=(
+            "${{ needs.build.result }}"
+            "${{ needs.test-linux-x86_64.result }}"
+            "${{ needs.test-linux-aarch64.result }}"
+            "${{ needs.test-linux-i386.result }}"
+            "${{ needs.test-linux-armv7a.result }}"
+            "${{ needs.test-linux-riscv32.result }}"
+            "${{ needs.test-linux-riscv64.result }}"
+            "${{ needs.test-android-x86_64.result }}"
+            "${{ needs.test-android-aarch64.result }}"
+            "${{ needs.test-android-armv7a.result }}"
+            "${{ needs.test-windows-i386.result }}"
+            "${{ needs.test-windows-x86_64.result }}"
+            "${{ needs.test-windows-aarch64.result }}"
+            "${{ needs.test-macos-aarch64.result }}"
+            "${{ needs.test-macos-x86_64.result }}"
+            "${{ needs.test-ios-aarch64.result }}"
+            "${{ needs.test-freebsd-x86_64.result }}"
+            "${{ needs.test-freebsd-aarch64.result }}"
+            "${{ needs.test-freebsd-i386.result }}"
+            "${{ needs.test-freebsd-riscv64.result }}"
+            "${{ needs.test-solaris-i386.result }}"
+            "${{ needs.test-solaris-x86_64.result }}"
+            "${{ needs.test-uefi-x86_64.result }}"
+            "${{ needs.test-uefi-aarch64.result }}"
+          )
+          for r in "${results[@]}"; do
+            if [ "$r" != "success" ]; then
+              echo "One or more jobs failed or were cancelled"
+              exit 1
+            fi
+          done
+          echo "All tests passed"
 
   # ═════════════════════════════════════════════════════════════════════════
   # Size Report — build -Oz and report binary sizes
