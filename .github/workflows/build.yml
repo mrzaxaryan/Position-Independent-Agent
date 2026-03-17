@@ -63,7 +63,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
 
       - name: Cache LLVM
@@ -119,21 +118,73 @@ jobs:
           path: release/
 
   # ═════════════════════════════════════════════════════════════════════════
+  # Test — build and run test suite on Linux x86_64
+  # ═════════════════════════════════════════════════════════════════════════
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cache LLVM
+        id: cache-llvm
+        uses: actions/cache@v4
+        with:
+          path: /opt/llvm
+          key: llvm-${{ env.LLVM_VERSION }}-linux-x64
+
+      - name: Install LLVM
+        if: steps.cache-llvm.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          TARBALL="LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz"
+          URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/${TARBALL}"
+          wget -q "$URL"
+          sudo mkdir -p /opt/llvm
+          sudo tar xf "$TARBALL" -C /opt/llvm --strip-components=1
+          rm "$TARBALL"
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build cmake
+
+      - name: Add LLVM to PATH
+        run: echo "/opt/llvm/bin" >> $GITHUB_PATH
+
+      - name: Build tests
+        run: |
+          cmake --preset linux-x86_64-debug -DBUILD_TESTS=ON -DENABLE_LOGGING=ON
+          cmake --build --preset linux-x86_64-debug
+
+      - name: Run tests
+        run: |
+          echo "=== Running PIR Test Suite ==="
+          ./build/debug/linux/x86_64/output.elf
+
+  # ═════════════════════════════════════════════════════════════════════════
   # Gate — single required check for branch protection
   # ═════════════════════════════════════════════════════════════════════════
   all-builds:
     if: always()
-    needs: [build]
+    needs: [build, test]
     runs-on: ubuntu-24.04
     steps:
       - name: Check all build results
         run: |
           echo "Build: ${{ needs.build.result }}"
+          echo "Test:  ${{ needs.test.result }}"
           if [ "${{ needs.build.result }}" != "success" ]; then
             echo "Build matrix failed or was cancelled"
             exit 1
           fi
-          echo "All builds passed"
+          if [ "${{ needs.test.result }}" != "success" ]; then
+            echo "Test suite failed or was cancelled"
+            exit 1
+          fi
+          echo "All builds and tests passed"
 
   # ═════════════════════════════════════════════════════════════════════════
   # Size Report — build -Oz and report binary sizes
@@ -183,7 +234,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
 
       - name: Cache LLVM
