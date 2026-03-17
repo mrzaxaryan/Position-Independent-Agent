@@ -99,6 +99,8 @@ struct GraphicsList
             delete[] graphicsArray;
             graphicsArray = nullptr;
         }
+        
+        count = 0;
     }
     
     BOOL IsInitialized() const

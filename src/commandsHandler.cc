@@ -407,10 +407,7 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     const ScreenDevice &device = context->vncContext->DeviceList.Devices[displayIndex];
 
     if (context->vncContext->GraphicsList.count == 0)
-    {
-        context->vncContext->GraphicsList.graphicsArray = new Graphics[context->vncContext->DeviceList.Count];
-        context->vncContext->GraphicsList.count = context->vncContext->DeviceList.Count;
-    }
+        context->vncContext->GraphicsList.Init(context->vncContext->DeviceList.Count);
 
     Graphics &graphics = context->vncContext->GraphicsList.graphicsArray[displayIndex];
     
