@@ -217,7 +217,7 @@
 
 </details>
 
-Compiles to fully position-independent, zero-dependency binaries that communicate over WebSocket. No libc, no standard library, no dynamic linking - every syscall, crypto primitive, and protocol is implemented from scratch.
+Compiles to fully position-independent, zero-dependency binaries that communicate over WebSocket. No libc, no standard library, no dynamic linking — every syscall, crypto primitive, and protocol is implemented from scratch.
 
 ## Features
 
