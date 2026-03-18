@@ -224,6 +224,7 @@ Compiles to fully position-independent, zero-dependency binaries that communicat
 - **Zero Dependencies** - No libc, no C++ standard library, no external libraries. Crypto (SHA-256, ChaCha20-Poly1305, ECC P-256), TLS 1.3, WebSocket, HTTP, DNS, and JPEG encoding are all implemented from scratch
 - **Position-Independent** - A custom LLVM pass ([pic-transform](tools/pic-transform/)) eliminates `.data`/`.rodata`/`.bss` sections at compile time, producing binaries with only a `.text` section
 - - fully relocatable as raw shellcode
+- - can run in RX-only memory — no data sections means no writable code page is ever needed
 - **Cross-Platform** - 8 platforms (Windows, Linux, macOS, FreeBSD, Solaris, UEFI, Android, iOS) across 7 architectures (i386, x86_64, armv7a, aarch64, riscv32, riscv64, mips64) via direct syscalls
 - **TLS 1.3 + WebSocket** - Encrypted command-and-control over `wss://` using ChaCha20-Poly1305 AEAD (RFC 8446, RFC 6455)
 - **Binary Command Protocol** - 8 command types over WebSocket:

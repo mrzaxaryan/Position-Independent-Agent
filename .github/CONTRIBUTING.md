@@ -166,6 +166,8 @@ The binary must contain **only** a `.text` section. No `.rdata`, `.rodata`, `.da
 
 The [pic-transform](https://github.com/mrzaxaryan/pic-transform) LLVM pass runs automatically during compilation and eliminates data sections by converting global constants (strings, floats, arrays) into stack-local immediate stores. This means you can write normal C++ string literals, float constants, and const arrays -- they are transformed automatically.
 
+**Memory protection consequence:** Because the binary has no data sections, the agent can run entirely in **RX (read+execute)** memory — no writable code page is ever needed at runtime. Any change that reintroduces a data section breaks this guarantee.
+
 | Forbidden | Use Instead |
 |-----------|-------------|
 | Global/static variables | Stack-local variables |
