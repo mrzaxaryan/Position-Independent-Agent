@@ -233,12 +233,64 @@ Result<void, Error> DirectoryIterator::Next()
 #else
 	currentEntry.Type = (UINT32)d->Type;
 #endif
-#else // macOS, iOS, FreeBSD — use dirent d_type
-	currentEntry.IsDirectory = (d->Type == DT_DIR);
+#else // macOS, iOS, FreeBSD — fstatat for size/timestamps, dirent d_type as fallback
+	{
+		UINT8 statbuf[256];
+		Memory::Zero(statbuf, sizeof(statbuf));
+
+#if defined(PLATFORM_MACOS) || defined(PLATFORM_IOS)
+		SSIZE statResult = System::Call(SYS_FSTATAT64, (USIZE)handle, (USIZE)d->Name, (USIZE)statbuf, 0);
+#elif defined(PLATFORM_FREEBSD)
+		SSIZE statResult = System::Call(SYS_FSTATAT, (USIZE)handle, (USIZE)d->Name, (USIZE)statbuf, 0);
+#endif
+
+		if (statResult == 0)
+		{
+			// Architecture-specific stat field offsets: st_mode, st_size, st_mtime
+#if defined(PLATFORM_MACOS) || defined(PLATFORM_IOS)
+			// macOS/iOS stat64: dev(4) mode(2) nlink(2) ino(8) uid(4) gid(4) rdev(4) pad(4) atim(16) mtim(16) ctim(16) birthtim(16) size(8)
+			constexpr USIZE OFF_MODE = 4;
+			constexpr USIZE OFF_SIZE = 96;
+			constexpr USIZE OFF_MTIME = 48;
+			constexpr BOOL MTIME_64 = true;
+#elif defined(PLATFORM_FREEBSD) && defined(ARCHITECTURE_I386)
+			// FreeBSD 12+ i386 stat: dev(8) ino(8) nlink(8) mode(2) pad(2) uid(4) gid(4) pad(4) rdev(8) atim(12) mtim(12) ctim(12) birthtim(12) size(8)
+			// timespec is 12 bytes on i386 (int64_t tv_sec + int32_t tv_nsec)
+			constexpr USIZE OFF_MODE = 24;
+			constexpr USIZE OFF_SIZE = 96;
+			constexpr USIZE OFF_MTIME = 60;
+			constexpr BOOL MTIME_64 = true;
+#elif defined(PLATFORM_FREEBSD)
+			// FreeBSD 12+ LP64 stat: dev(8) ino(8) nlink(8) mode(2) pad(2) uid(4) gid(4) pad(4) rdev(8) atim(16) mtim(16) ctim(16) birthtim(16) size(8)
+			constexpr USIZE OFF_MODE = 24;
+			constexpr USIZE OFF_SIZE = 112;
+			constexpr USIZE OFF_MTIME = 64;
+			constexpr BOOL MTIME_64 = true;
+#endif
+
+			UINT32 mode = *(UINT32 *)(statbuf + OFF_MODE);
+			currentEntry.IsDirectory = ((mode & 0xF000) == 0x4000); // S_IFDIR
+
+			INT64 fileSize = *(INT64 *)(statbuf + OFF_SIZE);
+			currentEntry.Size = (fileSize > 0) ? (UINT64)fileSize : 0;
+
+			INT64 mtime;
+			if constexpr (MTIME_64)
+				mtime = *(INT64 *)(statbuf + OFF_MTIME);
+			else
+				mtime = (INT64)(*(INT32 *)(statbuf + OFF_MTIME));
+			currentEntry.LastModifiedTime = (UINT64)mtime;
+			currentEntry.CreationTime = currentEntry.LastModifiedTime;
+		}
+		else
+		{
+			currentEntry.IsDirectory = (d->Type == DT_DIR);
+			currentEntry.Size = 0;
+			currentEntry.CreationTime = 0;
+			currentEntry.LastModifiedTime = 0;
+		}
+	}
 	currentEntry.Type = (UINT32)d->Type;
-	currentEntry.Size = 0;
-	currentEntry.CreationTime = 0;
-	currentEntry.LastModifiedTime = 0;
 #endif
 	currentEntry.IsDrive = false;
 	currentEntry.IsHidden = (d->Name[0] == '.');
