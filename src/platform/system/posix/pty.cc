@@ -7,10 +7,9 @@
  * - Linux/Android: TIOCSPTLCK unlock + TIOCGPTN for slave number, /dev/pts/<N>
  * - Linux/Android MIPS64: O_NOCTTY value differs (0x800 vs 0x100)
  * - Linux/Android aarch64/riscv: SYS_OPENAT instead of SYS_OPEN
- * - FreeBSD: SYS_OPENAT instead of SYS_OPEN
+ * - FreeBSD: SYS_OPENAT, TIOCPTUNLK unlock + TIOCGPTN for slave number, /dev/pts/<N>
  * - macOS/iOS: TIOCPTYUNLK unlock + TIOCPTYGNAME for slave path
- * - FreeBSD: TIOCPTUNLK unlock + TIOCGPTN for slave number, /dev/pts/<N>
- * - Solaris: TIOCSPTLCK unlock + TIOCGPTN, /dev/pts/<N>
+ * - Solaris: SYS_OPENAT, I_STR+UNLKPT unlock + fstat minor for slave number, /dev/pts/<N>
  * - Poll: SYS_PPOLL (Linux/Android), SYS_POLLSYS (Solaris), SYS_POLL (others)
  */
 
@@ -41,16 +40,25 @@
 
 #if defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)
 constexpr USIZE TIOCSPTLCK = 0x40045431;
-constexpr USIZE TIOCGPTN   = 0x80045430;
+constexpr USIZE TIOCGPTN = 0x80045430;
 #elif defined(PLATFORM_MACOS) || defined(PLATFORM_IOS)
-constexpr USIZE TIOCPTYUNLK  = 0x20007452;
+constexpr USIZE TIOCPTYUNLK = 0x20007452;
 constexpr USIZE TIOCPTYGNAME = 0x40807453;
 #elif defined(PLATFORM_FREEBSD)
-constexpr USIZE TIOCPTUNLK = 0x20007402;
+constexpr USIZE TIOCPTUNLK = 0x20007410;
 constexpr USIZE TIOCGPTN = 0x4004740f;
 #elif defined(PLATFORM_SOLARIS)
-constexpr USIZE TIOCSPTLCK = 0x40045431;
-constexpr USIZE TIOCGPTN   = 0x80045430;
+// Solaris uses STREAMS ioctls, not Linux TIOCSPTLCK/TIOCGPTN
+constexpr USIZE I_STR   = 0x5308;  // ('S' << 8) | 010
+constexpr USIZE UNLKPT  = 0x5002;  // ('P' << 8) | 2
+// st_rdev offset in Solaris struct stat
+#if defined(ARCHITECTURE_X86_64) || defined(ARCHITECTURE_AARCH64)
+constexpr USIZE STAT_RDEV_OFFSET = 32;  // LP64: dev(8)+ino(8)+mode(4)+nlink(4)+uid(4)+gid(4)
+constexpr USIZE STAT_BUF_SIZE    = 128;
+#elif defined(ARCHITECTURE_I386)
+constexpr USIZE STAT_RDEV_OFFSET = 36;  // ILP32: dev(4)+pad(12)+ino(4)+mode(4)+nlink(4)+uid(4)+gid(4)
+constexpr USIZE STAT_BUF_SIZE    = 128;
+#endif
 #endif
 
 // ============================================================================
@@ -59,7 +67,7 @@ constexpr USIZE TIOCGPTN   = 0x80045430;
 
 static SSIZE PtyOpen(const char *path, INT32 flags)
 {
-#if defined(PLATFORM_FREEBSD) || ((defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)) && (defined(ARCHITECTURE_AARCH64) || defined(ARCHITECTURE_RISCV64) || defined(ARCHITECTURE_RISCV32)))
+#if defined(PLATFORM_FREEBSD) || defined(PLATFORM_SOLARIS) || ((defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)) && (defined(ARCHITECTURE_AARCH64) || defined(ARCHITECTURE_RISCV64) || defined(ARCHITECTURE_RISCV32)))
 	return System::Call(SYS_OPENAT, (USIZE)AT_FDCWD, (USIZE)path, (USIZE)flags, 0);
 #else
 	return System::Call(SYS_OPEN, (USIZE)path, (USIZE)flags, 0);
@@ -74,7 +82,7 @@ static BOOL PtyOpenPair(SSIZE &masterFd, SSIZE &slaveFd)
 
 	char slavePath[128];
 
-#if defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID) || defined(PLATFORM_SOLARIS)
+#if defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)
 	INT32 unlock = 0;
 	if (System::Call(SYS_IOCTL, (USIZE)masterFd, TIOCSPTLCK, (USIZE)&unlock) < 0)
 	{
@@ -90,13 +98,83 @@ static BOOL PtyOpenPair(SSIZE &masterFd, SSIZE &slaveFd)
 	// Build "/dev/pts/<N>"
 	const char prefix[] = "/dev/pts/";
 	USIZE i = 0;
-	for (; prefix[i]; i++) slavePath[i] = prefix[i];
-	if (ptyNum == 0) { slavePath[i++] = '0'; }
-	else { char d[16]; USIZE n = 0; INT32 v = ptyNum; while (v > 0) { d[n++] = '0' + (v % 10); v /= 10; } while (n > 0) slavePath[i++] = d[--n]; }
+	for (; prefix[i]; i++)
+		slavePath[i] = prefix[i];
+	if (ptyNum == 0)
+	{
+		slavePath[i++] = '0';
+	}
+	else
+	{
+		char d[16];
+		USIZE n = 0;
+		INT32 v = ptyNum;
+		while (v > 0)
+		{
+			d[n++] = '0' + (v % 10);
+			v /= 10;
+		}
+		while (n > 0)
+			slavePath[i++] = d[--n];
+	}
+	slavePath[i] = '\0';
+
+#elif defined(PLATFORM_SOLARIS)
+	// Unlock slave via STREAMS I_STR + UNLKPT
+	struct { INT32 cmd; INT32 timout; INT32 len; PVOID dp; } strioctl;
+	strioctl.cmd = (INT32)UNLKPT;
+	strioctl.timout = 0;
+	strioctl.len = 0;
+	strioctl.dp = nullptr;
+	if (System::Call(SYS_IOCTL, (USIZE)masterFd, I_STR, (USIZE)&strioctl) < 0)
+	{
+		System::Call(SYS_CLOSE, (USIZE)masterFd);
+		return false;
+	}
+	// Get slave PTY number via fstat + minor(st_rdev)
+	UINT8 statBuf[STAT_BUF_SIZE] = {};
+	if (System::Call(SYS_FSTAT, (USIZE)masterFd, (USIZE)statBuf) < 0)
+	{
+		System::Call(SYS_CLOSE, (USIZE)masterFd);
+		return false;
+	}
+	USIZE rdev = 0;
+#if defined(ARCHITECTURE_X86_64) || defined(ARCHITECTURE_AARCH64)
+	rdev = *(USIZE *)(statBuf + STAT_RDEV_OFFSET);
+#elif defined(ARCHITECTURE_I386)
+	rdev = *(UINT32 *)(statBuf + STAT_RDEV_OFFSET);
+#endif
+	INT32 ptyNum = (INT32)(rdev & 0x3ffff); // minor() on Solaris
+	// Build "/dev/pts/<N>"
+	const char prefix[] = "/dev/pts/";
+	USIZE i = 0;
+	for (; prefix[i]; i++)
+		slavePath[i] = prefix[i];
+	if (ptyNum == 0)
+	{
+		slavePath[i++] = '0';
+	}
+	else
+	{
+		char d[16];
+		USIZE n = 0;
+		INT32 v = ptyNum;
+		while (v > 0)
+		{
+			d[n++] = '0' + (v % 10);
+			v /= 10;
+		}
+		while (n > 0)
+			slavePath[i++] = d[--n];
+	}
 	slavePath[i] = '\0';
 
 #elif defined(PLATFORM_MACOS) || defined(PLATFORM_IOS)
-	(void)System::Call(SYS_IOCTL, (USIZE)masterFd, TIOCPTYUNLK, 0);
+	if (System::Call(SYS_IOCTL, (USIZE)masterFd, TIOCPTYUNLK, 0) < 0)
+	{
+		System::Call(SYS_CLOSE, (USIZE)masterFd);
+		return false;
+	}
 	if (System::Call(SYS_IOCTL, (USIZE)masterFd, TIOCPTYGNAME, (USIZE)slavePath) < 0)
 	{
 		System::Call(SYS_CLOSE, (USIZE)masterFd);
@@ -104,7 +182,11 @@ static BOOL PtyOpenPair(SSIZE &masterFd, SSIZE &slaveFd)
 	}
 
 #elif defined(PLATFORM_FREEBSD)
-	(void)System::Call(SYS_IOCTL, (USIZE)masterFd, TIOCPTUNLK, 0);
+	if (System::Call(SYS_IOCTL, (USIZE)masterFd, TIOCPTUNLK, 0) < 0)
+	{
+		System::Call(SYS_CLOSE, (USIZE)masterFd);
+		return false;
+	}
 	INT32 ptyNum = 0;
 	if (System::Call(SYS_IOCTL, (USIZE)masterFd, TIOCGPTN, (USIZE)&ptyNum) < 0)
 	{
@@ -113,9 +195,25 @@ static BOOL PtyOpenPair(SSIZE &masterFd, SSIZE &slaveFd)
 	}
 	const char prefix[] = "/dev/pts/";
 	USIZE i = 0;
-	for (; prefix[i]; i++) slavePath[i] = prefix[i];
-	if (ptyNum == 0) { slavePath[i++] = '0'; }
-	else { char d[16]; USIZE n = 0; INT32 v = ptyNum; while (v > 0) { d[n++] = '0' + (v % 10); v /= 10; } while (n > 0) slavePath[i++] = d[--n]; }
+	for (; prefix[i]; i++)
+		slavePath[i] = prefix[i];
+	if (ptyNum == 0)
+	{
+		slavePath[i++] = '0';
+	}
+	else
+	{
+		char d[16];
+		USIZE n = 0;
+		INT32 v = ptyNum;
+		while (v > 0)
+		{
+			d[n++] = '0' + (v % 10);
+			v /= 10;
+		}
+		while (n > 0)
+			slavePath[i++] = d[--n];
+	}
 	slavePath[i] = '\0';
 #endif
 
