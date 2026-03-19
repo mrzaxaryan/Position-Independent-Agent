@@ -13,7 +13,7 @@ public:
 
         LOG_INFO("Running shell process Tests...");
 
-        RunTest(allPassed, &TestShellProcessCreate, "SHA-256 suite");
+        RunTest(allPassed, &TestShellProcessCreate, "Shell Process Create");
 
         if (allPassed)
             LOG_INFO("All shell process tests passed!");
