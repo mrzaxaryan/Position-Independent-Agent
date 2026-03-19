@@ -7,6 +7,7 @@
  */
 
 #include "platform/system/shell_process.h"
+#include "logger.h"
 
 // ============================================================================
 // ShellProcess::EndOfLineChar
@@ -25,7 +26,10 @@ Result<ShellProcess, Error> ShellProcess::Create() noexcept
 {
 	auto ptyResult = Pty::Create();
 	if (!ptyResult)
+	{
+		LOG_ERROR("Failed to create PTY for shell process: %e", ptyResult.Error());
 		return Result<ShellProcess, Error>::Err(ptyResult, Error::ShellProcess_CreateFailed);
+	}
 
 	Pty &pty = ptyResult.Value();
 
@@ -34,7 +38,10 @@ Result<ShellProcess, Error> ShellProcess::Create() noexcept
 	(void)pty.CloseSlave();
 
 	if (!processResult)
+	{
+		LOG_ERROR("Failed to spawn shell process: %e", processResult.Error());
 		return Result<ShellProcess, Error>::Err(processResult, Error::ShellProcess_CreateFailed);
+	}
 
 	return Result<ShellProcess, Error>::Ok(
 		ShellProcess(static_cast<Process &&>(processResult.Value()),
