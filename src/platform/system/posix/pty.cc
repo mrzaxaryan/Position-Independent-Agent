@@ -8,8 +8,8 @@
  * - Linux/Android MIPS64: O_NOCTTY value differs (0x800 vs 0x100)
  * - Linux/Android aarch64/riscv: SYS_OPENAT instead of SYS_OPEN
  * - FreeBSD: SYS_OPENAT, TIOCPTUNLK unlock + TIOCGPTN for slave number, /dev/pts/<N>
- * - macOS/iOS: TIOCPTYUNLK unlock + TIOCPTYGNAME for slave path
- * - Solaris: SYS_OPENAT, I_STR+UNLKPT unlock + fstat minor for slave number, /dev/pts/<N>
+ * - macOS/iOS: TIOCPTYGRANT + TIOCPTYUNLK unlock + TIOCPTYGNAME for slave path
+ * - Solaris: SYS_OPENAT, I_STR+UNLKPT unlock + SYS_FSTAT minor for slave number, /dev/pts/<N>
  * - Poll: SYS_PPOLL (Linux/Android), SYS_POLLSYS (Solaris), SYS_POLL (others)
  */
 
@@ -43,8 +43,9 @@
 constexpr USIZE TIOCSPTLCK = 0x40045431;
 constexpr USIZE TIOCGPTN = 0x80045430;
 #elif defined(PLATFORM_MACOS) || defined(PLATFORM_IOS)
-constexpr USIZE TIOCPTYUNLK = 0x20007452;
-constexpr USIZE TIOCPTYGNAME = 0x40807453;
+constexpr USIZE TIOCPTYGRANT = 0x20007454; // _IO('t', 0x54) -- grantpt()
+constexpr USIZE TIOCPTYUNLK  = 0x20007452; // _IO('t', 0x52) -- unlockpt()
+constexpr USIZE TIOCPTYGNAME = 0x40807453; // _IOC(OUT,'t',0x53,128) -- ptsname()
 #elif defined(PLATFORM_FREEBSD)
 constexpr USIZE TIOCPTUNLK = 0x20007410;
 constexpr USIZE TIOCGPTN = 0x4004740f;
@@ -78,6 +79,11 @@ static SSIZE PtyOpen(const char *path, INT32 flags)
 static BOOL PtyOpenPair(SSIZE &masterFd, SSIZE &slaveFd)
 {
 	masterFd = PtyOpen("/dev/ptmx", O_RDWR | O_NOCTTY | O_CLOEXEC);
+#if defined(PLATFORM_FREEBSD)
+	// FreeBSD: /dev/ptmx may not exist; try /dev/pts/ptmx as fallback
+	if (masterFd < 0)
+		masterFd = PtyOpen("/dev/pts/ptmx", O_RDWR | O_NOCTTY | O_CLOEXEC);
+#endif
 	if (masterFd < 0)
 	{
 		LOG_ERROR("PTY: open /dev/ptmx failed (errno: %d)", (INT32)(-masterFd));
@@ -135,23 +141,16 @@ static BOOL PtyOpenPair(SSIZE &masterFd, SSIZE &slaveFd)
 		System::Call(SYS_CLOSE, (USIZE)masterFd);
 		return false;
 	}
-	// Get slave PTY number via fstatat("/dev/fd/<N>") + minor(st_rdev)
-	// Note: SYS_FSTAT is removed/repurposed on Oracle Solaris 11.4, use SYS_FSTATAT
-	char fdPath[32];
-	{
-		const char fdPrefix[] = "/dev/fd/";
-		USIZE j = 0;
-		for (; fdPrefix[j]; j++) fdPath[j] = fdPrefix[j];
-		SSIZE fd = masterFd;
-		if (fd == 0) { fdPath[j++] = '0'; }
-		else { char dd[16]; USIZE nn = 0; while (fd > 0) { dd[nn++] = '0' + (fd % 10); fd /= 10; } while (nn > 0) fdPath[j++] = dd[--nn]; }
-		fdPath[j] = '\0';
-	}
+	// Get slave PTY number via fstat + minor(st_rdev)
 	UINT8 statBuf[STAT_BUF_SIZE] = {};
-	if (System::Call(SYS_FSTATAT, (USIZE)AT_FDCWD, (USIZE)fdPath, (USIZE)statBuf, 0) < 0)
 	{
-		System::Call(SYS_CLOSE, (USIZE)masterFd);
-		return false;
+		SSIZE statRet = System::Call(SYS_FSTAT, (USIZE)masterFd, (USIZE)statBuf);
+		if (statRet < 0)
+		{
+			LOG_ERROR("PTY: fstat failed (errno: %d)", (INT32)(-statRet));
+			System::Call(SYS_CLOSE, (USIZE)masterFd);
+			return false;
+		}
 	}
 	USIZE rdev = 0;
 #if defined(ARCHITECTURE_X86_64) || defined(ARCHITECTURE_AARCH64)
@@ -185,6 +184,15 @@ static BOOL PtyOpenPair(SSIZE &masterFd, SSIZE &slaveFd)
 	slavePath[i] = '\0';
 
 #elif defined(PLATFORM_MACOS) || defined(PLATFORM_IOS)
+	{
+		SSIZE grantRet = System::Call(SYS_IOCTL, (USIZE)masterFd, TIOCPTYGRANT, 0);
+		if (grantRet < 0)
+		{
+			LOG_ERROR("PTY: TIOCPTYGRANT failed (errno: %d)", (INT32)(-grantRet));
+			System::Call(SYS_CLOSE, (USIZE)masterFd);
+			return false;
+		}
+	}
 	{
 		SSIZE unlkRet = System::Call(SYS_IOCTL, (USIZE)masterFd, TIOCPTYUNLK, 0);
 		if (unlkRet < 0)
