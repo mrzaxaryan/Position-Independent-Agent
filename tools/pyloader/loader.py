@@ -176,25 +176,53 @@ def get_host():
 # Download from GitHub Releases
 # =============================================================================
 
+def _test_ssl():
+    """Test whether ssl.SSLContext works without crashing the process.
+
+    Spawns a short-lived child process that attempts to create an SSLContext.
+    If the child segfaults (exit code != 0), SSL is broken on this Python build.
+    Returns True if SSL is usable, False if broken.
+    """
+    import subprocess
+    _log('inf', "Testing SSL support (child process) ...")
+    try:
+        code = subprocess.call(
+            [sys.executable, '-c',
+             'import ssl; ssl.SSLContext(ssl.PROTOCOL_SSLv23)'],
+            stdout=open(os.devnull, 'w'),
+            stderr=open(os.devnull, 'w'),
+            timeout=10
+        )
+    except (OSError, TypeError):
+        # TypeError: Python 2 subprocess has no timeout param
+        try:
+            code = subprocess.call(
+                [sys.executable, '-c',
+                 'import ssl; ssl.SSLContext(ssl.PROTOCOL_SSLv23)'],
+                stdout=open(os.devnull, 'w'),
+                stderr=open(os.devnull, 'w')
+            )
+        except OSError:
+            code = -1
+    if code == 0:
+        _log('ok', "SSL test passed")
+        return True
+    _log('err', "SSL test failed (exit code %d) — SSLContext crashes on this Python build" % code)
+    return False
+
+
 def _make_ssl_context():
     """Create a permissive SSL context for maximum compatibility."""
     _log('dbg', "OpenSSL: %s" % getattr(ssl, 'OPENSSL_VERSION', 'unknown'))
     try:
         proto = getattr(ssl, 'PROTOCOL_TLS', None) or ssl.PROTOCOL_SSLv23
-        proto_name = 'PROTOCOL_TLS' if hasattr(ssl, 'PROTOCOL_TLS') else 'PROTOCOL_SSLv23'
-        _log('dbg', "SSL protocol: %s (0x%x)" % (proto_name, proto))
-        _log('dbg', "Creating SSLContext ...")
         ctx = ssl.SSLContext(proto)
-        _log('dbg', "SSLContext created")
         ctx.check_hostname = False
-        _log('dbg', "check_hostname = False")
         ctx.verify_mode = ssl.CERT_NONE
-        _log('dbg', "verify_mode = CERT_NONE")
         try:
             ctx.set_ciphers('DEFAULT')
-            _log('dbg', "Ciphers set to DEFAULT")
-        except ssl.SSLError as e:
-            _log('dbg', "set_ciphers failed: %s" % e)
+        except ssl.SSLError:
+            pass
         return ctx
     except Exception as e:
         _log('wrn', "SSL context creation failed: %s" % e)
@@ -209,7 +237,6 @@ def _http_get(url):
     else:
         _log('wrn', "SSL context unavailable, using system defaults")
     _log('inf', "Connecting to %s ..." % url.split('/')[2])
-    _log('dbg', "Calling urlopen ...")
     try:
         resp = urlopen(req, context=ctx) if ctx else urlopen(req)
     except TypeError:
@@ -228,6 +255,19 @@ def _http_get(url):
 DEFAULT_TAG = "preview"
 
 
+def _ssl_broken_bail(url, asset, arch):
+    """Print manual download instructions and exit."""
+    _log('err', "Python's SSL module is broken on this build — HTTPS downloads are impossible")
+    _log('err', "")
+    _log('err', "Download the file manually and re-run with the local path:")
+    _log('err', "")
+    _log('err', "  1. Download: %s" % url)
+    _log('err', "  2. Run:      python loader.py --arch %s %s" % (arch, asset))
+    _log('err', "")
+    _log('err', "Or upgrade Python to 3.5+ which ships a working SSL library.")
+    sys.exit(2)
+
+
 def download(platform_name, arch, tag):
     if not tag:
         tag = DEFAULT_TAG
@@ -238,6 +278,10 @@ def download(platform_name, arch, tag):
 
     _log('inf', "Asset: %s" % asset)
     _log('inf', "URL:   %s" % url)
+
+    if not _test_ssl():
+        _ssl_broken_bail(url, asset, arch)
+
     _log('inf', "Downloading ...")
     try:
         data = _http_get(url)
