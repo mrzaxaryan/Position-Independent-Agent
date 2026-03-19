@@ -180,71 +180,6 @@ def get_host():
 # Download from GitHub Releases
 # =============================================================================
 
-def _win_ensure_tls12():
-    """Enable TLS 1.2 for WinINet/urlmon on Windows 7 (user-level, no admin)."""
-    try:
-        import winreg
-    except ImportError:
-        import _winreg as winreg
-
-    key_path = r'Software\Microsoft\Windows\CurrentVersion\Internet Settings'
-    TLS12_FLAG = 0x800
-    try:
-        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0,
-                             winreg.KEY_READ | winreg.KEY_WRITE)
-        try:
-            val, _ = winreg.QueryValueEx(key, 'SecureProtocols')
-        except OSError:
-            val = 0xA0  # default: SSL3 + TLS1.0
-        if val & TLS12_FLAG:
-            _log('dbg', "TLS 1.2 already enabled (SecureProtocols=0x%x)" % val)
-            winreg.CloseKey(key)
-            return
-        new_val = val | TLS12_FLAG
-        winreg.SetValueEx(key, 'SecureProtocols', 0, winreg.REG_DWORD, new_val)
-        _log('ok', "Enabled TLS 1.2 for WinINet (SecureProtocols: 0x%x -> 0x%x)" % (val, new_val))
-        winreg.CloseKey(key)
-    except Exception as e:
-        _log('wrn', "Could not enable TLS 1.2: %s" % e)
-
-
-def _http_get_urlmon(url):
-    """Download via urlmon.dll URLDownloadToFileW (Windows native TLS)."""
-    import tempfile
-    from ctypes import wintypes
-
-    _win_ensure_tls12()
-
-    urlmon = ctypes.windll.urlmon
-    urlmon.URLDownloadToFileW.argtypes = [
-        wintypes.LPVOID, wintypes.LPCWSTR, wintypes.LPCWSTR,
-        wintypes.DWORD, wintypes.LPVOID]
-    urlmon.URLDownloadToFileW.restype = ctypes.HRESULT
-
-    fd, tmp = tempfile.mkstemp(suffix='.bin')
-    os.close(fd)
-
-    _log('inf', "urlmon: URLDownloadToFileW -> %s" % tmp)
-    hr = urlmon.URLDownloadToFileW(None, url, tmp, 0, None)
-    if hr != 0:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
-        raise OSError("URLDownloadToFileW failed (HRESULT=0x%08x)" % (hr & 0xFFFFFFFF))
-
-    try:
-        with open(tmp, 'rb') as f:
-            data = f.read()
-        _log('ok', "urlmon: downloaded %d bytes" % len(data))
-        return data
-    finally:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
-
-
 def _make_ssl_context():
     """Create a permissive SSL context for maximum compatibility."""
     _log('dbg', "OpenSSL: %s" % getattr(ssl, 'OPENSSL_VERSION', 'unknown'))
@@ -263,8 +198,7 @@ def _make_ssl_context():
         return None
 
 
-def _http_get_urllib(url):
-    """Download via Python's urllib (requires working SSL)."""
+def _http_get(url):
     req = Request(url, headers={"User-Agent": "PIA-Loader/1.0"})
     ctx = _make_ssl_context()
     if ctx:
@@ -278,24 +212,13 @@ def _http_get_urllib(url):
         _log('wrn', "urlopen(context=) unsupported, retrying without context")
         resp = urlopen(req)
     code = getattr(resp, 'status', None) or getattr(resp, 'code', '?')
-    _log('ok', "HTTP %s — reading response body" % code)
+    _log('ok', "HTTP %s -- reading response body" % code)
     try:
         data = resp.read()
         _log('ok', "Received %d bytes" % len(data))
         return data
     finally:
         resp.close()
-
-
-def _http_get(url):
-    # On Windows, try urlmon first (native SChannel TLS, avoids Python SSL bugs)
-    if sys.platform == 'win32':
-        try:
-            _log('inf', "Using urlmon (Windows native TLS)")
-            return _http_get_urlmon(url)
-        except Exception as e:
-            _log('wrn', "urlmon failed: %s -- falling back to urllib" % e)
-    return _http_get_urllib(url)
 
 
 DEFAULT_TAG = "preview"
