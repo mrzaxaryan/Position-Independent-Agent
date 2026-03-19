@@ -50,8 +50,9 @@ constexpr USIZE TIOCPTYGNAME = 0x40807453; // _IOC(OUT,'t',0x53,128) -- ptsname(
 constexpr USIZE TIOCGPTN = 0x40047409;   // _IOR('t', 9, int) -- get pts number
 #elif defined(PLATFORM_SOLARIS)
 // Solaris uses STREAMS ioctls, not Linux TIOCSPTLCK/TIOCGPTN
-constexpr USIZE I_STR   = 0x5308;  // ('S' << 8) | 010
-constexpr USIZE UNLKPT  = 0x5002;  // ('P' << 8) | 2
+constexpr USIZE I_STR    = 0x5308;  // ('S' << 8) | 010
+constexpr USIZE OWNERPT  = 0x5005;  // ('P' << 8) | 5 -- grantpt()
+constexpr USIZE UNLKPT   = 0x5002;  // ('P' << 8) | 2 -- unlockpt()
 // st_rdev offset in Solaris struct stat / stat64
 #if defined(ARCHITECTURE_X86_64) || defined(ARCHITECTURE_AARCH64)
 constexpr USIZE STAT_RDEV_OFFSET = 32;  // LP64: dev(8)+ino(8)+mode(4)+nlink(4)+uid(4)+gid(4)
@@ -129,8 +130,25 @@ static BOOL PtyOpenPair(SSIZE &masterFd, SSIZE &slaveFd)
 	slavePath[i] = '\0';
 
 #elif defined(PLATFORM_SOLARIS)
-	// Unlock slave via STREAMS I_STR + UNLKPT
+	// Grant + unlock slave via STREAMS I_STR ioctls.
+	// Solaris requires grantpt() (OWNERPT) before unlockpt() (UNLKPT)
+	// to fully configure the slave device, otherwise open returns ENXIO.
 	struct { INT32 cmd; INT32 timout; INT32 len; PVOID dp; } strioctl;
+
+	// grantpt: set slave ownership (uid=0/gid=0 when running as root)
+	struct { UINT32 ruid; UINT32 rgid; } ptOwn = {0, 0};
+	strioctl.cmd = (INT32)OWNERPT;
+	strioctl.timout = 0;
+	strioctl.len = (INT32)sizeof(ptOwn);
+	strioctl.dp = (PVOID)&ptOwn;
+	{
+		SSIZE grantRet = System::Call(SYS_IOCTL, (USIZE)masterFd, I_STR, (USIZE)&strioctl);
+		if (grantRet < 0)
+			LOG_ERROR("PTY: OWNERPT (grantpt) failed (errno: %d)", (INT32)(-grantRet));
+		// Non-fatal: try unlockpt anyway in case we have sufficient privileges
+	}
+
+	// unlockpt
 	strioctl.cmd = (INT32)UNLKPT;
 	strioctl.timout = 0;
 	strioctl.len = 0;
