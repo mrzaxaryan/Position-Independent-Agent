@@ -40,15 +40,15 @@
 
 #if defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)
 constexpr USIZE TIOCSPTLCK = 0x40045431;
-constexpr USIZE TIOCGPTN   = 0x80045430;
+constexpr USIZE TIOCGPTN = 0x80045430;
 #elif defined(PLATFORM_MACOS) || defined(PLATFORM_IOS)
-constexpr USIZE TIOCPTYUNLK  = 0x20007452;
+constexpr USIZE TIOCPTYUNLK = 0x20007452;
 constexpr USIZE TIOCPTYGNAME = 0x40807453;
 #elif defined(PLATFORM_FREEBSD)
 constexpr USIZE TIOCGPTN = 0x4004740f;
 #elif defined(PLATFORM_SOLARIS)
 constexpr USIZE TIOCSPTLCK = 0x40045431;
-constexpr USIZE TIOCGPTN   = 0x80045430;
+constexpr USIZE TIOCGPTN = 0x80045430;
 #endif
 
 // ============================================================================
@@ -88,9 +88,25 @@ static BOOL PtyOpenPair(SSIZE &masterFd, SSIZE &slaveFd)
 	// Build "/dev/pts/<N>"
 	const char prefix[] = "/dev/pts/";
 	USIZE i = 0;
-	for (; prefix[i]; i++) slavePath[i] = prefix[i];
-	if (ptyNum == 0) { slavePath[i++] = '0'; }
-	else { char d[16]; USIZE n = 0; INT32 v = ptyNum; while (v > 0) { d[n++] = '0' + (v % 10); v /= 10; } while (n > 0) slavePath[i++] = d[--n]; }
+	for (; prefix[i]; i++)
+		slavePath[i] = prefix[i];
+	if (ptyNum == 0)
+	{
+		slavePath[i++] = '0';
+	}
+	else
+	{
+		char d[16];
+		USIZE n = 0;
+		INT32 v = ptyNum;
+		while (v > 0)
+		{
+			d[n++] = '0' + (v % 10);
+			v /= 10;
+		}
+		while (n > 0)
+			slavePath[i++] = d[--n];
+	}
 	slavePath[i] = '\0';
 
 #elif defined(PLATFORM_MACOS) || defined(PLATFORM_IOS)
@@ -103,16 +119,32 @@ static BOOL PtyOpenPair(SSIZE &masterFd, SSIZE &slaveFd)
 
 #elif defined(PLATFORM_FREEBSD)
 	INT32 ptyNum = 0;
-	if (System::Call(SYS_IOCTL, (USIZE)masterFd, TIOCGPTN, (USIZE)&ptyNum) < 0)
+	if (System::Call(SYS_IOCTL, (USIZE)masterFd, (USIZE)TIOCGPTN, (USIZE)&ptyNum) < 0)
 	{
 		System::Call(SYS_CLOSE, (USIZE)masterFd);
 		return false;
 	}
 	const char prefix[] = "/dev/pts/";
 	USIZE i = 0;
-	for (; prefix[i]; i++) slavePath[i] = prefix[i];
-	if (ptyNum == 0) { slavePath[i++] = '0'; }
-	else { char d[16]; USIZE n = 0; INT32 v = ptyNum; while (v > 0) { d[n++] = '0' + (v % 10); v /= 10; } while (n > 0) slavePath[i++] = d[--n]; }
+	for (; prefix[i]; i++)
+		slavePath[i] = prefix[i];
+	if (ptyNum == 0)
+	{
+		slavePath[i++] = '0';
+	}
+	else
+	{
+		char d[16];
+		USIZE n = 0;
+		INT32 v = ptyNum;
+		while (v > 0)
+		{
+			d[n++] = '0' + (v % 10);
+			v /= 10;
+		}
+		while (n > 0)
+			slavePath[i++] = d[--n];
+	}
 	slavePath[i] = '\0';
 #endif
 
