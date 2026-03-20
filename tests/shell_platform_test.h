@@ -13,7 +13,11 @@ public:
 
         LOG_INFO("Running shell process Tests...");
 
+#if !defined(PLATFORM_UEFI)
         RunTest(allPassed, &TestShellProcessCreate, "Shell Process Create");
+#else
+        LOG_INFO("  SKIPPED: Shell Process Create (not supported on UEFI)");
+#endif
 
         if (allPassed)
             LOG_INFO("All shell process tests passed!");
