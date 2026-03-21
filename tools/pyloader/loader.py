@@ -54,23 +54,22 @@ REPO = "mrzaxaryan/Position-Independent-Agent"
 
 _LOG_LEVELS = {'dbg': 0, 'inf': 1, 'ok': 2, 'wrn': 3, 'err': 4}
 _LOG_PREFIXES = {
-    'dbg': '[-]',
-    'inf': '[*]',
-    'ok':  '[+]',
-    'wrn': '[!]',
-    'err': '[x]',
+    'dbg': '[DBG]',
+    'inf': '[INF]',
+    'ok':  '[INF]',
+    'wrn': '[WRN]',
+    'err': '[ERR]',
 }
 _log_verbosity = _LOG_LEVELS['dbg']
-_log_start = time.time()
 
 
 def _log(level, msg):
     """Log with timestamp, level prefix, and immediate flush."""
     if _LOG_LEVELS.get(level, 1) < _log_verbosity:
         return
-    elapsed = time.time() - _log_start
-    prefix = _LOG_PREFIXES.get(level, '[*]')
-    line = "%s %8.3fs  %s" % (prefix, elapsed, msg)
+    timestamp = time.strftime("%H:%M:%S")
+    prefix = _LOG_PREFIXES.get(level, '[INF]')
+    line = "%s [%s] %s" % (prefix, timestamp, msg)
     try:
         print(line)
     except UnicodeEncodeError:
