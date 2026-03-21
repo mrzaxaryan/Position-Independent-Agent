@@ -1,181 +1,130 @@
 # FreeBSD Kernel Interface
 
-Position-independent FreeBSD syscall layer supporting **4 architectures** with BSD carry-flag error semantics.
+Position-independent FreeBSD syscall layer supporting **4 architectures** with BSD carry-flag error semantics. FreeBSD shares syscall numbers across all architectures (unlike Linux), but each architecture has distinct calling conventions and error signaling mechanisms.
 
-## Architecture Support
+## Error Handling: The Carry Flag Pattern
 
-| Architecture | Trap Instruction | Syscall Number | Arg Registers | Error Detection |
-|---|---|---|---|---|
-| **x86_64** | `syscall` | `RAX` | `RDI, RSI, RDX, R10, R8, R9` | Carry flag (`CF`) |
-| **i386** | `int $0x80` | `EAX` | Stack-based (above `ESP`) | Carry flag (`CF`) |
-| **AArch64** | `svc #0` | `X8` | `X0, X1, X2, X3, X4, X5` | Carry flag (via `X1`) |
-| **RISC-V 64** | `ecall` | `T0 (X5)` | `A0-A5 (X10-X15)` | `T0` error indicator |
+FreeBSD uses the **BSD carry-flag** model — on error, the processor carry flag is set and the return register holds a **positive** errno (not negated like Linux):
 
-## File Map
-
-```
-freebsd/
-├── syscall.h              # Syscall numbers, BSD constants, structures
-├── system.h               # Architecture dispatcher
-├── system.x86_64.h        # x86_64 inline assembly (0-6 args)
-├── system.i386.h          # i386 inline assembly (0-6 args)
-├── system.aarch64.h       # AArch64 inline assembly (0-6 args)
-├── system.riscv64.h       # RISC-V 64 inline assembly (0-6 args)
-└── platform_result.h      # Carry-flag → Result<T, Error> conversion
-```
-
-## Error Model
-
-FreeBSD uses the **BSD carry-flag** model. On error, the carry flag is set and `EAX`/`RAX` contains the positive errno. The `System::Call` wrappers normalize this by negating the return value when the carry flag is set:
-
-```
-CF = 0  →  success (RAX = result)
-CF = 1  →  failure (RAX = errno, negated to -errno by wrapper)
-```
-
-After normalization, `result::FromFreeBSD<T>()` converts the value identically to Linux (negative = error).
-
-### x86_64 carry-flag handling:
+### x86_64: jnc/neg Pattern
 
 ```asm
 syscall
-jnc 1f          ; jump if no carry (success)
-neg rax         ; negate errno to make it negative
-1:
+jnc 1f            ; jump if carry clear (success)
+negq %%rax        ; error: negate errno to make it negative
+1:                ; success: rax already has the result
 ```
 
-### RISC-V 64 error handling:
+After this normalization, the return value looks like Linux (negative on error), so `result::FromFreeBSD()` handles it identically to `result::FromLinux()`.
 
-RISC-V has no carry flag. FreeBSD uses `T0` (X5) as an error indicator:
+### The RDX Clobbering Problem
+
+FreeBSD kernel writes a **secondary return value (rval[1])** to `RDX` for certain syscalls (e.g., `fork` returns child PID in RAX and parent PID in RDX; `pipe` returns read fd in RAX and write fd in RDX).
+
+This creates a subtle bug: for syscalls with 3+ arguments, `RDX` holds arg3 as **input** — but the kernel overwrites it with rval[1] as **output**. The code solves this by marking RDX as `"+r"` (input+output) in all overloads where it carries an argument:
+
+```c
+register USIZE r_rdx __asm__("rdx") = arg3;  // input
+__asm__ volatile(
+    "syscall\n" "jnc 1f\n" "negq %%rax\n" "1:\n"
+    : "+r"(r_rax), "+r"(r_rdx)   // rdx is BOTH input AND clobbered output
+    ...
+```
+
+Without `"+r"`, the compiler assumes RDX is unchanged after the syscall and may reuse its value — leading to data corruption.
+
+### RISC-V 64: T0 as Error Indicator (No Carry Flag)
+
+RISC-V has no carry flag. FreeBSD uses **T0 (X5)** as a dedicated error indicator:
 
 ```
 T0 = 0  →  success (A0 = result)
-T0 != 0 →  failure (A0 = errno)
+T0 != 0 →  failure (A0 = positive errno)
 ```
 
-## Syscalls
+Interesting implementation detail: the **syscall number also goes in T0** (not A7 like Linux RISC-V). The kernel reads T0 before `ecall`, then overwrites it with the error flag after.
 
-Syscall numbers are **shared across all FreeBSD architectures** (unlike Linux).
+The code uses **early-clobber `&` constraints** on all argument registers:
 
-### File I/O
+```c
+register USIZE r_a0 __asm__("a0") = arg1;
+__asm__ volatile(
+    "mv t0, %[num]\n"   // load syscall number into T0
+    "ecall\n"
+    "beqz t0, 1f\n"     // check error flag
+    "neg a0, a0\n"       // negate errno
+    "1:\n"
+    : "+&r"(r_a0)        // ← early-clobber: prevents allocating
+    : [num] "r"(number)  //    'number' to the same register as r_a0
+```
 
-| Syscall | Number | Purpose |
+Without early-clobber, the compiler might assign `number` and `r_a0` to the same physical register — overwriting the syscall number with arg1 before the `mv t0, %[num]` instruction executes.
+
+### i386: Stack-Based Arguments (NOT Registers)
+
+**Critical difference from Linux i386:** FreeBSD i386 passes arguments **on the stack**, not in registers. The code pushes a **dummy return address** first (FreeBSD kernel expects this), then pushes arguments in reverse order:
+
+```asm
+pushl $0          ; dummy return address (FreeBSD convention)
+pushl arg1        ; first argument
+pushl arg2        ; second argument
+; ...
+int $0x80
+jnc 1f
+negl %%eax
+1:
+addl $N, %%esp    ; clean up: N = 4*(argcount + 1)
+```
+
+The 6-argument variant has a special challenge: it needs `EBP` for the 6th argument, but `EBP` may be the frame pointer. The code uses `"g"` constraint (general register or memory) instead of a register constraint to avoid conflicts under LTO with `-fno-omit-frame-pointer`.
+
+## Shared Syscall Numbers
+
+Unlike Linux's per-architecture numbering, FreeBSD uses **the same syscall numbers across all architectures**. Some notable values:
+
+| Syscall | Number | Notes |
 |---|---|---|
-| `read` | 3 | Read from file descriptor |
-| `write` | 4 | Write to file descriptor |
-| `open` | 5 | Open file |
-| `close` | 6 | Close file descriptor |
-| `lseek` | 478 | Reposition file offset |
-| `openat` | 499 | Open file relative to directory fd |
-| `ioctl` | 54 | Device I/O control |
+| `lseek` | 478 | Much higher than Linux (8) — renumbered in FreeBSD 12 |
+| `fstat` | 551 | Modern fstat variant |
+| `getdirentries` | 554 | FreeBSD 12+ ABI |
+| `mmap` | 477 | Renumbered for 64-bit compatibility |
+| `posix_openpt` | 504 | PTY master allocation (no `/dev/ptmx` open) |
 
-### File Operations
+## Constant Differences from Linux
 
-| Syscall | Number | Purpose |
-|---|---|---|
-| `stat` | 188 | Get file status |
-| `fstat` | 551 | Get file status by fd |
-| `fstatat` | 552 | Get file status relative to dir fd |
-| `unlink` | 10 | Delete file |
-| `unlinkat` | 503 | Delete file relative to dir fd |
+Many "standard" constants have different values on FreeBSD due to BSD heritage:
 
-### Directory Operations
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `mkdir` | 136 | Create directory |
-| `mkdirat` | 496 | Create directory relative to dir fd |
-| `rmdir` | 137 | Remove directory |
-| `getdirentries` | 554 | Read directory entries |
-
-### Memory
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `mmap` | 477 | Map memory pages |
-| `munmap` | 73 | Unmap memory pages |
-
-### Network
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `socket` | 97 | Create socket |
-| `connect` | 98 | Connect to remote |
-| `bind` | 104 | Bind to local address |
-| `sendto` | 133 | Send data |
-| `recvfrom` | 29 | Receive data |
-| `shutdown` | 134 | Shutdown connection |
-| `setsockopt` | 105 | Set socket option |
-| `getsockopt` | 118 | Get socket option |
-| `fcntl` | 92 | File control |
-| `poll` | 209 | Poll with timeout |
-
-### Process
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `exit` | 1 | Exit process |
-| `fork` | 2 | Create child process |
-| `execve` | 59 | Execute program |
-| `dup2` | 90 | Duplicate fd |
-| `wait4` | 7 | Wait for child |
-| `kill` | 37 | Send signal |
-| `setsid` | 147 | Create session |
-| `pipe` | 42 | Create pipe |
-
-### PTY / Time
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `posix_openpt` | 504 | Open pseudo-terminal master |
-| `clock_gettime` | 232 | Get clock time |
-| `gettimeofday` | 116 | Get time of day |
-
-## Constants
-
-FreeBSD shares BSD heritage with macOS — many constant values are identical but differ from Linux:
-
-| Constant | FreeBSD | Linux | Notes |
+| Constant | FreeBSD | Linux | Why |
 |---|---|---|---|
-| `O_CREAT` | `0x0200` | `0x0040` | BSD vs Linux |
-| `O_NONBLOCK` | `0x0004` | `0x0800` | BSD vs Linux |
-| `O_DIRECTORY` | `0x20000` | `0x10000`/`0x4000` | Varies |
-| `MAP_ANONYMOUS` | `0x1000` | `0x20` | BSD vs Linux |
-| `SOL_SOCKET` | `0xFFFF` | `1` | BSD-style |
-| `SO_ERROR` | `0x1007` | `4` | BSD-style |
-| `CLOCK_MONOTONIC` | `4` | `1` | Different IDs |
-| `EINPROGRESS` | `36` | `115` | Different errno |
-| `AT_FDCWD` | `-100` | `-100` | Same |
-| `AT_REMOVEDIR` | `0x0800` | `0x200` | Different |
-| `O_NOCTTY` | `0x8000` | `0x100` | Different |
+| `O_CREAT` | `0x0200` | `0x0040` | BSD vs System V heritage |
+| `O_NONBLOCK` | `0x0004` | `0x0800` | BSD assigns low bits first |
+| `MAP_ANONYMOUS` | `0x1000` | `0x20` | Different allocation of flag bits |
+| `SOL_SOCKET` | `0xFFFF` | `1` | BSD uses "magic" level value |
+| `EINPROGRESS` | `36` | `115` | BSD errno numbering |
+| `CLOCK_MONOTONIC` | `4` | `1` | Different clock ID assignment |
+| `AT_REMOVEDIR` | `0x0800` | `0x200` | Different flag bits |
+| `O_NOCTTY` | `0x8000` | `0x100` | Different bit positions |
 
-## Structures
+## FreeBSD Dirent Structure
 
-| Structure | Fields | Notes |
-|---|---|---|
-| `FreeBsdDirent` | `Fileno`, `Off`, `Reclen`, `Type`, `Pad0`, `Namlen`, `Pad1`, `Name[]` | FreeBSD 12+ ABI; has `Namlen` field (macOS-style) |
-| `Timespec` | `Sec`, `Nsec` | Nanosecond precision |
-| `Pollfd` | `Fd`, `Events`, `Revents` | Standard poll structure |
+```c
+struct FreeBsdDirent {
+    UINT64 Fileno;    // inode number
+    UINT64 Off;       // offset to next entry
+    UINT16 Reclen;    // total record size
+    UINT8  Type;      // DT_REG, DT_DIR, etc.
+    UINT8  Pad0;
+    UINT16 Namlen;    // filename length (BSD-specific field)
+    UINT16 Pad1;
+    CHAR   Name[];    // null-terminated filename
+};
+```
 
-## Architecture-Specific Notes
+The `Namlen` field is a BSD-ism — Linux's `dirent64` doesn't have it (the name length is derived from `Reclen` minus the header size).
 
-### x86_64
+## NOINLINE and LTO
 
-- Uses `syscall` instruction, same register convention as Linux x86_64
-- `RDX` is clobbered by `rval[1]` (FreeBSD returns two values from some syscalls like `fork` and `pipe`)
-
-### i386
-
-- Uses `int $0x80` — same as Linux i386
-- Arguments passed on the stack (above `ESP`), not in registers
-
-### AArch64
-
-- Uses `svc #0` instruction
-- `X1` is clobbered by `rval[1]` (dual-return syscalls)
-
-### RISC-V 64
-
-- Uses `ecall` instruction
-- Error flag in `T0` (X5) instead of carry flag
-- Syscall number in `T0` (X5) as well (FreeBSD convention, not `A7` like Linux)
+Every `System::Call` overload is `NOINLINE` to prevent LTO from:
+- Inlining the carry-flag check (`jnc`/`neg`) and optimizing it away
+- Reordering register stores across the `syscall`/`int $0x80` boundary
+- On RISC-V, miscompiling the T0 error-indicator pattern

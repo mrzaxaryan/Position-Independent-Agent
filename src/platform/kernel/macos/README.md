@@ -1,176 +1,161 @@
 # macOS (XNU) Kernel Interface
 
-Position-independent macOS/XNU syscall layer supporting **x86_64** and **AArch64** (Apple Silicon), with BSD syscalls, Mach trap support, and dynamic framework resolution via dyld.
+Position-independent macOS/XNU syscall layer for **x86_64** and **AArch64** (Apple Silicon). Combines BSD syscalls, Mach kernel traps, and a custom dyld framework resolution system that parses Mach-O binaries to locate `dlopen`/`dlsym` at runtime.
 
-## Architecture Support
+## XNU Dual-Personality Kernel
 
-| Architecture | Trap Instruction | Syscall Number | Arg Registers | Error Detection |
-|---|---|---|---|---|
-| **x86_64** | `syscall` | `RAX` | `RDI, RSI, RDX, R10, R8, R9` | Carry flag (`CF`) |
-| **AArch64** | `svc #0x80` | `X16` | `X0, X1, X2, X3, X4, X5` | Carry flag (via condition) |
+XNU has two syscall interfaces:
+- **BSD syscalls** (class 2) — POSIX file/network/process operations, prefixed with `0x2000000`
+- **Mach traps** (class 1) — kernel IPC, task management, using **negative** syscall numbers
 
-**Important AArch64 differences from Linux:**
-- Trap instruction is `svc #0x80` (not `svc #0`)
-- Syscall number goes in `X16` (not `X8`)
+Both are invoked through the same `syscall`/`svc` instruction, distinguished by the syscall number.
 
-## File Map
+## BSD Syscall Dispatch
 
-```
-macos/
-├── syscall.h              # BSD syscall numbers (class 2), constants, structures
-├── system.h               # Architecture dispatcher
-├── system.x86_64.h        # x86_64 inline assembly (0-6 args)
-├── system.aarch64.h       # AArch64 inline assembly (0-6 args)
-├── mach.h                 # Mach trap definitions and IPC structures
-├── dyld.h                 # Dynamic framework resolution declarations
-├── dyld.cc                # Dyld/Mach-O parsing implementation
-└── platform_result.h      # Carry-flag → Result<T, Error> conversion
+### x86_64: Standard with Carry Flag
+
+```asm
+mov rax, 0x2000003    ; SYS_READ = SYSCALL_CLASS_UNIX | 3
+mov rdi, arg1
+mov rsi, arg2
+mov rdx, arg3
+syscall
+jnc 1f                ; carry clear = success
+negq %%rax            ; carry set = negate errno
+1:
 ```
 
-## Error Model
+Same carry-flag pattern as FreeBSD. **RDX is clobbered by rval[1]** (secondary return value), requiring `"+r"` constraint.
 
-macOS uses the same **BSD carry-flag** model as FreeBSD. The `System::Call` wrappers negate the return value when carry is set, normalizing to the negative-errno convention.
+### AArch64: Two Key Differences from Linux
 
-## Syscall Number Format
-
-XNU classifies syscalls by class. BSD syscalls use class 2 with the `0x2000000` prefix:
-
-```c
-constexpr USIZE SYSCALL_CLASS_UNIX = 0x2000000;
-constexpr USIZE SYS_READ  = SYSCALL_CLASS_UNIX | 3;   // = 0x2000003
-constexpr USIZE SYS_WRITE = SYSCALL_CLASS_UNIX | 4;   // = 0x2000004
+```asm
+mov x16, 0x2000003    ; syscall number in X16 (NOT x8)
+mov x0, arg1
+; ...
+svc #0x80             ; supervisor call 0x80 (NOT svc #0)
+b.cc 1f               ; branch on carry clear
+neg x0, x0            ; negate errno
+1:
 ```
 
-Mach traps use **negative** numbers (class 1).
+Two critical divergences from Linux ARM64:
+1. **`svc #0x80`** instead of `svc #0` — the immediate value matters on XNU
+2. **Syscall number in `X16`** instead of `X8` — X8 is a regular argument register on macOS
 
-## BSD Syscalls
+**X1 is clobbered by rval[1]** just like RDX on x86_64.
 
-Syscall numbers are **shared across x86_64 and AArch64**.
+## Mach Traps: Negative Syscall Numbers
 
-### File I/O
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `read` | 3 | Read from file descriptor |
-| `write` | 4 | Write to file descriptor |
-| `open` | 5 | Open file |
-| `close` | 6 | Close file descriptor |
-| `lseek` | 199 | Reposition file offset |
-| `openat` | 463 | Open relative to directory fd |
-| `ioctl` | 54 | Device I/O control |
-
-### File / Directory Operations
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `stat64` | 338 | Get file status (64-bit) |
-| `fstat64` | 339 | Get file status by fd (64-bit) |
-| `fstatat64` | 470 | Get file status relative to dir fd |
-| `unlink` | 10 | Delete file |
-| `unlinkat` | 472 | Delete relative to dir fd |
-| `mkdir` | 136 | Create directory |
-| `mkdirat` | 475 | Create directory relative to dir fd |
-| `rmdir` | 137 | Remove directory |
-| `getdirentries64` | 344 | Read directory entries |
-
-### Memory / Network / Process
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `mmap` | 197 | Map memory pages |
-| `munmap` | 73 | Unmap memory pages |
-| `socket` | 97 | Create socket |
-| `connect` | 98 | Connect to remote |
-| `bind` | 104 | Bind to local address |
-| `sendto` | 133 | Send data |
-| `recvfrom` | 29 | Receive data |
-| `fork` | 2 | Create child process |
-| `execve` | 59 | Execute program |
-| `exit` | 1 | Exit process |
-| `pipe` | 42 | Create pipe |
-| `kill` | 37 | Send signal |
-| `poll` | 230 | Poll with timeout |
-| `gettimeofday` | 116 | Get time of day |
-
-### macOS-Specific
-
-| Constant | Value | Notes |
-|---|---|---|
-| `AT_FDCWD` | `-2` | Different from Linux (-100) and FreeBSD (-100) |
-| `AT_REMOVEDIR` | `0x0080` | Different from Linux (0x200) and FreeBSD (0x0800) |
-| `O_DIRECTORY` | `0x100000` | Different from FreeBSD (0x20000) |
-| `O_NOCTTY` | `0x20000` | Same as FreeBSD |
-| `O_CLOEXEC` | `0x1000000` | Same as FreeBSD |
-
-## Mach Trap Support
-
-**File:** `mach.h`
-
-macOS provides Mach kernel traps alongside BSD syscalls. These use **negative syscall numbers**:
+Mach kernel traps use negative numbers and do **not** set the carry flag — they return `kern_return_t` directly:
 
 | Trap | Number | Purpose |
 |---|---|---|
 | `mach_task_self` | -28 | Get current task port |
 | `mach_reply_port` | -26 | Allocate a reply port |
-| `mach_msg` | -31 | Send/receive IPC message (7 args) |
+| `mach_msg` | -31 | Send/receive IPC message |
 
-Mach traps are invoked using the same `System::Call` mechanism but with negative numbers in the syscall register.
+### 7-Argument mach_msg_trap
 
-### Mach IPC
+`mach_msg` takes 7 arguments — one more than the standard `System::Call` supports (0-6). The runtime uses custom assembly:
 
-The `mach_msg` trap is used for inter-process communication with the XNU kernel. It supports:
-- `MACH_SEND_MSG` — send a message
-- `MACH_RCV_MSG` — receive a message
-- Combined send+receive in a single call
+**x86_64:**
+```asm
+pushq %[notify]        ; push 7th arg onto stack
+mov rax, -31           ; MACH_TRAP_MACH_MSG
+syscall
+addq $8, %%rsp         ; clean up stack
+```
 
-This is used by the dyld resolution system to query `task_info` for locating the dyld image.
+**AArch64:**
+```asm
+mov x16, -31           ; trap number
+; x0-x5 hold args 1-6
+mov x6, arg7           ; 7th arg in x6 (ARM64 has plenty of registers)
+svc #0x80
+```
 
-## Dynamic Framework Resolution (dyld)
+## Dynamic Framework Resolution via dyld
 
-**Files:** `dyld.h`, `dyld.cc`
+The most sophisticated technique in the macOS layer. Frameworks like CoreGraphics are loaded at runtime without any link-time dependency — not even on libSystem.
 
-macOS-specific mechanism for loading frameworks and resolving function addresses at runtime without any dependency on libSystem or dyld stubs.
+### The Problem
+
+Position-independent code can't have import tables pointing to system frameworks. But macOS doesn't have a PEB-like structure to walk loaded modules. The solution: use Mach IPC to find dyld, parse its Mach-O symbol table to extract `_dlopen` and `_dlsym`, then use those to load frameworks.
 
 ### Resolution Flow
 
 ```
-ResolveFrameworkFunction(L"CoreFoundation", hash("CFStringCreateWithCString"))
-  │
-  ├─ 1. mach_task_self()   → get task port
-  ├─ 2. task_info(TASK_DYLD_INFO) via mach_msg → locate dyld image info
-  ├─ 3. Parse dyld's Mach-O headers to find its symbol table
-  ├─ 4. Locate _dlopen and _dlsym in dyld's export table
-  ├─ 5. dlopen("CoreFoundation.framework/CoreFoundation")
-  └─ 6. dlsym(handle, "CFStringCreateWithCString") → function pointer
+1. mach_task_self()                           → get task port
+      │
+2. mach_msg(task_info, TASK_DYLD_INFO)        → via Mach IPC
+      │                                          returns dyld_all_image_infos address
+      │
+3. Parse dyld's Mach-O headers:
+      ├─ Find __TEXT segment (vmAddr for ASLR slide)
+      ├─ Find __LINKEDIT segment (symbol table location)
+      ├─ Find LC_SYMTAB load command (symbol/string table offsets)
+      │
+4. Compute ASLR slide:
+      slide = (USIZE)header - textSeg→VmAddr
+      │
+5. Compute linked symbol table base:
+      linkeditBase = slide + linkeditSeg→VmAddr - linkeditSeg→FileOff
+      │
+6. Walk Nlist64 symbol table:
+      for each symbol:
+        name = stringTable[nlist.strIndex]
+        if Djb2::Hash(name) == hash("_dlopen"):
+          dlopen = slide + nlist.value
+      │
+7. dlopen("CoreGraphics.framework/CoreGraphics")
+      │
+8. dlsym(handle, "CGMainDisplayID")           → function pointer
 ```
 
-### Mach-O Parsing Structures
+### ASLR Slide Calculation
 
-| Structure | Purpose |
-|---|---|
-| `MachHeader64` | Mach-O header: `magic` (0xFEEDFACF), `cpuType`, `ncmds` |
-| `LoadCommand` | Generic load command: `cmd` type, `cmdSize` |
-| `SegmentCommand64` | Segment: `segName`, `vmAddr`, `vmSize`, `fileOff` |
-| `SymtabCommand` | Symbol table: `symOff`, `nSyms`, `strOff`, `strSize` |
-| `Nlist64` | Symbol entry: `strIndex`, `type`, `sect`, `value` |
+The key insight is that the Mach-O `__TEXT` segment has a compile-time `VmAddr`, but ASLR loads the binary at a random address. The **slide** is the difference:
 
-## Constants (BSD Values)
+```c
+USIZE slide = (USIZE)machHeader - textSegment->VmAddr;
+```
 
-macOS shares BSD heritage with FreeBSD. Most constant values are identical to FreeBSD:
+All symbol table addresses (stored as file offsets from the binary's preferred base) need this slide added to get their actual runtime addresses.
 
-| Constant | Value | Same as FreeBSD? |
+### Mach-O Structures
+
+| Structure | Magic/Cmd | Purpose |
+|---|---|---|
+| `MachHeader64` | `0xFEEDFACF` | Mach-O 64-bit header, contains `ncmds` load commands |
+| `SegmentCommand64` | `LC_SEGMENT_64` (0x19) | Describes a memory segment (`__TEXT`, `__LINKEDIT`) |
+| `SymtabCommand` | `LC_SYMTAB` (0x02) | Symbol table and string table offsets |
+| `Nlist64` | — | Symbol entry: `strIndex`, `type`, `sect`, `value` (address) |
+
+## BSD Constants (Shared with FreeBSD)
+
+macOS and FreeBSD share BSD heritage — most constants are identical:
+
+| Constant | Value | Same as FreeBSD |
 |---|---|---|
 | `O_CREAT` | `0x0200` | Yes |
 | `O_NONBLOCK` | `0x0004` | Yes |
 | `MAP_ANONYMOUS` | `0x1000` | Yes |
 | `SOL_SOCKET` | `0xFFFF` | Yes |
-| `SO_ERROR` | `0x1007` | Yes |
 | `EINPROGRESS` | `36` | Yes |
+
+Notable macOS-specific differences:
+
+| Constant | macOS | FreeBSD | Linux |
+|---|---|---|---|
+| `AT_FDCWD` | `-2` | `-100` | `-100` |
+| `AT_REMOVEDIR` | `0x0080` | `0x0800` | `0x200` |
+| `O_DIRECTORY` | `0x100000` | `0x20000` | varies |
 
 ## Structures
 
-| Structure | Fields | Notes |
-|---|---|---|
-| `BsdDirent64` | `Ino`, `Seekoff`, `Reclen`, `Namlen`, `Type`, `Name[]` | macOS-specific layout |
-| `Timeval` | `Sec` (8 bytes), `Usec` (8 bytes) | 64-bit fields for raw syscall ABI |
-| `Pollfd` | `Fd`, `Events`, `Revents` | Standard poll structure |
+| Structure | Notes |
+|---|---|
+| `BsdDirent64` | Has `Seekoff` field (not `Off` like Linux/FreeBSD) |
+| `Timeval` | Both `Sec` and `Usec` are **8 bytes** (kernel ABI for 64-bit processes) |
+| `Pollfd` | Standard |

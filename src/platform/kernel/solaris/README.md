@@ -1,159 +1,137 @@
 # Solaris Kernel Interface
 
-Position-independent Solaris/illumos syscall layer supporting **3 architectures** with BSD-style carry-flag error semantics and SVR4-heritage syscall conventions.
+Position-independent Solaris/illumos syscall layer supporting **3 architectures**. Solaris has unique syscall conventions inherited from SVR4 — including `int $0x91` on i386, multiplexed process/group syscalls, and aggressive legacy syscall removal in Solaris 11.4.
 
-## Architecture Support
+## The `int $0x91` Trap Gate (i386)
 
-| Architecture | Trap Instruction | Syscall Number | Arg Registers | Error Detection |
-|---|---|---|---|---|
-| **x86_64** | `syscall` | `RAX` | `RDI, RSI, RDX, R10, R8, R9` | Carry flag (`CF`) |
-| **i386** | `int $0x91` | `EAX` | Stack-based (above `ESP`) | Carry flag (`CF`) |
-| **AArch64** | `svc #0` | `X8` | `X0, X1, X2, X3, X4, X5` | Carry (via `X1`) |
+Solaris i386 uses `int $0x91` — **not** `int $0x80` (Linux/FreeBSD). This is the SVR4 fast system call trap gate. The calling convention mirrors FreeBSD i386 (stack-based arguments with dummy return address), not Linux i386 (register-based):
 
-**Note:** i386 Solaris uses `int $0x91` — NOT `int $0x80` (which is Linux/FreeBSD).
-
-## File Map
-
-```
-solaris/
-├── syscall.h              # Syscall numbers, Solaris constants, structures
-├── system.h               # Architecture dispatcher
-├── system.x86_64.h        # x86_64 inline assembly (0-6 args)
-├── system.i386.h          # i386 inline assembly (0-6 args)
-├── system.aarch64.h       # AArch64 inline assembly (0-6 args)
-└── platform_result.h      # Carry-flag → Result<T, Error> conversion
+```asm
+pushl $0          ; dummy return address (SVR4 convention)
+pushl arg1
+pushl arg2
+; ...
+int $0x91         ; ← Solaris-specific trap gate
+jnc 1f            ; carry flag error check (BSD-style)
+negl %%eax
+1:
+addl $N, %%esp    ; clean up stack
 ```
 
-## Error Model
+The 6-argument variant has the same EBP/frame-pointer conflict as FreeBSD i386 — uses `"g"` constraint for the 6th argument.
 
-Solaris uses the **carry-flag** error model (same as BSD). On error, the carry flag is set and `EAX`/`RAX` contains the positive errno. The `System::Call` wrappers negate the return value when carry is set.
+## Error Handling: Carry Flag
 
-## Syscalls
+Solaris uses the **BSD carry-flag** model across all architectures:
 
-Syscall numbers are **shared across all Solaris architectures**.
-
-### File I/O
-
-| Syscall | Number | Purpose |
+| Architecture | Instruction | Error Handling |
 |---|---|---|
-| `read` | 3 | Read from file descriptor |
-| `write` | 4 | Write to file descriptor |
-| `open` | 5 | Open file (legacy — removed in Solaris 11.4) |
-| `close` | 6 | Close file descriptor |
-| `lseek` | 19 | Reposition file offset |
-| `openat` | 68 | Open relative to directory fd |
-| `ioctl` | 54 | Device I/O control |
+| **x86_64** | `syscall` | `jnc 1f; negq %%rax; 1:` |
+| **i386** | `int $0x91` | `jnc 1f; negl %%eax; 1:` |
+| **AArch64** | `svc #0` | `b.cc 1f; neg x0, x0; 1:` |
 
-### File Operations
+### AArch64: Standard Conventions
 
-| Syscall | Number | Purpose |
-|---|---|---|
-| `fstatat` | 66 | Get file status relative to dir fd |
-| `unlinkat` | 76 | Delete file relative to dir fd |
+Solaris AArch64 follows standard conventions (unlike macOS):
+- `svc #0` (not `svc #0x80`)
+- Syscall number in `X8` (not `X16`)
+- **X1 clobbered by rval[1]** — same as FreeBSD
 
-### Directory Operations
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `mkdirat` | 102 | Create directory relative to dir fd |
-| `getdents` | 81 | Read directory entries |
-| `getdents64` | 213 | Read directory entries (64-bit) |
-
-### Memory
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `mmap` | 115 | Map memory pages |
-| `munmap` | 117 | Unmap memory pages |
-
-### Network
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `socket` | 230 | Create socket |
-| `connect` | 235 | Connect to remote |
-| `bind` | 232 | Bind to local address |
-| `sendto` | 242 | Send data |
-| `recvfrom` | 238 | Receive data |
-| `shutdown` | 244 | Shutdown connection |
-| `setsockopt` | 245 | Set socket option |
-| `getsockopt` | 246 | Get socket option |
-
-### Process
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `exit` | 1 | Exit process |
-| `forksys` | 142 | Fork (subcodes: fork=0, vfork=1, forkall=2) |
-| `execve` | 59 | Execute program |
-| `pgrpsys` | 39 | Process group ops (getpgrp=0, setpgrp=1, getsid=2, setsid=3) |
-| `kill` | 37 | Send signal |
-| `pipe` | 42 | Create pipe |
-| `waitid` | 107 | Wait for child |
-
-### Other
-
-| Syscall | Number | Purpose |
-|---|---|---|
-| `pollsys` | 183 | Poll with timeout |
-| `clock_gettime` | 191 | Get clock time |
+All `System::Call` overloads are `NOINLINE` to prevent LTO from miscompiling the carry-flag + `"+r"(x1)` constraint pattern.
 
 ## Multiplexed Syscalls
 
-Solaris uses **multiplexed syscalls** — a single syscall number with sub-operation codes:
+Solaris groups related operations under single syscall numbers with sub-operation codes:
 
-### `forksys` (142)
+### forksys (142)
 
-```
-Subcode 0: fork     — create child process
-Subcode 1: vfork    — create child sharing address space
-Subcode 2: forkall  — fork all LWPs (lightweight processes)
-```
+A single syscall for all fork variants:
 
-### `pgrpsys` (39)
-
-```
-Subcode 0: getpgrp  — get process group
-Subcode 1: setpgrp  — set process group
-Subcode 2: getsid   — get session ID
-Subcode 3: setsid   — create new session
+```c
+// fork:     System::Call(SYS_FORKSYS, 0, 0)
+// vfork:    System::Call(SYS_FORKSYS, 1, 0)
+// forkall:  System::Call(SYS_FORKSYS, 2, 0)
 ```
 
-## Solaris-Specific Constants
+Subcode 0 = fork, 1 = vfork (shared address space), 2 = forkall (fork all LWPs — Solaris-specific for multi-threaded processes).
 
-Many constants differ significantly from Linux and BSD:
+### pgrpsys (39)
 
-| Constant | Solaris | Linux | FreeBSD | Notes |
-|---|---|---|---|---|
-| `AT_FDCWD` | `0xffd19553` | `-100` | `-100` | Solaris-unique value |
-| `AT_REMOVEDIR` | `0x01` | `0x200` | `0x0800` | Solaris-unique |
-| `O_CREAT` | `0x100` | `0x040` | `0x200` | SVR4 heritage |
-| `O_APPEND` | `0x08` | `0x400` | `0x08` | Same as FreeBSD |
-| `O_NONBLOCK` | `0x80` | `0x800` | `0x04` | Unique |
-| `O_DIRECTORY` | `0x1000000` | `0x10000` | `0x20000` | Very large value |
-| `MAP_ANONYMOUS` | `0x100` | `0x20` | `0x1000` | Unique |
-| `CLOCK_REALTIME` | `3` | `0` | `0` | Different ID |
-| `CLOCK_MONOTONIC` | `4` | `1` | `4` | Same as FreeBSD |
-| `EINPROGRESS` | `150` | `115` | `36` | Same as MIPS Linux |
-| `SOL_SOCKET` | `0xFFFF` | `1` | `0xFFFF` | BSD-style |
-| `SO_ERROR` | `0x1007` | `4` | `0x1007` | BSD-style |
+Process group and session operations:
 
-### Legacy Syscall Removal
+```c
+// getpgrp:  System::Call(SYS_PGRPSYS, 0)
+// setpgrp:  System::Call(SYS_PGRPSYS, 1)
+// getsid:   System::Call(SYS_PGRPSYS, 2, pid)
+// setsid:   System::Call(SYS_PGRPSYS, 3)
+// getpgid:  System::Call(SYS_PGRPSYS, 4, pid)
+// setpgid:  System::Call(SYS_PGRPSYS, 5, pid, pgid)
+```
 
-Oracle Solaris 11.4 removed many legacy syscalls. The following must use `*at` variants:
+This design comes from SVR4's system call table, where related operations share a single trap number.
 
-- `open` → `openat`
-- `stat`/`fstat` → `fstatat`
-- `unlink` → `unlinkat`
-- `mkdir` → `mkdirat`
-- `rmdir` → `unlinkat` with `AT_REMOVEDIR`
+## Legacy Syscall Removal (Solaris 11.4)
 
-## Structures
+Oracle removed many "traditional" syscalls from Solaris 11.4. Code **must** use `*at` variants:
 
-| Structure | Fields | Notes |
+| Removed | Replacement | Notes |
 |---|---|---|
-| `SolarisDirent64` | `Ino`, `Off`, `Reclen`, `Name[]` | **No `Type` field** — must use `fstatat` to determine file type |
-| `Timespec` | `Sec`, `Nsec` | Nanosecond precision |
-| `Pollfd` | `Fd`, `Events`, `Revents` | Standard poll structure |
+| `open` | `openat` (68) | `AT_FDCWD` for current directory |
+| `stat` / `fstat` | `fstatat` (66) | Single syscall for all stat variants |
+| `unlink` | `unlinkat` (76) | With or without `AT_REMOVEDIR` |
+| `mkdir` | `mkdirat` (102) | Relative to directory fd |
+| `rmdir` | `unlinkat` + `AT_REMOVEDIR` | No standalone rmdir |
 
-**Important:** `SolarisDirent64` lacks a `Type` field (unlike Linux's `d_type` and BSD's `d_type`). To determine whether an entry is a file or directory, a separate `fstatat` call is required.
+The legacy numbers still exist in the syscall table (for compatibility), but calling them on Solaris 11.4 may fail.
+
+## Solaris-Unique Constant Values
+
+Solaris has some of the most divergent constant values of any platform:
+
+| Constant | Solaris | Linux | FreeBSD | Why |
+|---|---|---|---|---|
+| `AT_FDCWD` | `0xffd19553` (-665133) | `-100` | `-100` | Solaris-unique magic value |
+| `AT_REMOVEDIR` | `0x01` | `0x200` | `0x0800` | Simplest value |
+| `O_CREAT` | `0x100` | `0x040` | `0x200` | SVR4 heritage |
+| `O_NONBLOCK` | `0x80` | `0x800` | `0x04` | SVR4 heritage |
+| `O_DIRECTORY` | `0x1000000` | varies | `0x20000` | Very large value |
+| `MAP_ANONYMOUS` | `0x100` | `0x20` | `0x1000` | Unique |
+| `CLOCK_REALTIME` | `3` | `0` | `0` | Different ID assignment |
+| `EINPROGRESS` | `150` | `115` | `36` | SVR4 errno numbering |
+| `SOCK_STREAM` | `2` | `1` | `1` | SVR4 swaps STREAM/DGRAM |
+| `SOCK_DGRAM` | `1` | `2` | `2` | SVR4 swaps STREAM/DGRAM |
+
+The `AT_FDCWD` value (`0xffd19553`) is particularly notable — it's a deliberately unlikely file descriptor value chosen to be unique.
+
+`SOCK_STREAM` and `SOCK_DGRAM` are **swapped** compared to every other platform (SVR4 heritage, also shared by MIPS Linux).
+
+## The Missing d_type: Solaris dirent
+
+Solaris `dirent` lacks a `d_type` field:
+
+```c
+struct SolarisDirent64 {
+    UINT64 Ino;       // inode number
+    UINT64 Off;       // offset to next entry
+    UINT16 Reclen;    // record length
+    CHAR   Name[];    // filename — NO TYPE FIELD
+};
+```
+
+To determine if an entry is a file or directory, a **separate `fstatat` call is required for every entry**. This makes Solaris directory iteration ~2x more expensive than platforms with `d_type`.
+
+### getdents vs getdents64
+
+On Solaris, 64-bit processes that call `getdents64` receive **SIGSYS** (bad syscall). The workaround: use `getdents` (the "32-bit" variant, syscall 81), which returns native 64-bit dirent structures when called from a 64-bit process. This is a Solaris kernel quirk — `getdents64` (syscall 213) is only for 32-bit processes accessing large directories.
+
+## Socket Constants (BSD-Style)
+
+Despite being SVR4-derived, Solaris socket options use BSD-style values:
+
+```c
+SOL_SOCKET   = 0xFFFF    // same as FreeBSD/macOS (not 1 like Linux)
+SO_ERROR     = 0x1007    // same as FreeBSD/macOS (not 4 like Linux)
+SO_RCVTIMEO  = 0x1006    // same as FreeBSD/macOS (not 20 like Linux)
+```
+
+This is because Solaris integrated the BSD socket layer wholesale, inheriting its constant values.

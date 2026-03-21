@@ -1,47 +1,31 @@
 # iOS (XNU) Kernel Interface
 
-Position-independent iOS syscall layer for **AArch64** — re-exports macOS XNU definitions since iOS shares the same kernel and BSD syscall ABI.
+Position-independent iOS syscall layer for **AArch64 only**. Re-exports macOS XNU definitions since iOS shares the same kernel and BSD syscall ABI.
 
-## Architecture Support
+## Same Kernel, Same Syscalls
 
-| Architecture | Trap Instruction | Syscall Number | Arg Registers |
-|---|---|---|---|
-| **AArch64** | `svc #0x80` | `X16` | `X0, X1, X2, X3, X4, X5` |
+iOS runs on the **XNU kernel** — the exact same kernel as macOS. The syscall interface is identical at the binary level:
 
-## File Map
-
-```
-ios/
-├── syscall.h              # Re-exports macOS syscall definitions
-├── system.h               # Re-exports macOS system dispatch
-├── system.aarch64.h       # Re-exports macOS AArch64 inline assembly
-└── platform_result.h      # Re-exports macOS result conversion
-```
-
-## Relationship to macOS
-
-iOS runs on the **XNU kernel** — the same kernel as macOS. The BSD syscall interface is identical:
 - Same syscall numbers (class 2, `0x2000000` prefix)
-- Same `svc #0x80` trap instruction on AArch64
-- Same `X16` register for syscall number
-- Same carry-flag error model
-- Same BSD constants (`O_CREAT`, `SOL_SOCKET`, `AT_FDCWD`, etc.)
+- Same `svc #0x80` trap instruction (not `svc #0`)
+- Same `X16` register for syscall number (not `X8`)
+- Same carry-flag error model (`b.cc 1f; neg x0, x0; 1:`)
+- Same X1 clobbering for rval[1]
+- Same BSD constant values (`O_CREAT` = 0x200, `SOL_SOCKET` = 0xFFFF, etc.)
 
-All files in this directory simply re-export the macOS definitions:
+All files in this directory simply include the macOS equivalents:
 
 ```c
-// ios/syscall.h
-#include "platform/kernel/macos/syscall.h"
-
-// ios/system.h
-#include "platform/kernel/macos/system.h"
+// ios/syscall.h → includes macos/syscall.h
+// ios/system.h → includes macos/system.h
+// ios/system.aarch64.h → includes macos/system.aarch64.h
 ```
 
-## What's Different from macOS
+## What iOS Lacks
 
-While the kernel syscall interface is identical, iOS differs at higher levels:
-- No dyld framework resolution (iOS apps use a different loading model)
-- Restricted syscall access (sandboxing is stricter)
-- AArch64 only (no x86_64 support)
+While the syscall interface is identical, iOS differs at higher levels:
+- **No dyld framework resolution** — iOS apps use a different code signing and loading model
+- **Stricter sandbox** — many syscalls are blocked by the App Sandbox
+- **AArch64 only** — no x86_64 (that's the iOS Simulator, which runs macOS)
 
-For full syscall documentation, see the [macOS Kernel Interface](../macos/README.md).
+For the full technical details of the syscall dispatch, carry-flag handling, Mach traps, and BSD constants, see the [macOS Kernel Interface](../macos/README.md).

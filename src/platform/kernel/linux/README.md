@@ -1,189 +1,171 @@
 # Linux Kernel Interface
 
-Position-independent Linux syscall layer supporting **7 architectures** — the widest architecture coverage of any platform in the project.
+Position-independent Linux syscall layer supporting **7 architectures** — the widest architecture coverage of any platform in the project. Each architecture has its own trap instruction, register convention, syscall number table, and in some cases fundamentally different error handling.
 
-## Architecture Support
+## Error Handling: Negative Return vs $A3 Flag
 
-| Architecture | Trap Instruction | Syscall Number | Arg Registers | Clobbered |
-|---|---|---|---|---|
-| **x86_64** | `syscall` | `RAX` | `RDI, RSI, RDX, R10, R8, R9` | `RCX, R11` |
-| **i386** | `int $0x80` | `EAX` | `EBX, ECX, EDX, ESI, EDI, EBP` | — |
-| **AArch64** | `svc #0` | `X8` | `X0, X1, X2, X3, X4, X5` | — |
-| **ARMv7-A** | `svc #0` | `R7` | `R0, R1, R2, R3, R4, R5` | — |
-| **RISC-V 64** | `ecall` | `A7 (X17)` | `A0-A5 (X10-X15)` | — |
-| **RISC-V 32** | `ecall` | `A7 (X17)` | `A0-A5 (X10-X15)` | — |
-| **MIPS64** | `syscall` | `$V0 ($2)` | `$A0-$A5 ($4-$9)` | `$AT ($1)` |
-
-## File Map
-
-```
-linux/
-├── syscall.h              # Shared POSIX constants, structures, arch-selector
-├── syscall.x86_64.h       # x86_64 syscall numbers
-├── syscall.i386.h         # i386 syscall numbers
-├── syscall.aarch64.h      # AArch64 syscall numbers
-├── syscall.armv7a.h       # ARMv7-A syscall numbers
-├── syscall.riscv64.h      # RISC-V 64 syscall numbers
-├── syscall.riscv32.h      # RISC-V 32 syscall numbers
-├── syscall.mips64.h       # MIPS64 syscall numbers
-├── system.h               # Architecture dispatcher
-├── system.x86_64.h        # x86_64 inline assembly (0-6 args)
-├── system.i386.h          # i386 inline assembly (0-6 args)
-├── system.aarch64.h       # AArch64 inline assembly (0-6 args)
-├── system.armv7a.h        # ARMv7-A inline assembly (0-6 args)
-├── system.riscv64.h       # RISC-V 64 inline assembly (0-6 args)
-├── system.riscv32.h       # RISC-V 32 inline assembly (0-6 args)
-├── system.mips64.h        # MIPS64 inline assembly (0-6 args)
-└── platform_result.h      # Negative-errno → Result<T, Error> conversion
-```
-
-## Error Model
-
-Linux uses the **negative return** model — on failure, the syscall returns `-errno` directly in the return register:
+Linux uses the **negative return** model on all architectures except MIPS:
 
 ```
 Return >= 0  →  success (value is the result)
 Return < 0   →  failure (negate to get errno)
 ```
 
-Converted via `result::FromLinux<T>(rawResult)` → `Result<T, Error>`.
+### MIPS64: The Odd One Out
 
-## Syscall Dispatch
+MIPS64 is the only Linux architecture that uses a **separate error register** — mirroring the BSD carry-flag pattern rather than Linux's standard negative-return convention:
 
-Each architecture provides `System::Call` overloads for 0 to 6 arguments. Example (x86_64):
-
-```c
-static NOINLINE SSIZE Call(USIZE number, USIZE arg1, USIZE arg2, USIZE arg3)
-{
-    register USIZE r_rdi __asm__("rdi") = arg1;
-    register USIZE r_rsi __asm__("rsi") = arg2;
-    register USIZE r_rdx __asm__("rdx") = arg3;
-    register USIZE r_rax __asm__("rax") = number;
-    __asm__ volatile("syscall\n" : "+r"(r_rax)
-        : "r"(r_rdi), "r"(r_rsi), "r"(r_rdx) : "rcx", "r11", "memory");
-    return (SSIZE)r_rax;
-}
+```asm
+syscall                    ; issue syscall
+beqz $7, 1f               ; $a3 ($7) = error flag: 0 = success
+nop                        ; ← MIPS branch delay slot (mandatory!)
+negu $2, $2                ; error: negate $v0 to make it negative
+1:
 ```
 
-## Syscalls by Category
+The `nop` after `beqz` is **not optional** — MIPS executes the instruction in the branch delay slot (the instruction immediately after a branch) regardless of whether the branch is taken. Without the `nop`, the `negu` would always execute.
 
-### File I/O
+MIPS also clobbers an unusually large set of registers: `$1 (at)`, `$3 (v1)`, `$10-$15 (t2-t7)`, `$24-$25 (t8-t9)`, `hi`, `lo` — all explicitly listed in the clobber list.
 
-| Syscall | x86_64 | AArch64 | i386 | Purpose |
+## Architecture-Specific Syscall Dispatch
+
+### x86_64: The Straightforward Case
+
+```asm
+mov rax, <syscall_number>     ; e.g., 0 for read, 1 for write
+mov rdi, arg1
+mov rsi, arg2
+mov rdx, arg3
+mov r10, arg4                  ; NOT rcx — syscall clobbers rcx
+mov r8, arg5
+mov r9, arg6
+syscall                        ; rcx and r11 are clobbered
+```
+
+Arguments in `RDI, RSI, RDX, R10, R8, R9`. Note `R10` instead of `RCX` — the `syscall` instruction saves `RIP` to `RCX` and `RFLAGS` to `R11`, destroying both.
+
+### i386: Register Passing with EBP Headaches
+
+Linux i386 passes arguments in **registers** (unlike FreeBSD/Solaris i386 which use the stack):
+
+```asm
+mov eax, <syscall_number>
+mov ebx, arg1
+mov ecx, arg2
+mov edx, arg3
+mov esi, arg4
+mov edi, arg5
+mov ebp, arg6     ; ← problem: may be frame pointer
+int $0x80
+```
+
+The 6-argument case is tricky because `EBP` is the frame pointer when `-fno-omit-frame-pointer` is active. The code manually saves and restores it:
+
+```asm
+pushl %%ebp           ; save frame pointer
+movl %[a6], %%ebp     ; load 6th argument
+int $0x80
+popl %%ebp            ; restore frame pointer
+```
+
+The `arg6` operand uses `"rm"` constraint (register **or memory**) because at `-O0` with frame pointer enabled, all 6 GPRs are tied to operands and `arg6` may need to live on the stack.
+
+### AArch64: Clean Modern Design
+
+```asm
+mov x8, <syscall_number>      ; syscall number in x8
+mov x0, arg1                   ; x0-x5 for arguments
+; ...
+svc #0                         ; supervisor call
+```
+
+No register clobbering complications. AArch64 exclusively uses the **modern syscall table** — no legacy `open`, `stat`, `unlink`, `mkdir`, `fork`, `dup2`, `pipe`. Must use `openat`, `fstatat`, `unlinkat`, `mkdirat`, `clone`, `dup3`, `pipe2` with `AT_FDCWD` (-100).
+
+### ARMv7-A: Syscall Number in R7
+
+```asm
+mov r7, <syscall_number>      ; r7 holds syscall number
+mov r0, arg1                   ; r0-r5 for arguments
+; ...
+svc #0
+```
+
+Supports both direct socket syscalls AND the legacy `socketcall` multiplexer (unlike i386 which only has the multiplexer).
+
+### RISC-V 64/32: ecall with A7
+
+```asm
+li a7, <syscall_number>       ; a7 (x17) for syscall number
+mv a0, arg1                    ; a0-a5 (x10-x15) for arguments
+; ...
+ecall
+```
+
+Same modern-only syscall table as AArch64. **RISC-V 32 has no 32-bit time syscalls** — must use `clock_gettime64`, `ppoll_time64`. The `Timespec` and `Timeval` structures have `INT64` fields (not `SSIZE`) to match the kernel ABI.
+
+## Syscall Number Divergence
+
+Unlike BSD systems (where syscall numbers are shared across architectures), Linux assigns **different numbers per architecture**. Some examples:
+
+| Syscall | x86_64 | i386 | AArch64 | MIPS64 |
 |---|---|---|---|---|
-| `read` | 0 | 63 | 3 | Read from file descriptor |
-| `write` | 1 | 64 | 4 | Write to file descriptor |
-| `open` | 2 | — | 5 | Open file (legacy) |
-| `openat` | 257 | 56 | 295 | Open file relative to directory fd |
-| `close` | 3 | 57 | 6 | Close file descriptor |
-| `lseek` | 8 | 62 | 19 | Reposition file offset |
-| `ioctl` | 16 | 29 | 54 | Device I/O control |
+| `read` | 0 | 3 | 63 | 5000 |
+| `write` | 1 | 4 | 64 | 5001 |
+| `open` | 2 | 5 | — | 5002 |
+| `close` | 3 | 6 | 57 | 5003 |
+| `exit` | 60 | 1 | 93 | 5058 |
+| `socket` | 41 | 102* | 198 | 5041 |
 
-### File Operations
+*i386 uses `socketcall` multiplexer, not direct socket syscalls.
 
-| Syscall | x86_64 | AArch64 | Purpose |
+MIPS64 numbers start at **5000** (5000 + original SVR4 number).
+
+## Constant Value Divergence
+
+Even POSIX "constants" vary across architectures due to historical ABI inheritance:
+
+| Constant | Generic | MIPS64 | Notes |
 |---|---|---|---|
-| `stat`/`fstatat` | 4/262 | 79 | Get file status |
-| `fstat` | 5 | 80 | Get file status by fd |
-| `unlink`/`unlinkat` | 87/— | 35 | Delete file |
-| `mkdir`/`mkdirat` | 83/— | 34 | Create directory |
-| `rmdir` | 84 | — | Remove directory |
-| `getdents64` | 217 | 61 | Read directory entries |
+| `O_CREAT` | `0x0040` | `0x0100` | IRIX/SVR4 heritage |
+| `O_APPEND` | `0x0400` | `0x0008` | Different bit position |
+| `O_NONBLOCK` | `0x0800` | `0x0080` | Different bit position |
+| `O_DIRECTORY` | `0x4000`/`0x10000` | `0x10000` | x86 uses 0x10000, ARM uses 0x4000 |
+| `MAP_ANONYMOUS` | `0x20` | `0x0800` | MIPS unique |
+| `SOL_SOCKET` | `1` | `0xFFFF` | MIPS uses BSD-style |
+| `SO_ERROR` | `4` | `0x1007` | MIPS uses BSD-style |
+| `EINPROGRESS` | `115` | `150` | MIPS unique |
+| `SO_RCVTIMEO` | `20` | `0x1006` | MIPS uses BSD-style; RV32 uses 66 (time64) |
 
-### Memory
+## i386 socketcall Multiplexer
 
-| Syscall | x86_64 | AArch64 | Purpose |
-|---|---|---|---|
-| `mmap` | 9 | 222 | Map memory pages |
-| `munmap` | 11 | 215 | Unmap memory pages |
+i386 Linux packs all socket operations through a single `SYS_SOCKETCALL` (102):
 
-### Network
+```c
+// Create socket:
+USIZE args[] = { domain, type, protocol };
+System::Call(102 /*SYS_SOCKETCALL*/, 1 /*SOCKOP_SOCKET*/, (USIZE)args);
 
-| Syscall | x86_64 | AArch64 | Purpose |
-|---|---|---|---|
-| `socket` | 41 | 198 | Create socket |
-| `connect` | 42 | 203 | Connect to remote |
-| `bind` | 49 | 200 | Bind to local address |
-| `sendto` | 44 | 206 | Send data |
-| `recvfrom` | 45 | 207 | Receive data |
-| `shutdown` | 48 | 210 | Shutdown connection |
-| `setsockopt` | 54 | 208 | Set socket option |
-| `getsockopt` | 55 | 209 | Get socket option |
-| `ppoll` | 271 | 73 | Poll with timeout |
-| `fcntl` | 72 | 25 | File control |
+// Connect:
+USIZE args[] = { fd, (USIZE)addr, addrlen };
+System::Call(102, 3 /*SOCKOP_CONNECT*/, (USIZE)args);
+```
 
-### Process
+The kernel reads the argument array from the pointer — one less level of indirection than a typical syscall, but the arguments are packed in memory rather than registers.
 
-| Syscall | x86_64 | AArch64 | Purpose |
-|---|---|---|---|
-| `exit` | 60 | 93 | Exit thread |
-| `exit_group` | 231 | 94 | Exit all threads |
-| `fork`/`clone` | 57 | 220 | Create child process |
-| `execve` | 59 | 221 | Execute program |
-| `dup2`/`dup3` | 33 | 24 | Duplicate fd |
-| `wait4` | 61 | 260 | Wait for child |
-| `kill` | 62 | 129 | Send signal |
-| `setsid` | 112 | 157 | Create session |
-| `pipe`/`pipe2` | 22 | 59 | Create pipe |
+## LTO Miscompilation Prevention
 
-### Other
+All `System::Call` overloads are marked `NOINLINE`. Without this, Link-Time Optimization may:
+- Inline the assembly block and optimize away the negative-return check
+- Reorder register assignments around the `syscall`/`int $0x80` instruction
+- On MIPS, eliminate the branch delay slot `nop`
 
-| Syscall | x86_64 | AArch64 | Purpose |
-|---|---|---|---|
-| `clock_gettime` | 228 | 113 | Get clock time |
-| `getrandom` | 318 | 278 | Get random bytes |
+This is a common pitfall with inline assembly in position-independent code compiled with LTO.
 
-## Architecture-Specific Notes
+## Shared Structures
 
-### AArch64 / RISC-V 64 / RISC-V 32
-
-These architectures use the **modern Linux syscall table** exclusively:
-- No legacy `open` / `stat` / `unlink` / `mkdir` / `rmdir` — must use `openat`, `fstatat`, `unlinkat`, `mkdirat` with `AT_FDCWD` (-100)
-- `clone` instead of `fork`
-- `dup3` instead of `dup2`
-- `pipe2` instead of `pipe`
-
-### i386
-
-- Uses `socketcall` (102) multiplexer for all socket operations — individual socket syscalls are dispatched via sub-numbers
-- Uses `mmap2` instead of `mmap` (page-offset-based)
-- Uses `fcntl64` instead of `fcntl`
-
-### RISC-V 32
-
-- No legacy 32-bit time syscalls — uses `clock_gettime64` and `ppoll_time64`
-- `Timespec` and `Timeval` fields are `INT64` (not `SSIZE`) to match kernel ABI
-- `SO_RCVTIMEO` = 66, `SO_SNDTIMEO` = 67 (time64 variants, not 20/21)
-
-### MIPS64
-
-- Syscall numbers start at **5000** (e.g., `read` = 5000, `open` = 5002)
-- **Special error handling:** `$A3` register is the error flag (0 = success, non-zero = error), errno in `$V0` — differs from all other Linux architectures
-- Inherited IRIX/SVR4 constant values:
-  - `O_CREAT` = 0x100, `O_APPEND` = 0x08, `O_NONBLOCK` = 0x80
-  - `SOL_SOCKET` = 0xFFFF, `SO_ERROR` = 0x1007
-  - `MAP_ANONYMOUS` = 0x0800
-  - `EINPROGRESS` = 150
-
-## Shared Constants and Structures
-
-### Constants (`syscall.h`)
-
-| Category | Constants |
-|---|---|
-| **File descriptors** | `STDIN_FILENO` (0), `STDOUT_FILENO` (1), `STDERR_FILENO` (2) |
-| **Open flags** | `O_RDONLY`, `O_WRONLY`, `O_RDWR`, `O_CREAT`, `O_TRUNC`, `O_APPEND`, `O_NONBLOCK`, `O_DIRECTORY` |
-| **Permissions** | `S_IRUSR`, `S_IWUSR`, `S_IXUSR`, `S_IRGRP`, `S_IWGRP`, etc. |
-| **Memory** | `PROT_READ`, `PROT_WRITE`, `PROT_EXEC`, `MAP_SHARED`, `MAP_PRIVATE`, `MAP_ANONYMOUS` |
-| **Socket** | `SOL_SOCKET`, `SO_ERROR`, `SO_RCVTIMEO`, `SO_SNDTIMEO`, `IPPROTO_TCP`, `TCP_NODELAY` |
-| **Poll** | `POLLIN`, `POLLOUT`, `POLLERR`, `POLLHUP` |
-| **Signals** | `SIGKILL` (9), `WNOHANG` (1) |
-
-### Structures
-
-| Structure | Purpose |
-|---|---|
-| `LinuxDirent64` | Directory entry: `Ino`, `Off`, `Reclen`, `Type`, `Name[]` |
-| `Timespec` | Nanosecond-precision time: `Sec`, `Nsec` (64-bit on RISC-V 32) |
-| `Timeval` | Microsecond-precision time: `Sec`, `Usec` (64-bit on RISC-V 32) |
-| `Pollfd` | Poll descriptor: `Fd`, `Events`, `Revents` |
+| Structure | Fields | Notes |
+|---|---|---|
+| `LinuxDirent64` | `Ino`, `Off`, `Reclen`, `Type`, `Name[]` | Variable-size records |
+| `Timespec` | `Sec`, `Nsec` | **64-bit** fields on RISC-V 32 |
+| `Timeval` | `Sec`, `Usec` | **64-bit** fields on RISC-V 32 |
+| `Pollfd` | `Fd`, `Events`, `Revents` | Standard across all architectures |
