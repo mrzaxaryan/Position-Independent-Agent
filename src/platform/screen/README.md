@@ -1,123 +1,145 @@
 # Screen Capture
 
-Platform-independent display enumeration and framebuffer capture for screen recording and remote display.
+Platform-independent display enumeration and framebuffer capture. Each platform uses a completely different graphics subsystem — this module abstracts five fundamentally different capture mechanisms behind a single `Screen::Capture()` interface.
 
-## File Map
+## Windows: GDI BitBlt Pipeline
+
+The classic Win32 screen capture approach, but implemented without linking to any DLLs:
 
 ```
-screen/
-├── screen.h               # Interface: ScreenDevice, ScreenDeviceList, Screen class
-├── windows/screen.cc      # Windows (User32 + GDI32 BitBlt/GetDIBits)
-├── posix/screen.cc        # Linux/Android (DRM dumb buffers + fbdev fallback)
-├── macos/screen.cc        # macOS (CoreGraphics via dyld framework loader)
-├── ios/screen.cc          # iOS (stub — not implemented)
-├── solaris/screen.cc      # Solaris (framebuffer device + FBIOGTYPE ioctl)
-└── uefi/screen.cc         # UEFI (Graphics Output Protocol BLT)
+GetDC(NULL)                          → screen DC (entire virtual desktop)
+  │
+  CreateCompatibleDC(screenDC)       → memory DC (offscreen buffer)
+  CreateCompatibleBitmap(w, h)       → bitmap matching screen format
+  SelectObject(memDC, bitmap)        → target bitmap into memory DC
+  │
+  BitBlt(memDC, 0, 0, w, h,         → copy pixels from screen to memory
+         screenDC, x, y, SRCCOPY)      (handles multi-monitor offsets)
+  │
+  GetDIBits(memDC, bitmap, 0, h,     → extract pixel data into buffer
+            buffer, &bmi,              (converts to 32-bit BGRA top-down)
+            DIB_RGB_COLORS)
+  │
+  Cleanup: DeleteObject, DeleteDC, ReleaseDC
 ```
 
-## Data Structures
+Multi-monitor support: `EnumDisplayDevicesW` iterates adapters, `EnumDisplaySettingsW` gets resolution, and `DEVMODEW.dmPositionX/Y` provides the virtual desktop offset for `BitBlt`.
 
-### ScreenDevice (packed)
+## Linux: Three-Tier Capture Strategy
+
+Linux has no single standard screen capture API. The runtime tries three methods in order:
+
+### Tier 1: X11 Protocol (Display Server)
+
+Direct X11 protocol communication via Unix socket — no libX11 dependency:
+
+1. Parse `~/.Xauthority` for MIT-MAGIC-COOKIE-1 authentication
+2. Connect to X11 socket (`/tmp/.X11-unix/X{display}`)
+3. Send `GetImage` request (opcode 73) in `ZPixmap` format
+4. Receive raw pixel data
+
+Detected displays are encoded with a sentinel: `Left = -(1000 + displayNum)`.
+
+### Tier 2: DRM Dumb Buffers (Kernel Mode-Setting)
+
+Direct framebuffer access through the DRM (Direct Rendering Manager) subsystem:
+
+```
+open("/dev/dri/card0")
+  → ioctl(DRM_IOCTL_MODE_GETRESOURCES)     → list of CRTCs, connectors, encoders
+  → ioctl(DRM_IOCTL_MODE_GETCRTC)          → active framebuffer ID
+  → ioctl(DRM_IOCTL_MODE_MAP_DUMB)         → mmap offset for framebuffer
+  → mmap(offset)                            → pixel data
+```
+
+**GPU-composited scanout detection:** After capturing, the code checks if the buffer is all-black — which indicates a GPU-composited framebuffer that can't be read via dumb buffers. If detected, falls through to fbdev.
+
+Encoded as `Left = -(cardIndex + 1)`, `Top = crtcId`.
+
+### Tier 3: fbdev (Linux Framebuffer)
+
+The legacy fallback, using `/dev/fb0` through `/dev/fb7`:
+
+```
+ioctl(FBIOGET_FSCREENINFO)   → line_length, smem_len (framebuffer size)
+ioctl(FBIOGET_VSCREENINFO)   → xres, yres, bits_per_pixel
+mmap(0, smem_len)            → direct pixel access
+```
+
+**Android variant:** Tries `/dev/graphics/fb0..fb7` when standard `/dev/fb*` paths are unavailable.
+
+## macOS: CoreGraphics via dyld with Fork-Based Probing
+
+No link-time dependency on CoreGraphics. Functions are resolved at runtime through the dyld framework loader:
 
 ```c
-struct ScreenDevice {
-    INT32 Left;           // X position on virtual desktop
-    INT32 Top;            // Y position on virtual desktop
-    UINT32 Width;         // Horizontal resolution in pixels
-    UINT32 Height;        // Vertical resolution in pixels
-    BOOL Primary;         // TRUE if primary display
-};
+dlopen("/System/Library/Frameworks/CoreGraphics.framework/CoreGraphics")
+dlsym(handle, "CGMainDisplayID")
+dlsym(handle, "CGDisplayBounds")
+dlsym(handle, "CGDisplayCreateImage")
+// ... etc.
 ```
 
-### ScreenDeviceList
+### Fork-Based Crash Isolation
+
+CoreGraphics may crash (SIGKILL/SIGSYS) on headless systems or sandboxed environments. The runtime isolates this risk using `fork()`:
+
+```
+pid = fork()
+  │
+  ├─ Child: try loading CoreGraphics and calling CGMainDisplayID()
+  │         exit(0) if success, exit(1) if failure
+  │
+  └─ Parent: wait4(pid) and check exit status
+             If child crashed → skip CoreGraphics, no capture available
+             If child exited 0 → safe to use CoreGraphics in parent
+```
+
+### Pixel Format Detection
+
+CoreGraphics returns images in various pixel formats. The code decodes `CGBitmapInfo`:
 
 ```c
-struct ScreenDeviceList {
-    ScreenDevice* Devices;   // Heap-allocated array
-    UINT32 Count;            // Number of displays
-    void Free();             // Deallocate array
-};
+alphaInfo = bitmapInfo & 0x1F;    // alpha/skip mask
+byteOrder = bitmapInfo & 0xF000;  // endian indicator
+
+// Map to RGB byte offsets:
+// BGRA (little-endian) → rOff=2, gOff=1, bOff=0
+// RGBA (big-endian)    → rOff=0, gOff=1, bOff=2
 ```
 
-## Screen Class
+**Retina handling:** `CGDisplayCreateImage` may return a 2x image. The code clamps pixel dimensions to the device's reported resolution.
 
-Static class — no instantiation.
+## Solaris: SunOS Framebuffer
 
-| Method | Signature | Purpose |
-|---|---|---|
-| `GetDevices` | `static GetDevices() → Result<ScreenDeviceList, Error>` | Enumerate connected displays |
-| `Capture` | `static Capture(device, Span<RGB> buffer) → Result<void, Error>` | Capture framebuffer pixels |
+Simple framebuffer access via `/dev/fb`:
 
-**Buffer requirement:** `Capture` expects a pre-allocated buffer of at least `Width * Height` RGB pixels (3 bytes per pixel, top-down, left-to-right).
+```
+open("/dev/fb")
+ioctl(FBIOGTYPE)   → display type, width, height, depth
+mmap(size)         → raw pixel data
+```
 
-## Platform Implementations
+Single framebuffer only — no multi-monitor support.
 
-### Windows
+## UEFI: Graphics Output Protocol
 
-**Display Enumeration:**
-1. `User32::EnumDisplayDevicesW(NULL, i, &dev, 0)` — iterate adapters
-2. Filter by `DISPLAY_DEVICE_ACTIVE` flag
-3. `User32::EnumDisplaySettingsW(name, ENUM_CURRENT_SETTINGS, &mode)` — get resolution
-4. Check `DISPLAY_DEVICE_PRIMARY_DEVICE` for primary flag
+```
+LocateProtocol(EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID) → gop
+gop→QueryMode(mode) → resolution, pixel format, pixels_per_scanline
+gop→Blt(buffer, EfiBltVideoToBltBuffer, ...) → copy framebuffer to buffer
+```
 
-**Screen Capture:**
-1. `User32::GetDC(NULL)` → screen device context
-2. `Gdi32::CreateCompatibleDC(screenDC)` → memory DC
-3. `Gdi32::CreateCompatibleBitmap(screenDC, width, height)` → bitmap
-4. `Gdi32::SelectObject(memDC, bitmap)` → select into memory DC
-5. `Gdi32::BitBlt(memDC, 0, 0, w, h, screenDC, x, y, SRCCOPY)` → copy pixels
-6. `Gdi32::GetDIBits(memDC, bitmap, 0, h, buffer, &bmi, DIB_RGB_COLORS)` → extract
-7. Cleanup: `DeleteObject`, `DeleteDC`, `ReleaseDC`
+Pixel formats vary by firmware: `PixelRedGreenBlueReserved8BitPerColor` (RGBX) or `PixelBlueGreenRedReserved8BitPerColor` (BGRX). The code handles both.
 
-### Linux / Android
+## Platform Support
 
-**Primary method: DRM dumb buffers** (`/dev/dri/card*`)
-1. Open DRM device
-2. Read display mode info from sysfs
-3. `mmap` the framebuffer
-4. Copy pixels to output buffer
-
-**Fallback: fbdev** (`/dev/fb0` through `/dev/fb7`)
-1. `ioctl(FBIOGET_FSCREENINFO)` — get fixed screen info (line length, framebuffer size)
-2. `ioctl(FBIOGET_VSCREENINFO)` — get variable screen info (resolution, bpp)
-3. `mmap` the framebuffer
-4. Copy pixels, handle BPP conversion
-
-### macOS
-
-Uses **CoreGraphics framework** loaded dynamically via dyld:
-1. `dlopen("CoreGraphics.framework")` via dyld resolution
-2. `dlsym` for `CGGetActiveDisplayList`, `CGDisplayBounds`, `CGDisplayPixelsWide/High`
-3. `CGDisplayCreateImage` for screenshot capture
-4. Extract pixel data from `CGImage`
-
-### Solaris
-
-Uses **framebuffer device** (`/dev/fb`):
-1. `ioctl(FBIOGTYPE)` — query display type and dimensions
-2. `mmap` the framebuffer memory
-3. Copy pixels to output buffer
-
-### UEFI
-
-Uses **Graphics Output Protocol** (GOP):
-1. `LocateProtocol(EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID)` → GOP handle
-2. `GOP→QueryMode` — get resolution and pixel format
-3. `GOP→Blt(VideoToBltBuffer)` — copy framebuffer to buffer
-
-### iOS
-
-**Not implemented** — stub returns error. iOS restricts direct framebuffer access.
-
-## Platform Support Summary
-
-| Platform | Enumeration | Capture | Method |
+| Platform | Method | Multi-Monitor | Notes |
 |---|---|---|---|
-| Windows | Multi-monitor | Full | GDI BitBlt + GetDIBits |
-| Linux | Single/multi | Full | DRM dumb buffers / fbdev |
-| Android | Single/multi | Full | DRM dumb buffers / fbdev |
-| macOS | Multi-monitor | Full | CoreGraphics framework |
-| iOS | — | — | Not implemented |
-| Solaris | Single | Full | Framebuffer /dev/fb |
-| FreeBSD | — | — | Uses POSIX (DRM/fbdev if available) |
-| UEFI | Single | Full | GOP protocol |
+| Windows | GDI BitBlt | Yes | User32 + GDI32 via PEB resolution |
+| Linux | X11 / DRM / fbdev | Yes (X11/DRM) | Three-tier fallback chain |
+| Android | DRM / fbdev | Yes (DRM) | `/dev/graphics/fb*` variant |
+| macOS | CoreGraphics | Yes | Fork-based probing, Retina handling |
+| Solaris | `/dev/fb` ioctl | No | Single framebuffer |
+| UEFI | GOP BLT | No | Firmware-provided framebuffer |
+| iOS | — | — | Not implemented (sandbox restriction) |

@@ -2,73 +2,68 @@
 
 Platform-independent text output and structured logging, implemented directly over kernel syscalls without any CRT dependency.
 
-## File Map
+## How Console Output Works
+
+### The UTF-16 → UTF-8 Problem
+
+The runtime uses wide strings (`WCHAR*`, UTF-16LE) internally for compatibility with Windows and UEFI. But POSIX terminals expect UTF-8. The `Console::Write(Span<const WCHAR>)` overload handles this with a streaming codepoint-by-codepoint conversion:
 
 ```
-console/
-├── console.h              # Interface: Write(), WriteFormatted()
-├── console.cc             # UTF-16 → UTF-8 conversion (shared by POSIX platforms)
-├── posix/console.cc       # Linux, Android, macOS, iOS, FreeBSD, Solaris
-├── windows/console.cc     # Windows (NTDLL ZwWriteFile + WriteConsoleW)
-├── uefi/console.cc        # UEFI (EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL)
-└── logger.h               # Structured logging with ANSI colors and timestamps
+Write(L"Hello 世界")
+  │
+  ├─ Windows: WriteConsoleW() — native UTF-16, no conversion needed
+  │
+  ├─ POSIX:
+  │    ├─ For each input character:
+  │    │    CodepointToUTF8(text, index, bytes[4]) → byteCount (1-4)
+  │    │    Append bytes to 256-byte stack buffer
+  │    │    If buffer full → flush via write(STDOUT_FILENO) syscall
+  │    └─ Flush remaining bytes
+  │
+  └─ UEFI: Direct OutputString() — CHAR16 is the native format
 ```
 
-## Console Class
+The conversion handles surrogate pairs (codepoints > U+FFFF) and produces valid multi-byte UTF-8 sequences. The 256-byte buffer amortizes syscall overhead — each `write()` syscall has non-trivial kernel transition cost.
 
-Static class — no instantiation, all methods are static.
+### Windows Output Path
 
-### Output Methods
+Windows uses two different output mechanisms:
 
-| Method | Purpose |
-|---|---|
-| `Write(Span<const CHAR> text)` | Write narrow string (UTF-8 on POSIX, ANSI on Windows) |
-| `Write(Span<const WCHAR> text)` | Write wide string (native UTF-16 on Windows, converted to UTF-8 on POSIX) |
-| `Write<TChar>(const TChar* text)` | Write null-terminated string |
-| `WriteFormatted<TChar, Args...>(format, args...)` | Printf-style formatted output (variadic templates, type-safe) |
+- **Narrow strings** (`CHAR*`): `ZwWriteFile` to the `StandardOutput` handle obtained from `PEB→ProcessParameters→StandardOutput`. This bypasses the Win32 `WriteFile` API entirely.
+- **Wide strings** (`WCHAR*`): `WriteConsoleW` resolved dynamically from kernel32.dll via PEB export resolution. Native UTF-16 — no conversion needed.
 
-### Platform Implementations
+### UEFI Output Path
 
-| Platform | Narrow Output | Wide Output |
+UEFI's `EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL→OutputString` accepts `CHAR16*` (equivalent to `WCHAR*`). Narrow strings are widened character-by-character before output. The protocol pointer comes from `EFI_SYSTEM_TABLE→ConOut`.
+
+## Formatted Output
+
+`Console::WriteFormatted<TChar, Args...>(format, args...)` is a type-safe variadic template formatter — no format string parsing at runtime like `printf`. The compiler generates specialized code for each argument type combination.
+
+## Logger
+
+Structured logging with ANSI color escapes and timestamps:
+
+```
+\033[0;32m[INF] [14:30:45] Connection established\033[0m
+         ─────  ────────  ──────────────────────
+         green  DateTime  message
+         prefix ::Now()
+```
+
+| Level | Color Code | Prefix |
 |---|---|---|
-| **POSIX** | `write(STDOUT_FILENO)` syscall | UTF-16 → UTF-8 conversion, then `write()` |
-| **Windows** | `ZwWriteFile` to `StandardOutput` handle | `WriteConsoleW` (native Unicode) |
-| **UEFI** | Convert to CHAR16, then `OutputString` | Direct `EFI_SIMPLE_TEXT_OUTPUT_PROTOCOL→OutputString` |
+| `Logger::Info` | `\033[0;32m` (green) | `[INF]` |
+| `Logger::Warning` | `\033[0;33m` (yellow) | `[WRN]` |
+| `Logger::Error` | `\033[0;31m` (red) | `[ERR]` |
+| `Logger::Debug` | `\033[0;36m` (cyan) | `[DBG]` |
 
-### Wide-to-Narrow Conversion
+When `ENABLE_LOGGING` is disabled at compile time, all logging calls are eliminated — zero overhead.
 
-The shared `console.cc` provides UTF-16 → UTF-8 conversion for POSIX platforms. Since Windows handles wide strings natively via `WriteConsoleW`, only POSIX and UEFI need conversion paths.
+## Platform Implementations
 
-## Logger Class
-
-Static structured logging with ANSI color-coded output and timestamps.
-
-### Log Levels
-
-| Method | Color | Prefix |
+| Platform | Narrow Path | Wide Path |
 |---|---|---|
-| `Logger::Info(format, args...)` | Green (`\033[0;32m`) | `[INF]` |
-| `Logger::Warning(format, args...)` | Yellow (`\033[0;33m`) | `[WRN]` |
-| `Logger::Error(format, args...)` | Red (`\033[0;31m`) | `[ERR]` |
-| `Logger::Debug(format, args...)` | Cyan (`\033[0;36m`) | `[DBG]` |
-
-### Output Format
-
-```
-\033[0;32m[INF] [14:30:45] Connection established to 192.168.1.1:443\033[0m
-```
-
-- Timestamps via `DateTime::Now().ToTimeOnlyString()` (`HH:MM:SS`)
-- Uses `Console::WriteFormatted` internally
-- Zero-overhead when `ENABLE_LOGGING` is disabled at compile time
-
-## Platform Support
-
-| Platform | Status |
-|---|---|
-| Windows | Full (native UTF-16) |
-| Linux / Android | Full (UTF-8 via syscall) |
-| macOS / iOS | Full (UTF-8 via syscall) |
-| FreeBSD | Full (UTF-8 via syscall) |
-| Solaris | Full (UTF-8 via syscall) |
-| UEFI | Full (CHAR16 via protocol) |
+| **Windows** | `ZwWriteFile` to PEB→StandardOutput | `WriteConsoleW` (native Unicode) |
+| **POSIX** (all 6) | `write(STDOUT_FILENO)` syscall | UTF-16→UTF-8 conversion, then `write()` |
+| **UEFI** | Widen to CHAR16, then `OutputString` | Direct `ConOut→OutputString` |

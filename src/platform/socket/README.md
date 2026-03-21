@@ -1,172 +1,193 @@
 # TCP Socket Networking
 
-Platform-independent TCP stream socket implementation supporting IPv4 and IPv6 across all platforms. Each platform uses its native networking interface — POSIX sockets, Windows AFD driver, or UEFI TCP protocols.
+Platform-independent TCP stream sockets supporting IPv4 and IPv6. Each platform uses a fundamentally different networking interface — POSIX sockets, the Windows AFD driver, or UEFI TCP protocols.
 
-## File Map
+## Windows: Bypassing Winsock via the AFD Driver
 
-```
-socket/
-├── socket.h               # Interface: Socket, SockAddr, SockAddr6, SocketAddressHelper
-├── posix/socket.cc        # POSIX (Linux, Android, macOS, iOS, FreeBSD, Solaris)
-├── windows/socket.cc      # Windows (AFD driver via NTDLL ioctls)
-└── uefi/socket.cc         # UEFI (EFI_TCP4/TCP6_PROTOCOL)
-```
+The most interesting implementation. Instead of using the Winsock2 API (`WSAStartup`, `WSASocket`, etc.), the runtime talks directly to the **Ancillary Function Driver (AFD)** — the kernel-mode driver that Winsock itself calls internally.
 
-## Socket Address Structures
+### How AFD Sockets Work
 
-### SockAddr (IPv4)
+A socket is opened as a **file** on the AFD device:
 
 ```c
-struct SockAddr {
-#if defined(BSD)                // macOS, iOS, FreeBSD
-    UINT8 SinLen;               // Structure length (BSD requirement)
-    UINT8 SinFamily;            // AF_INET
-#else                           // Linux, Windows, Solaris, UEFI
-    UINT16 SinFamily;           // AF_INET
-#endif
-    UINT16 SinPort;             // Port in network byte order
-    UINT32 SinAddr;             // IPv4 address in network byte order
-    CHAR SinZero[8];            // Padding to 16 bytes
-};
+ZwCreateFile(&handle,
+    path = L"\\Device\\Afd\\Endpoint",
+    EaBuffer = AfdSocketParams {
+        AfdOperation = "AfdOpenPacketXX",   // magic EA name
+        AddressFamily = AF_INET,
+        SocketType = SOCK_STREAM,
+        Protocol = IPPROTO_TCP
+    })
 ```
 
-### SockAddr6 (IPv6)
+The Extended Attributes (EA) buffer encodes the socket parameters as a named structure — `"AfdOpenPacketXX"` tells the AFD driver to create a TCP socket endpoint.
+
+### AFD IOCTL Encoding
+
+All socket operations use `ZwDeviceIoControlFile` with IOCTLs encoded as:
 
 ```c
-struct SockAddr6 {
-#if defined(BSD)
-    UINT8 Sin6Len;
-    UINT8 Sin6Family;           // AF_INET6
-#else
-    UINT16 Sin6Family;          // AF_INET6
-#endif
-    UINT16 Sin6Port;            // Port in network byte order
-    UINT32 Sin6Flowinfo;        // Flow label
-    UINT8 Sin6Addr[16];         // 128-bit IPv6 address
-    UINT32 Sin6ScopeId;         // Scope ID
-};
+IOCTL = (DeviceType << 12) | (FunctionCode << 2) | Method
+//       0x12 (AFD)          0-7                    3 (neither)
+
+IOCTL_AFD_BIND    = (0x12 << 12) | (0 << 2) | 3  // = 0x12003
+IOCTL_AFD_CONNECT = (0x12 << 12) | (1 << 2) | 3  // = 0x12007
+IOCTL_AFD_RECV    = (0x12 << 12) | (5 << 2) | 3  // = 0x12017
+IOCTL_AFD_SEND    = (0x12 << 12) | (7 << 2) | 3  // = 0x1201F
 ```
 
-### Platform-Specific Constants
+### Connect with Timeout
 
-| Constant | Linux | macOS/iOS | FreeBSD | Solaris | Windows | UEFI |
-|---|---|---|---|---|---|---|
-| `AF_INET` | 2 | 2 | 2 | 2 | 2 | 2 |
-| `AF_INET6` | 10 | 30 | 28 | 26 | 23 | 23 |
-| `SOCK_STREAM` | 1 | 1 | 1 | 2 | 1 | — |
-| `SOCK_DGRAM` | 2 | 2 | 2 | 1 | 2 | — |
-
-**Note:** Solaris and MIPS Linux swap `SOCK_STREAM` and `SOCK_DGRAM` values (inherited from SVR4/IRIX).
-
-## SocketAddressHelper
-
-Static utility class for address preparation:
-
-| Method | Purpose |
-|---|---|
-| `PrepareAddress(ip, port, buffer)` | Convert `IPAddress` + port to `SockAddr`/`SockAddr6` in buffer |
-| `PrepareBindAddress(isIPv6, port, buffer)` | Create wildcard bind address (`INADDR_ANY` / `in6addr_any`) |
-| `GetAddressFamily(ip)` | Return `AF_INET` or `AF_INET6` |
-
-## Socket Class
-
-RAII TCP socket — move-only, stack-only, non-copyable.
-
-### Lifecycle
+AFD connect is asynchronous — the runtime manages the async lifecycle manually:
 
 ```
-Socket::Create(ip, port)     → allocate OS socket handle
-  │
-  socket.Open()              → TCP three-way handshake (5s timeout)
-  │
-  socket.Write(data)         → send data (loops for partial writes)
-  socket.Read(buffer)        → blocking read (platform-specific timeout)
-  │
-  socket.Close()             → release handle, FIN on UEFI
+1. ZwCreateEvent(&event)                          → create synchronization event
+2. ZwDeviceIoControlFile(handle, event,           → issue async connect
+     IOCTL_AFD_BIND, &bindData)                    (must bind to wildcard first)
+3. ZwDeviceIoControlFile(handle, event,
+     IOCTL_AFD_CONNECT, &connectInfo)
+4. ZwWaitForSingleObject(event, &timeout)         → wait up to 5 seconds
+     │
+     ├─ STATUS_SUCCESS  → connected
+     ├─ STATUS_TIMEOUT  → connection timed out
+     └─ STATUS_PENDING  → still in progress (shouldn't happen after wait)
 ```
 
-### Methods
+Timeout values use Windows' 100-nanosecond units, with negative values meaning "relative from now":
+```c
+LARGE_INTEGER timeout;
+timeout.QuadPart = -5LL * 1000LL * 10000LL;  // -50,000,000 = 5 seconds
+```
 
-| Method | Signature | Purpose |
+### Send/Receive Indirection
+
+AFD uses a two-level buffer descriptor:
+
+```
+AfdSendRecvInfo {
+    BufferArray → AfdWsaBuf[] {
+        { Length = 1024, Buffer = dataPtr }    // scatter/gather array
+    }
+    BufferCount = 1
+    AfdFlags, TdiFlags
+}
+```
+
+This mirrors Winsock's `WSABUF` scatter/gather pattern, but at the driver level.
+
+## POSIX: Non-Blocking Connect with Poll
+
+POSIX sockets use the standard non-blocking connect pattern:
+
+```
+1. socket(AF_INET, SOCK_STREAM, IPPROTO_TCP) → fd
+2. fcntl(fd, F_SETFL, O_NONBLOCK)            → make non-blocking
+3. connect(fd, addr, len)                     → returns -EINPROGRESS immediately
+4. ppoll/poll(fd, POLLOUT, 5 seconds)         → wait for connection
+5. getsockopt(fd, SOL_SOCKET, SO_ERROR, &err) → check actual result
+6. fcntl(fd, F_SETFL, ~O_NONBLOCK)            → back to blocking
+```
+
+### Linux i386 socketcall Multiplexer
+
+i386 Linux lacks direct socket syscalls. Instead, all socket operations go through a single `SYS_SOCKETCALL` (102) multiplexer:
+
+```c
+// To create a socket on i386:
+USIZE args[] = { domain, type, protocol };
+System::Call(SYS_SOCKETCALL, SOCKOP_SOCKET, (USIZE)args);
+
+// To connect:
+USIZE args[] = { fd, (USIZE)addr, addrlen };
+System::Call(SYS_SOCKETCALL, SOCKOP_CONNECT, (USIZE)args);
+```
+
+The kernel unpacks the argument array based on the operation code. All other architectures have direct syscalls (`SYS_SOCKET`, `SYS_CONNECT`, etc.).
+
+### Platform-Specific Polling
+
+| Platform | Syscall | Timeout Format |
 |---|---|---|
-| `Create` | `static Create(ip, port) → Result<Socket, Error>` | Create TCP socket |
-| `Open` | `Open() → Result<void, Error>` | Connect with 5-second timeout |
-| `Close` | `Close() → Result<void, Error>` | Close connection |
-| `Read` | `Read(Span<CHAR>) → Result<SSIZE, Error>` | Read data (returns 0 on peer close) |
-| `Write` | `Write(Span<const CHAR>) → Result<UINT32, Error>` | Write all data (internal loop) |
-| `IsValid` | `IsValid() → BOOL` | Handle valid? |
-| `GetFd` | `GetFd() → SSIZE` | Raw file descriptor / handle |
+| Linux / Android | `SYS_PPOLL` | `Timespec` (nanosecond) |
+| Solaris | `SYS_POLLSYS` | `Timespec` (nanosecond) |
+| macOS / iOS / FreeBSD | `SYS_POLL` | Milliseconds (integer) |
 
-### Timeouts
+### BSD sockaddr Length Field
 
-| Operation | Windows | POSIX | UEFI |
-|---|---|---|---|
-| Connect | 5 seconds | 5 seconds (ppoll/poll) | 5 seconds |
-| Read | 5 minutes | — (blocking) | 60 seconds |
-| Write | 1 minute/chunk | — (blocking) | 30 seconds |
+BSD-derived systems (macOS, iOS, FreeBSD) require a `sin_len` field at the start of `sockaddr`:
 
-## Platform Implementations
-
-### POSIX
-
-```
-Create: socket(AF_INET/6, SOCK_STREAM, IPPROTO_TCP) → fd
-Open:   fcntl(F_SETFL, O_NONBLOCK)
-        connect(fd, addr, len)       // returns -EINPROGRESS
-        ppoll/poll(fd, POLLOUT, 5s)  // wait for connection
-        getsockopt(SO_ERROR)         // check result
-        fcntl(F_SETFL, ~O_NONBLOCK)  // back to blocking
-Read:   recvfrom(fd, buf, len, 0, NULL, NULL)
-Write:  sendto(fd, buf, len, 0, NULL, 0)   // loops for partial
-Close:  close(fd)
+```c
+#if defined(BSD)
+struct SockAddr {
+    UINT8 SinLen;      // Structure length (BSD-specific)
+    UINT8 SinFamily;   // AF_INET (fits in 1 byte on BSD)
+    ...
+};
+#else
+struct SockAddr {
+    UINT16 SinFamily;  // AF_INET (16-bit on Linux/Windows)
+    ...
+};
+#endif
 ```
 
-**Linux i386 special case:** Uses `socketcall(2)` multiplexer instead of direct socket syscalls. All socket operations are dispatched via sub-numbers (`SOCKOP_SOCKET`, `SOCKOP_CONNECT`, etc.) through a single `int $0x80` call.
+### AF_INET6 Value Divergence
 
-### Windows (AFD Driver)
+Every platform family has a different value for `AF_INET6`:
 
-Windows networking bypasses Winsock entirely by talking directly to the AFD (Ancillary Function Driver):
+| Platform | AF_INET6 |
+|---|---|
+| Linux | 10 |
+| Windows / UEFI | 23 |
+| macOS / iOS | 30 |
+| FreeBSD | 28 |
+| Solaris | 26 |
 
-```
-Create: ZwCreateFile("\\Device\\Afd\\Endpoint",
-                     EaBuffer = { AfdOpenPacket, family, type, protocol })
-Open:   IOCTL_AFD_BIND(wildcard address)
-        IOCTL_AFD_CONNECT(target address, 5s timeout via ZwWaitForSingleObject)
-Read:   IOCTL_AFD_RECV(buffer, flags)
-Write:  IOCTL_AFD_SEND(buffer, flags)
-Close:  ZwClose(handle)
-```
+## UEFI: Protocol-Based TCP Stack
 
-The AFD endpoint is opened as a file via `ZwCreateFile` with extended attributes specifying the socket parameters. All operations use `ZwDeviceIoControlFile` with AFD-specific IOCTL codes.
-
-### UEFI (TCP Protocol Stack)
+UEFI networking uses firmware-provided TCP protocol interfaces, not syscalls:
 
 ```
-Create: LocateProtocol(EFI_TCP4_SERVICE_BINDING_PROTOCOL_GUID)
-        ServiceBinding→CreateChild(&handle)
-        HandleProtocol(handle, EFI_TCP4_PROTOCOL_GUID) → tcp
-Open:   tcp→Configure(AccessPoint: { localAddr, localPort, remoteAddr, remotePort })
-        tcp→Connect(&token)    // async
-        poll for completion (5s)
-Read:   tcp→Receive(&token)    // async
-        poll for completion (60s)
-Write:  tcp→Transmit(&token)   // async
-        poll for completion (30s)
-Close:  tcp→Close(&token)      // graceful FIN
-        ServiceBinding→DestroyChild(handle)
+1. LocateProtocol(TCP4_SERVICE_BINDING_GUID)     → service binding
+2. ServiceBinding→CreateChild(&childHandle)       → per-connection handle
+3. HandleProtocol(child, TCP4_PROTOCOL_GUID)      → tcp protocol
+4. tcp→Configure(AccessPoint: { local, remote })  → set addresses/ports
+5. tcp→Connect(&token)                            → async connect
+6. Poll for completion with Stall(1ms) loop       → pseudo-blocking wait
 ```
 
-UEFI networking is fully asynchronous — each operation creates a completion token and polls for completion.
+UEFI has no true async mechanism (no signals, no poll syscall). The runtime busy-polls with `Stall(1000)` (1ms sleep) between checks:
 
-## Platform Support
+```c
+while (token.Status == EFI_NOT_READY) {
+    tcp->Poll(tcp);           // kick the firmware
+    bs->Stall(1000);          // sleep 1ms
+    if (elapsed > timeout)    // manual timeout check
+        return EFI_TIMEOUT;
+}
+```
 
-| Platform | IPv4 | IPv6 | Non-blocking Connect | Notes |
-|---|---|---|---|---|
-| Windows | Yes | Yes | Via AFD timeout | AFD driver, no Winsock |
-| Linux | Yes | Yes | fcntl + ppoll | i386 uses socketcall multiplexer |
-| Android | Yes | Yes | fcntl + ppoll | Same as Linux |
-| macOS | Yes | Yes | fcntl + poll | BSD sockets |
-| iOS | Yes | Yes | fcntl + poll | BSD sockets |
-| FreeBSD | Yes | Yes | fcntl + poll | BSD sockets |
-| Solaris | Yes | Yes | fcntl + poll | SVR4 socket numbers |
-| UEFI | Yes | Yes | Async + poll | EFI TCP4/TCP6 protocols |
+### GUID Stack Construction
+
+Protocol GUIDs cannot live in `.rdata` (position-independent requirement). They're constructed field-by-field at runtime:
+
+```c
+EFI_GUID tcpGuid;
+tcpGuid.Data1 = 0x00720665;
+tcpGuid.Data2 = 0x67EB;
+tcpGuid.Data3 = 0x4A99;
+// ...
+```
+
+### Network Initialization Sequence
+
+UEFI networking requires explicit stack initialization:
+1. Start Simple Network Protocol (SNP)
+2. Initialize the NIC
+3. Configure DHCP (IP4 Config2 with `Dhcp` policy)
+4. Wait for DHCP completion (50 retries × 100ms = 5s timeout)
+5. 500ms settling delay for TCP stack readiness
+6. Create TCP child handle
+
+The state flags `NetworkInitialized`, `DhcpConfigured`, `TcpStackReady` in `EFI_CONTEXT` prevent re-initialization.

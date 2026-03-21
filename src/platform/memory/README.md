@@ -1,97 +1,80 @@
 # Memory Allocation
 
-Platform-independent virtual memory allocation. Provides the `Allocator` interface and global `operator new`/`operator delete` overloads so all heap allocations route through platform-specific virtual memory syscalls.
+Platform-independent virtual memory allocation with a hidden size-header trick to support C++ `operator delete` without requiring the caller to supply the allocation size.
 
-## File Map
+## The Size Header Trick (POSIX)
+
+The core challenge: `operator delete(void*)` doesn't provide the allocation size, but `munmap` requires it. The solution is to prepend a `USIZE` header to every allocation:
 
 ```
-memory/
-├── allocator.h            # Interface: AllocateMemory(), ReleaseMemory()
-├── allocator.cc           # Global operator new/delete overloads
-├── posix/memory.cc        # POSIX: mmap/munmap
-├── windows/memory.cc      # Windows: ZwAllocateVirtualMemory/ZwFreeVirtualMemory
-└── uefi/memory.cc         # UEFI: AllocatePool/FreePool
+           What mmap returns            What the caller gets
+           ┌───────────────────────────┬──────────────────────────────┐
+           │ USIZE: totalSize (header) │ usable memory (user data)    │
+           └───────────────────────────┴──────────────────────────────┘
+           ▲                           ▲
+           base (page-aligned)         returned pointer = base + sizeof(USIZE)
 ```
 
-## Allocator Class
+**Allocation:**
+```c
+USIZE totalSize = (size + sizeof(USIZE) + 4095) & ~(USIZE)4095;  // page-align
+PCHAR base = mmap(NULL, totalSize, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+*(USIZE*)base = totalSize;           // store size in header
+return (PVOID)(base + sizeof(USIZE)); // return pointer past header
+```
 
-Static class — no instantiation.
+**Deallocation:**
+```c
+PCHAR base = (PCHAR)address - sizeof(USIZE);  // recover base
+USIZE totalSize = *(USIZE*)base;               // read stored size
+munmap(base, totalSize);                        // free entire mapping
+```
 
-| Method | Signature | Purpose |
-|---|---|---|
-| `AllocateMemory` | `static AllocateMemory(USIZE size) → PVOID` | Allocate memory |
-| `ReleaseMemory` | `static ReleaseMemory(PVOID ptr, USIZE size) → void` | Free memory |
+This means every allocation is at least one full page (4096 bytes) — wasteful for small allocations, but acceptable since the runtime makes relatively few allocations, and the simplicity avoids needing a full heap allocator.
+
+## mmap2 Page-Shift (32-bit Linux)
+
+32-bit Linux architectures (i386, ARMv7-A, RISC-V 32) use `SYS_MMAP2` instead of `SYS_MMAP`. The difference: the offset parameter is in **pages** (offset / 4096), not bytes. This extends the addressable file offset range on 32-bit systems. For anonymous mappings (offset = 0), the difference is invisible.
+
+## FreeBSD i386 Inline Assembly Hack
+
+FreeBSD's `mmap` takes an `off_t` offset parameter, which is a **64-bit** type even on i386. This means 7 argument slots on the stack (the 64-bit offset occupies two 32-bit slots). The 6-argument `System::Call` can't handle this — it only pushes one slot for the offset, leaving garbage in the upper 32 bits.
+
+The fix is raw inline assembly that manually pushes all 8 stack slots (7 args + dummy return address):
+
+```asm
+pushl $0          ; off_t high 32 bits = 0
+pushl $0          ; off_t low 32 bits = 0
+pushl %%edi       ; fd = -1
+pushl %%esi       ; flags = MAP_PRIVATE | MAP_ANONYMOUS
+pushl %%edx       ; prot = PROT_READ | PROT_WRITE
+pushl %%ecx       ; len = totalSize
+pushl %%ebx       ; addr = NULL
+pushl $0          ; dummy return address (FreeBSD expects this)
+int $0x80         ; BSD syscall
+jnc 1f            ; carry flag clear = success
+negl %%eax        ; carry set = negate errno
+1:
+addl $32, %%esp   ; clean up 32 bytes (8 × 4)
+```
+
+Without this fix, `mmap` returns `EINVAL` because FreeBSD rejects non-zero offsets for `MAP_ANONYMOUS` — and the garbage upper bits make the offset appear non-zero.
+
+## Windows: No Header Needed
+
+`ZwAllocateVirtualMemory` with `MEM_COMMIT | MEM_RESERVE` allocates pages, and `ZwFreeVirtualMemory` with `MEM_RELEASE` frees the entire region by base address alone — no size parameter needed for full-region release. So no header trick is required.
+
+## UEFI: No Header Needed
+
+`BootServices→AllocatePool(EfiLoaderData, size, &buffer)` and `BootServices→FreePool(buffer)` — the UEFI pool allocator tracks sizes internally.
 
 ## Global Operator Overloads
 
-All C++ heap allocations are intercepted and routed through `Allocator`:
+All C++ heap allocations are intercepted so the runtime never calls `malloc`/`free`:
 
 ```c++
-void* operator new(size_t size)         { return Allocator::AllocateMemory(size); }
-void* operator new[](size_t size)       { return Allocator::AllocateMemory(size); }
-void  operator delete(void* p) noexcept { Allocator::ReleaseMemory(p, 0); }
+void* operator new(size_t size)            { return Allocator::AllocateMemory(size); }
+void* operator new[](size_t size)          { return Allocator::AllocateMemory(size); }
+void  operator delete(void* p) noexcept    { Allocator::ReleaseMemory(p, 0); }
 void  operator delete(void* p, size_t s) noexcept { Allocator::ReleaseMemory(p, s); }
-// ... and array variants
 ```
-
-## Platform Implementations
-
-### POSIX (mmap/munmap)
-
-```
-AllocateMemory(size):
-  1. actual_size = size + sizeof(USIZE)    ← header for size tracking
-  2. mmap(NULL, actual_size, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0)
-  3. Store actual_size in header
-  4. Return pointer past header
-
-ReleaseMemory(ptr, size):
-  1. Read stored size from header (ptr - sizeof(USIZE))
-  2. munmap(header_ptr, stored_size)
-```
-
-**Why the size header?** `munmap` requires the size of the mapping. Since C++ `operator delete(void*)` doesn't provide the size, the allocator prepends a `USIZE` header to store it.
-
-#### Architecture-Specific Notes
-
-| Architecture | Syscall | Notes |
-|---|---|---|
-| **x86_64** | `SYS_MMAP` (9) | Standard 6-arg mmap |
-| **i386** | `SYS_MMAP2` | Page-shifted offset (offset/4096) |
-| **AArch64** | `SYS_MMAP` (222) | Standard 6-arg |
-| **ARMv7-A** | `SYS_MMAP2` | Page-shifted offset |
-| **RISC-V 64/32** | `SYS_MMAP` | Standard 6-arg |
-| **MIPS64** | `SYS_MMAP` | Standard 6-arg |
-| **FreeBSD i386** | `SYS_MMAP` (477) | Requires inline asm for 64-bit offset on stack |
-
-### Windows (ZwAllocateVirtualMemory)
-
-```
-AllocateMemory(size):
-  ZwAllocateVirtualMemory(NtCurrentProcess(), &base, 0, &size,
-                          MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE)
-
-ReleaseMemory(ptr, size):
-  ZwFreeVirtualMemory(NtCurrentProcess(), &ptr, &zero, MEM_RELEASE)
-```
-
-No size header needed — `MEM_RELEASE` frees the entire region.
-
-### UEFI (AllocatePool/FreePool)
-
-```
-AllocateMemory(size):
-  BootServices->AllocatePool(EfiLoaderData, size, &buffer)
-
-ReleaseMemory(ptr, size):
-  BootServices->FreePool(ptr)
-```
-
-No size header needed — UEFI pool allocator tracks sizes internally.
-
-## Design Notes
-
-- All allocations are page-aligned on POSIX (minimum 4096 bytes per mmap)
-- No CRT `malloc`/`free` — completely standalone
-- Allocations come directly from the OS virtual memory manager
-- Thread safety depends on the underlying OS syscall guarantees
