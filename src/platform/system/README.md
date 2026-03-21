@@ -139,7 +139,7 @@ The `Environment` class provides compile-time and runtime system identification 
 | **Linux/Android** | `uname` syscall | `HOSTNAME` env var / `/etc/hostname` |
 | **macOS/iOS/FreeBSD** | `sysctl` (kern.ostype + kern.osrelease) | `sysctl` kern.hostname |
 | **Solaris** | `utssys` → `/etc/release` fallback | `utssys` nodename → `/etc/nodename` |
-| **UEFI** | `"uefi"` (static) | `"unknown"` |
+| **UEFI** | `"uefi"` (static) | empty (no hostname concept) |
 
 ## Pseudo-Terminal (PTY) Creation
 

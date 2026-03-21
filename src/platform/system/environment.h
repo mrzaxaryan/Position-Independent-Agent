@@ -76,7 +76,7 @@ public:
 	 * - Linux/Android: HOSTNAME environment variable, fallback to /etc/hostname
 	 * - macOS/FreeBSD/Solaris/iOS: HOSTNAME environment variable, fallback
 	 *   to /etc/hostname
-	 * - UEFI: returns "unknown" (no hostname concept)
+	 * - UEFI: returns 0 (no hostname concept)
 	 */
 	static USIZE GetHostname(Span<CHAR> buffer) noexcept;
 

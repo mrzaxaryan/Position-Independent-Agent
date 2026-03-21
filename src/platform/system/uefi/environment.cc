@@ -33,8 +33,9 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 
 USIZE Environment::GetHostname(Span<CHAR> buffer) noexcept
 {
-	StringUtils::Copy(buffer, Span<const CHAR>("unknown"));
-	return StringUtils::Length(buffer.Data());
+	if (buffer.Size() > 0)
+		buffer[0] = '\0';
+	return 0;
 }
 
 USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept
@@ -44,7 +45,8 @@ USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept
 #elif defined(ARCHITECTURE_AARCH64)
 	StringUtils::Copy(buffer, Span<const CHAR>("aarch64"));
 #else
-	StringUtils::Copy(buffer, Span<const CHAR>("unknown"));
+	buffer.Data()[0] = '\0';
+	return 0;
 #endif
 	return StringUtils::Length(buffer.Data());
 }

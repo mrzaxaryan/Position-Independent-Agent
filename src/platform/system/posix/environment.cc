@@ -9,7 +9,7 @@
  * Platform identification:
  * - GetAgentPlatform(): compile-time OS target from PLATFORM_* defines
  * - GetOSVersion(): runtime OS version via uname syscall (Linux/Android),
- *   sysctl (macOS/iOS/FreeBSD), utssys then /etc/release (Solaris), or "unknown" fallback
+ *   sysctl (macOS/iOS/FreeBSD), utssys then /etc/release (Solaris), or 0 on failure
  * - GetHostname(): HOSTNAME env var (Linux/Android), /etc/hostname (Linux/Android),
  *   sysctl kern.hostname (macOS/iOS/FreeBSD), utssys then /etc/nodename (Solaris)
  *
@@ -186,7 +186,8 @@ USIZE Environment::GetAgentPlatform(Span<CHAR> buffer) noexcept
 #elif defined(PLATFORM_SOLARIS)
 	StringUtils::Copy(buffer, Span<const CHAR>("solaris"));
 #else
-	StringUtils::Copy(buffer, Span<const CHAR>("unknown"));
+	buffer.Data()[0] = '\0';
+	return 0;
 #endif
 	return StringUtils::Length(buffer.Data());
 }
@@ -258,8 +259,8 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 		SSIZE ret = System::Call(SYS_SYSCTL, (USIZE)mib, 2, (USIZE)ostype, (USIZE)&len, 0, 0);
 		if (ret < 0)
 		{
-			StringUtils::Copy(buffer, Span<const CHAR>("unknown"));
-			return StringUtils::Length(buffer.Data());
+			buffer.Data()[0] = '\0';
+			return 0;
 		}
 
 		// CTL_KERN=1, KERN_OSRELEASE=2 → e.g. "23.1.0" or "14.0-RELEASE"
@@ -269,8 +270,8 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 		ret = System::Call(SYS_SYSCTL, (USIZE)mib, 2, (USIZE)osrelease, (USIZE)&len, 0, 0);
 		if (ret < 0)
 		{
-			StringUtils::Copy(buffer, Span<const CHAR>("unknown"));
-			return StringUtils::Length(buffer.Data());
+			buffer.Data()[0] = '\0';
+			return 0;
 		}
 
 		// Format: "{ostype} {osrelease}" e.g. "Darwin 23.1.0"
@@ -350,8 +351,8 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 	}
 #endif
 
-	StringUtils::Copy(buffer, Span<const CHAR>("unknown"));
-	return StringUtils::Length(buffer.Data());
+	buffer.Data()[0] = '\0';
+	return 0;
 }
 
 USIZE Environment::GetHostname(Span<CHAR> buffer) noexcept
@@ -436,8 +437,8 @@ USIZE Environment::GetHostname(Span<CHAR> buffer) noexcept
 	}
 #endif
 
-	StringUtils::Copy(buffer, Span<const CHAR>("unknown"));
-	return StringUtils::Length(buffer.Data());
+	buffer.Data()[0] = '\0';
+	return 0;
 }
 
 USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept
@@ -457,7 +458,8 @@ USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept
 #elif defined(ARCHITECTURE_MIPS64)
 	StringUtils::Copy(buffer, Span<const CHAR>("mips64"));
 #else
-	StringUtils::Copy(buffer, Span<const CHAR>("unknown"));
+	buffer.Data()[0] = '\0';
+	return 0;
 #endif
 	return StringUtils::Length(buffer.Data());
 }

@@ -182,13 +182,7 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 
 USIZE Environment::GetHostname(Span<CHAR> buffer) noexcept
 {
-	USIZE len = Environment::GetVariable("COMPUTERNAME", buffer);
-	if (len == 0)
-	{
-		StringUtils::Copy(buffer, Span<const CHAR>("unknown"));
-		return StringUtils::Length(buffer.Data());
-	}
-	return len;
+	return Environment::GetVariable("COMPUTERNAME", buffer);
 }
 
 USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept
@@ -202,7 +196,8 @@ USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept
 #elif defined(ARCHITECTURE_ARMV7A)
 	StringUtils::Copy(buffer, Span<const CHAR>("armv7a"));
 #else
-	StringUtils::Copy(buffer, Span<const CHAR>("unknown"));
+	buffer.Data()[0] = '\0';
+	return 0;
 #endif
 	return StringUtils::Length(buffer.Data());
 }

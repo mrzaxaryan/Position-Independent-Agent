@@ -19,9 +19,7 @@ public:
 		RunTest(allPassed, &TestGetAgentPlatform, "GetAgentPlatform returns non-empty string");
 		RunTest(allPassed, &TestGetAgentPlatformKnownValue, "GetAgentPlatform returns known platform");
 		RunTest(allPassed, &TestGetOSVersion, "GetOSVersion returns non-empty string");
-		RunTest(allPassed, &TestGetOSVersionNotUnknown, "GetOSVersion returns actual version info");
 		RunTest(allPassed, &TestGetHostname, "GetHostname returns non-empty string");
-		RunTest(allPassed, &TestGetHostnameNotUnknown, "GetHostname returns actual hostname");
 		RunTest(allPassed, &TestGetArchitecture, "GetArchitecture returns known architecture");
 		RunTest(allPassed, &TestGetMachineUUID, "GetMachineUUID returns valid UUID");
 		RunTest(allPassed, &TestSystemInfoPopulated, "SystemInfo fields are populated");
@@ -103,27 +101,6 @@ private:
 			return false;
 		}
 
-		LOG_INFO("  OSVersion: %s (len=%llu)", buffer, (UINT64)len);
-		return true;
-	}
-
-	static BOOL TestGetOSVersionNotUnknown()
-	{
-		CHAR buffer[128];
-		Memory::Zero(buffer, sizeof(buffer));
-
-		Environment::GetOSVersion(Span<CHAR>(buffer, 127));
-
-		// On actual OS targets (not UEFI), we should get real version info,
-		// not "unknown". On UEFI, "uefi" is acceptable.
-#if !defined(PLATFORM_UEFI)
-		if (StringUtils::Equals(buffer, "unknown"))
-		{
-			LOG_ERROR("GetOSVersion returned 'unknown' on a real OS");
-			return false;
-		}
-#endif
-
 		// On Windows, should start with "Windows"
 #if defined(PLATFORM_WINDOWS)
 		if (buffer[0] != 'W' || buffer[1] != 'i' || buffer[2] != 'n')
@@ -142,6 +119,7 @@ private:
 		}
 #endif
 
+		LOG_INFO("  OSVersion: %s (len=%llu)", buffer, (UINT64)len);
 		return true;
 	}
 
@@ -168,40 +146,16 @@ private:
 		return true;
 	}
 
-	static BOOL TestGetHostnameNotUnknown()
-	{
-		CHAR buffer[256];
-		Memory::Zero(buffer, sizeof(buffer));
-
-		Environment::GetHostname(Span<CHAR>(buffer, 255));
-
-		// On actual OS targets (not UEFI), we should get a real hostname,
-		// not "unknown".
-#if !defined(PLATFORM_UEFI)
-		if (StringUtils::Equals(buffer, "unknown"))
-		{
-			LOG_ERROR("GetHostname returned 'unknown' on a real OS");
-			return false;
-		}
-#endif
-
-		return true;
-	}
-
 	static BOOL TestGetMachineUUID()
 	{
 		auto result = GetMachineUUID();
 
-#if !defined(PLATFORM_UEFI) && !defined(PLATFORM_SOLARIS)
-		// On real OS targets (except Solaris which lacks a UUID source),
-		// GetMachineUUID must succeed.
 		if (!result)
 		{
-			LOG_ERROR("GetMachineUUID failed on a real OS");
+			LOG_ERROR("GetMachineUUID failed");
 			return false;
 		}
 
-		// UUID must not be nil (all zeros)
 		UUID &uuid = result.Value();
 		if (uuid.GetMostSignificantBits() == 0 && uuid.GetLeastSignificantBits() == 0)
 		{
@@ -212,19 +166,6 @@ private:
 		CHAR uuidStr[37];
 		uuid.ToString(Span<CHAR>(uuidStr));
 		LOG_INFO("  MachineUUID: %s", uuidStr);
-#else
-		// UEFI and Solaris: UUID may not be available, just log status
-		if (result)
-		{
-			CHAR uuidStr[37];
-			result.Value().ToString(Span<CHAR>(uuidStr));
-			LOG_INFO("  MachineUUID: %s", uuidStr);
-		}
-		else
-		{
-			LOG_INFO("  MachineUUID: not available (expected on this platform)");
-		}
-#endif
 
 		return true;
 	}
