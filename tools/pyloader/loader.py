@@ -573,8 +573,7 @@ def main():
         else:
             code = run_mmap(shellcode)
 
-    elapsed = time.time() - _log_start
-    _log('ok', "Exit code: %d  (%.3fs elapsed)" % (code, elapsed))
+    _log('ok', "Exit code: %d" % code)
     os._exit(code)
 
 
