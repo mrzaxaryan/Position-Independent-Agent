@@ -154,7 +154,12 @@ private:
 		}
 
 		CHAR uuidStr[37];
-		uuid.ToString(Span<CHAR>(uuidStr));
+		auto toStrResult = uuid.ToString(Span<CHAR>(uuidStr));
+		if (toStrResult.IsErr())
+		{
+			LOG_ERROR("UUID::ToString failed");
+			return false;
+		}
 		LOG_INFO("  MachineUUID: %s", uuidStr);
 
 		return true;
