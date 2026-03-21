@@ -543,6 +543,8 @@ jobs:
         with:
           sync: scp
           usesh: true
+          prepare: |
+            hostname solaris-ci
           run: |
             for dir in release/*/; do
               opt=$(basename "$dir")
@@ -566,6 +568,8 @@ jobs:
         with:
           sync: scp
           usesh: true
+          prepare: |
+            hostname solaris-ci
           run: |
             for dir in release/*/; do
               opt=$(basename "$dir")

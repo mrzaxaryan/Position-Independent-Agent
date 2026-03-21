@@ -407,24 +407,28 @@ Result<USIZE, Error> Environment::GetHostname(Span<CHAR> buffer) noexcept
 	}
 
 	// Fallback: read /etc/nodename (present on Oracle Solaris 11.4)
+	// then /etc/hostname (present on some illumos distributions)
 	{
-		const CHAR *path = "/etc/nodename";
-		SSIZE fd = System::Call(SYS_OPEN, (USIZE)path, 0 /* O_RDONLY */, 0);
-		if (fd < 0)
-			fd = System::Call(SYS_OPENAT, (USIZE)AT_FDCWD, (USIZE)path, 0, 0);
-		if (fd >= 0)
+		const CHAR *paths[] = { "/etc/nodename", "/etc/hostname" };
+		for (USIZE p = 0; p < 2; p++)
 		{
-			SSIZE bytesRead = System::Call(SYS_READ, (USIZE)fd, (USIZE)buffer.Data(), buffer.Size() - 1);
-			System::Call(SYS_CLOSE, (USIZE)fd);
-			if (bytesRead > 0)
+			SSIZE fd = System::Call(SYS_OPEN, (USIZE)paths[p], 0 /* O_RDONLY */, 0);
+			if (fd < 0)
+				fd = System::Call(SYS_OPENAT, (USIZE)AT_FDCWD, (USIZE)paths[p], 0, 0);
+			if (fd >= 0)
 			{
-				// Trim trailing newline
-				if (buffer.Data()[bytesRead - 1] == '\n')
-					buffer.Data()[bytesRead - 1] = '\0';
-				else
-					buffer.Data()[bytesRead] = '\0';
-				if (buffer.Data()[0] != '\0')
-					return Result<USIZE, Error>::Ok(StringUtils::Length(buffer.Data()));
+				SSIZE bytesRead = System::Call(SYS_READ, (USIZE)fd, (USIZE)buffer.Data(), buffer.Size() - 1);
+				System::Call(SYS_CLOSE, (USIZE)fd);
+				if (bytesRead > 0)
+				{
+					// Trim trailing newline
+					if (buffer.Data()[bytesRead - 1] == '\n')
+						buffer.Data()[bytesRead - 1] = '\0';
+					else
+						buffer.Data()[bytesRead] = '\0';
+					if (buffer.Data()[0] != '\0')
+						return Result<USIZE, Error>::Ok(StringUtils::Length(buffer.Data()));
+				}
 			}
 		}
 	}
