@@ -2,6 +2,15 @@
 #include "platform/fs/file.h"
 #include "platform/console/logger.h"
 #include "core/string/string.h"
+#include "core/memory/memory.h"
+
+#if defined(PLATFORM_MACOS)
+#include "platform/kernel/macos/syscall.h"
+#include "platform/kernel/macos/system.h"
+#elif defined(PLATFORM_IOS)
+#include "platform/kernel/ios/syscall.h"
+#include "platform/kernel/ios/system.h"
+#endif
 
 /// @brief Getting MachineID from File
 /// @param path Path to the file containing the machine ID
@@ -56,13 +65,52 @@ Result<UUID, Error> GetMachineUUID()
 	if (result)
 		return result;
 
-#if defined(PLATFORM_ANDROID)
-	// Android doesn't have /etc/machine-id.
+#if defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)
 	// Fall back to /proc/sys/kernel/random/boot_id (UUID format with dashes).
-	// Note: boot_id changes on each reboot.
+	// Available on all Linux kernels. Note: boot_id changes on each reboot.
 	result = ReadMachineIdFromFile(L"/proc/sys/kernel/random/boot_id", true);
 	if (result)
 		return result;
+#endif
+
+#if defined(PLATFORM_MACOS) || defined(PLATFORM_IOS)
+	// Use sysctl kern.uuid — the IOPlatformUUID (hardware, persists across reinstalls).
+	// kern.uuid has a dynamically assigned OID (OID_AUTO), so we first translate the
+	// name to a MIB path via the sysctl name2oid handler ({0, 3}), then query the value.
+	{
+		// Step 1: Translate "kern.uuid" to MIB path
+		INT32 name2oid[2];
+		name2oid[0] = 0;  // CTL_SYSCTL
+		name2oid[1] = 3;  // SYSCTL_NAME2OID
+		INT32 mib[8];
+		USIZE mibLen = sizeof(mib);
+		const CHAR *kernUuid = "kern.uuid";
+		SSIZE ret = System::Call(SYS_SYSCTL, (USIZE)name2oid, 2,
+								(USIZE)mib, (USIZE)&mibLen,
+								(USIZE)kernUuid, 9);
+		if (ret == 0 && mibLen > 0)
+		{
+			// Step 2: Query the actual UUID string using the resolved MIB
+			CHAR uuidStr[40];
+			USIZE uuidLen = sizeof(uuidStr) - 1;
+			Memory::Zero(uuidStr, sizeof(uuidStr));
+			USIZE mibCount = mibLen / sizeof(INT32);
+			ret = System::Call(SYS_SYSCTL, (USIZE)mib, mibCount,
+							  (USIZE)uuidStr, (USIZE)&uuidLen, 0, 0);
+			if (ret == 0 && uuidStr[0] != '\0')
+			{
+				auto parseResult = UUID::FromString(Span<const CHAR>(uuidStr, StringUtils::Length(uuidStr)));
+				if (parseResult)
+					return parseResult;
+			}
+		}
+	}
+#endif
+
+#if defined(PLATFORM_SOLARIS)
+	// Solaris has no standard persistent machine UUID file.
+	// /etc/hostid contains only 8 hex chars (not a full UUID).
+	// Accept that machine UUID may not be available on Solaris.
 #endif
 
 	LOG_ERROR("Failed to retrieve machine UUID from OS");

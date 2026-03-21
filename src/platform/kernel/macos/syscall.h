@@ -60,6 +60,9 @@ constexpr USIZE SYS_FCNTL      = SYSCALL_CLASS_UNIX | 92;
 constexpr USIZE SYS_IOCTL      = SYSCALL_CLASS_UNIX | 54;
 constexpr USIZE SYS_POLL       = SYSCALL_CLASS_UNIX | 230;
 
+// System information
+constexpr USIZE SYS_SYSCTL     = SYSCALL_CLASS_UNIX | 202;
+
 // Time operations
 constexpr USIZE SYS_GETTIMEOFDAY   = SYSCALL_CLASS_UNIX | 116;
 

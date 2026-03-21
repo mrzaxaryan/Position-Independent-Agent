@@ -45,6 +45,9 @@ constexpr USIZE SYS_RMDIR      = 79;
 constexpr USIZE SYS_GETDENTS   = 81;   // LP64: native 64-bit dirent; ILP32: 32-bit dirent (use getdents64)
 constexpr USIZE SYS_GETDENTS64 = 213;  // ILP32 only: 64-bit dirent for 32-bit processes
 
+// System information
+constexpr USIZE SYS_UTSSYS     = 57;   // utssys(buf, arg, type): type 0 = uname
+
 // I/O control
 constexpr USIZE SYS_IOCTL      = 54;
 
@@ -203,6 +206,18 @@ constexpr SSIZE INVALID_FD = -1;
 // =============================================================================
 // Solaris Structures
 // =============================================================================
+
+/// @brief Solaris utsname structure returned by the utssys syscall (type 0).
+/// @details Contains system identification strings. Each field is SYS_NMLN (257)
+/// bytes on Solaris, unlike Linux's 65 bytes.
+struct SolarisUtsname
+{
+	CHAR Sysname[257];    ///< OS name (e.g. "SunOS")
+	CHAR Nodename[257];   ///< Network hostname
+	CHAR Release[257];    ///< OS release (e.g. "5.11")
+	CHAR Version[257];    ///< OS version string
+	CHAR Machine[257];    ///< Hardware architecture (e.g. "i86pc")
+};
 
 /// @brief Solaris directory entry returned by getdents (LP64) / getdents64 (ILP32).
 ///

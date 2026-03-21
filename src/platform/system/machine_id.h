@@ -9,9 +9,11 @@
  * Platform implementations:
  * - Windows: SMBIOS Type 1 UUID via NtQuerySystemInformation (hardware-level,
  *   survives OS reinstalls)
- * - Linux/FreeBSD: /etc/machine-id (systemd, generated at install)
+ * - Linux/FreeBSD: /etc/machine-id (systemd, generated at install),
+ *   falls back to /proc/sys/kernel/random/boot_id (changes per reboot)
  * - Android: /etc/machine-id if available, otherwise
  *   /proc/sys/kernel/random/boot_id (changes per reboot)
+ * - macOS/iOS: sysctl kern.uuid (IOPlatformUUID, hardware-level)
  *
  * @ingroup platform
  */
@@ -30,9 +32,12 @@
  *   firmware tables via NtQuerySystemInformation. This is a hardware-level
  *   UUID assigned by the OEM, constant across reboots and OS reinstalls.
  * - Linux/FreeBSD: Reads /etc/machine-id (systemd 128-bit identifier,
- *   generated at install time, constant across reboots).
+ *   generated at install time, constant across reboots). Falls back to
+ *   /proc/sys/kernel/random/boot_id (Linux only, changes per reboot).
  * - Android: Reads /etc/machine-id if available (e.g. Termux on rooted
  *   devices), falls back to /proc/sys/kernel/random/boot_id.
+ * - macOS/iOS: Queries kern.uuid via sysctl (IOPlatformUUID, hardware-level,
+ *   constant across reboots and OS reinstalls).
  *
  * @return Ok(UUID) on success, Err on failure (firmware table unavailable,
  *         SMBIOS Type 1 not found, file not readable, etc.)

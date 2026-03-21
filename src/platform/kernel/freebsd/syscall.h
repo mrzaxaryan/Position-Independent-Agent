@@ -62,6 +62,9 @@ constexpr USIZE SYS_GETSOCKOPT = 118;
 constexpr USIZE SYS_FCNTL      = 92;
 constexpr USIZE SYS_POLL       = 209;
 
+// System information
+constexpr USIZE SYS_SYSCTL     = 202;
+
 // Time operations
 constexpr USIZE SYS_CLOCK_GETTIME  = 232;
 constexpr USIZE SYS_GETTIMEOFDAY   = 116;
