@@ -43,6 +43,9 @@ function(pir_add_postbuild target_name)
 
     # PIC artifact commands: .bin extraction, base64, and verification
     # Skipped entirely for debug optimization levels (O0/Og)
+    #
+    # Note: poly-transform runs at COMPILE TIME as an LLVM pass (not post-build).
+    # The output.bin already contains polymorphically transformed instructions.
     set(_pic_cmds)
     if(NOT _is_debug_opt)
         set(_pic_cmds
@@ -58,26 +61,6 @@ function(pir_add_postbuild target_name)
                 -DMAP_FILE="${PIR_MAP_FILE}"
                 -P "${PIR_ROOT_DIR}/cmake/scripts/VerifyPICMode.cmake"
         )
-
-        # Polymorphic instruction analysis (when tool is available)
-        if(POLY_TRANSFORM_EXECUTABLE)
-            pir_log_verbose("  4. Instruction set analysis (poly-transform)")
-            # Generate disassembly and run analysis
-            # Note: verification is informational only — does not fail the build
-            find_program(_ply_objdump llvm-objdump)
-            if(_ply_objdump)
-                list(APPEND _pic_cmds
-                    COMMAND ${CMAKE_COMMAND}
-                        -DPLY_OBJDUMP=${_ply_objdump}
-                        -DPLY_EXECUTABLE=${POLY_TRANSFORM_EXECUTABLE}
-                        -DPLY_INPUT="${_out}${PIR_EXT}"
-                        -DPLY_DISASM="${_out}.disasm"
-                        -DPLY_ARCH=${PIR_ARCH}
-                        -DPLY_SEED=${POLY_TRANSFORM_SEED}
-                        -P "${PIR_ROOT_DIR}/cmake/scripts/PolyTransformAnalyze.cmake"
-                )
-            endif()
-        endif()
     endif()
 
     add_custom_command(TARGET ${target_name} POST_BUILD

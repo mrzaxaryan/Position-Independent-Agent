@@ -253,6 +253,7 @@ This project solves that: a full C++23 codebase that compiles to position-indepe
 
 - **Zero Dependencies** - No libc, no C++ standard library, no external libraries. Crypto (SHA-256, ChaCha20-Poly1305, ECC P-256), TLS 1.3, WebSocket, HTTP, DNS, and JPEG encoding are all implemented from scratch
 - **Position-Independent** - A custom LLVM pass ([pic-transform](tools/pic-transform/)) eliminates `.data`/`.rodata`/`.bss` sections at compile time, producing binaries with only a `.text` section — fully relocatable as raw shellcode, executable in RX-only memory with no writable pages required
+- **Polymorphic** - A second LLVM pass ([poly-transform](tools/poly-transform/)) constrains instruction selection to a random per-build subset of the target's instruction set. Each build produces a different instruction vocabulary, making static signature detection effectively impossible (~4.8 billion valid combinations on x86_64)
 - **Cross-Platform** - 8 platforms (Windows, Linux, macOS, FreeBSD, Solaris, UEFI, Android, iOS) across 7 architectures (i386, x86_64, armv7a, aarch64, riscv32, riscv64, mips64) via direct syscalls
 - **TLS 1.3 + WebSocket** - Encrypted command-and-control over `wss://` using ChaCha20-Poly1305 AEAD (RFC 8446, RFC 6455)
 - **Binary Command Protocol** - 8 command types over WebSocket:
@@ -341,7 +342,7 @@ src/
 └── beacon/      Layer 4 — Agent: command dispatcher, 8 command handlers, interactive shell, screen capture context
 ```
 
-All system interaction is through direct syscalls (NT Native API on Windows, inline assembly on POSIX, Boot Services on UEFI). A custom LLVM pass ([pic-transform](tools/pic-transform/)) eliminates data sections at compile time, ensuring only a `.text` section in the final binary.
+All system interaction is through direct syscalls (NT Native API on Windows, inline assembly on POSIX, Boot Services on UEFI). Two custom LLVM passes run at compile time: [pic-transform](tools/pic-transform/) eliminates data sections (producing `.text`-only binaries), and [poly-transform](tools/poly-transform/) constrains instruction selection to a random subset (making each build's instruction fingerprint unique).
 
 See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the full project structure and source tree layout.
 
@@ -359,7 +360,8 @@ See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the full project structure an
 │   └── entry_point.cc       # Platform entry point
 ├── tests/                   # Test suite (31 test suites across all layers)
 └── tools/
-    ├── pic-transform/       # Custom LLVM pass for PIC enforcement
+    ├── pic-transform/       # LLVM pass: eliminates data sections for PIC shellcode
+    ├── poly-transform/      # LLVM pass: polymorphic instruction selection (anti-signature)
     └── pyloader/            # Cross-platform shellcode loader (Python)
 ```
 

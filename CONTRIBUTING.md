@@ -131,8 +131,9 @@ For more information, see the [VSCode WSL documentation](https://code.visualstud
 │   ├── Options.cmake          # CMake options (BUILD_TESTS, ENABLE_LOGGING)
 │   ├── Toolchain.cmake        # Compiler detection
 │   ├── PICTransform.cmake     # pic-transform LLVM pass integration
+│   ├── PolyTransform.cmake    # poly-transform LLVM pass integration
 │   ├── Sources.cmake          # Source file collection & platform filtering
-│   ├── Target.cmake           # Executable definition & post-build verification
+│   ├── Target.cmake           # Executable definition, LLVM pass pipeline & post-build
 │   ├── Triples.cmake          # LLVM target triple generation
 │   ├── platforms/             # Per-platform CMake modules (Windows, Linux, macOS, etc.)
 │   └── data/                  # Linker scripts & function order files
@@ -151,8 +152,8 @@ For more information, see the [VSCode WSL documentation](https://code.visualstud
 │   ├── start.cc               # Test harness entry point
 │   └── *_tests.h              # Individual test suites
 └── tools/
-    ├── pic-transform/         # Custom LLVM pass for PIC enforcement
-    ├── poly-engine/           # Polymorphic engine
+    ├── pic-transform/         # LLVM pass: eliminates data sections for PIC shellcode
+    ├── poly-transform/        # LLVM pass: polymorphic instruction selection (anti-signature)
     └── pyloader/              # Cross-platform shellcode loader (Python)
 ```
 
@@ -164,7 +165,9 @@ The project is a self-contained monorepo. The `cmake/` directory contains the fu
 
 The binary must contain **only** a `.text` section. No `.rdata`, `.rodata`, `.data`, or `.bss`. Verified automatically by the post-build step in `cmake/PostBuild.cmake`.
 
-The [pic-transform](https://github.com/mrzaxaryan/pic-transform) LLVM pass runs automatically during compilation and eliminates data sections by converting global constants (strings, floats, arrays) into stack-local immediate stores. This means you can write normal C++ string literals, float constants, and const arrays -- they are transformed automatically.
+Two LLVM passes run automatically during compilation:
+- [pic-transform](https://github.com/mrzaxaryan/pic-transform) eliminates data sections by converting global constants (strings, floats, arrays) into stack-local immediate stores. You can write normal C++ string literals, float constants, and const arrays — they are transformed automatically.
+- [poly-transform](tools/poly-transform/) constrains instruction selection to a random per-build subset of the target ISA. Each source file gets a different instruction vocabulary via FNV-1a seeding, making static instruction-pattern signatures impossible.
 
 **Memory protection consequence:** Because the binary has no data sections, the agent can run entirely in **RX (read+execute)** memory — no writable code page is ever needed at runtime. Any change that reintroduces a data section breaks this guarantee.
 
@@ -299,6 +302,10 @@ Wire paths arrive as null-terminated UTF-16LE strings. Use `DecodeWirePath()` to
 ### Data Section Elimination (pic-transform)
 
 The [pic-transform](https://github.com/mrzaxaryan/pic-transform) LLVM pass automatically converts string literals, float/double constants, const arrays, and function pointer references into position-independent code during compilation. No special syntax or macros are needed.
+
+### Polymorphic Instruction Selection (poly-transform)
+
+The [poly-transform](tools/poly-transform/) LLVM pass constrains the compiler's instruction selection to a random subset of the target's ISA. Each source file gets a unique seed, so every file in the binary uses a different instruction vocabulary. Transformations are algebraic (ADD ↔ SUB, XOR ↔ AND+OR via De Morgan's) and semantically equivalent — no behavioral changes.
 
 ---
 

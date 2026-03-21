@@ -2,7 +2,7 @@
 
 LLVM pass that eliminates data sections (`.rodata`, `.rdata`, `.data`, `.bss`) from compiled code by transforming string literals, floating-point constants, and constant arrays into stack-local allocations with immediate-value stores. Produces binaries with only a `.text` section.
 
-Designed for position-independent shellcode — also useful anywhere pure-code binaries are required.
+Designed for position-independent shellcode — also useful anywhere pure-code binaries are required. Companion to [poly-transform](../poly-transform/) which constrains instruction selection for anti-signature polymorphism.
 
 ## What it does
 

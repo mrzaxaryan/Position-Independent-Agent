@@ -128,6 +128,13 @@ if(NOT EXISTS "${_pt_build_dir}/CMakeCache.txt")
     pir_log_verbose_at("pic-transform" "Compiler: ${_pt_compiler_dir}/clang++")
     pir_log_verbose_at("pic-transform" "Static link: ON")
     string(TIMESTAMP _pt_cfg_start "%s")
+    # Force standalone mode when poly-transform source exists (both tools
+    # must be standalone to work together in the compile pipeline with LTO).
+    set(_pt_force_standalone OFF)
+    if(EXISTS "${PIR_ROOT_DIR}/tools/poly-transform/CMakeLists.txt")
+        set(_pt_force_standalone ON)
+    endif()
+
     execute_process(
         COMMAND ${CMAKE_COMMAND}
             -S "${_pt_source_dir}"
@@ -137,6 +144,7 @@ if(NOT EXISTS "${_pt_build_dir}/CMakeCache.txt")
             -DCMAKE_C_COMPILER=${_pt_compiler_dir}/clang
             -DCMAKE_CXX_COMPILER=${_pt_compiler_dir}/clang++
             -DSTATIC_LINK=ON
+            -DFORCE_STANDALONE=${_pt_force_standalone}
         RESULT_VARIABLE _pt_cfg_rc
         OUTPUT_VARIABLE _pt_cfg_out
         ERROR_VARIABLE  _pt_cfg_err
@@ -168,15 +176,24 @@ if(NOT _pt_build_rc EQUAL 0)
 endif()
 pir_log_at("pic-transform" "Build succeeded (${_pt_build_elapsed}s)")
 
-# ── Locate artifact (prefer plugin over standalone) ─────────────────────
-_pt_find_artifact(_pt_plugin "${_pt_plugin_name}" "${_pt_build_dir}")
-if(_pt_plugin)
-    _pt_found(plugin "${_pt_plugin}" "Built plugin from source")
-endif()
+# ── Locate artifact ─────────────────────────────────────────────────────
+# When forced standalone, look for the binary first.
+# Otherwise prefer plugin over standalone.
+if(_pt_force_standalone)
+    _pt_find_artifact(_pt_bin "${_pt_bin_name}" "${_pt_build_dir}")
+    if(_pt_bin)
+        _pt_found(standalone "${_pt_bin}" "Built standalone from source")
+    endif()
+else()
+    _pt_find_artifact(_pt_plugin "${_pt_plugin_name}" "${_pt_build_dir}")
+    if(_pt_plugin)
+        _pt_found(plugin "${_pt_plugin}" "Built plugin from source")
+    endif()
 
-_pt_find_artifact(_pt_bin "${_pt_bin_name}" "${_pt_build_dir}")
-if(_pt_bin)
-    _pt_found(standalone "${_pt_bin}" "Built standalone from source")
+    _pt_find_artifact(_pt_bin "${_pt_bin_name}" "${_pt_build_dir}")
+    if(_pt_bin)
+        _pt_found(standalone "${_pt_bin}" "Built standalone from source")
+    endif()
 endif()
 
 message(FATAL_ERROR "[pir:pic-transform] Build succeeded but no artifact found in ${_pt_build_dir}")

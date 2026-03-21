@@ -28,17 +28,25 @@ add_definitions(${LLVM_DEFINITIONS_LIST})
 # =============================================================================
 # Determine build mode: plugin vs standalone
 # =============================================================================
-# Also verify PassPlugin.h exists (some distro packages set LLVM_ENABLE_PLUGINS
-# but don't ship the header).
-if(LLVM_ENABLE_PLUGINS)
+# Force standalone mode when FORCE_STANDALONE is set (needed when poly-transform
+# is also in the pipeline — both tools must be standalone to avoid conflicts
+# with -flto=full and pass plugin double-loading).
+if(FORCE_STANDALONE)
+	set(_PIC_BUILD_STANDALONE ON)
+	message(STATUS "[pic-transform] Forced standalone mode (FORCE_STANDALONE=ON)")
+elseif(LLVM_ENABLE_PLUGINS)
 	find_file(_PASS_PLUGIN_H "llvm/Passes/PassPlugin.h" PATHS ${LLVM_INCLUDE_DIRS} NO_DEFAULT_PATH)
-	if(NOT _PASS_PLUGIN_H)
+	if(_PASS_PLUGIN_H)
+		set(_PIC_BUILD_STANDALONE OFF)
+	else()
 		message(STATUS "[pic-transform] PassPlugin.h not found — falling back to standalone tool")
-		set(LLVM_ENABLE_PLUGINS OFF)
+		set(_PIC_BUILD_STANDALONE ON)
 	endif()
+else()
+	set(_PIC_BUILD_STANDALONE ON)
 endif()
 
-if(NOT LLVM_ENABLE_PLUGINS)
+if(_PIC_BUILD_STANDALONE)
 	# ── Standalone executable mode ───────────────────────────────────────
 	message(STATUS "[pic-transform] Building standalone executable")
 

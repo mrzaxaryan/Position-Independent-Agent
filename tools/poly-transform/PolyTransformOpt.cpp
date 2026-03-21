@@ -1,20 +1,20 @@
-//===-- PICTransformOpt.cpp - Standalone PIC transform tool ----------------===//
+//===-- PolyTransformOpt.cpp - Standalone poly-transform tool --------------===//
 //
-// Reads LLVM bitcode or textual IR, runs PICTransformPass to eliminate
-// data sections, and writes the transformed result.
+// Reads LLVM bitcode or textual IR, runs PolyTransformPass to constrain
+// instruction selection, and writes the transformed result.
 //
 // Usage:
 //   clang++ -emit-llvm -c -O2 input.cpp -o input.bc
-//   pic-transform input.bc -o output.bc
+//   poly-transform --seed=0xDEAD --count=10 input.bc -o output.bc
 //   clang++ output.bc -o output.exe
 //
 //===----------------------------------------------------------------------===//
 
-#ifndef PIC_TRANSFORM_STANDALONE
-#define PIC_TRANSFORM_STANDALONE
+#ifndef POLY_TRANSFORM_STANDALONE
+#define POLY_TRANSFORM_STANDALONE
 #endif
 
-#include "PICTransformPass.h"
+#include "PolyTransformPass.h"
 
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
@@ -27,6 +27,8 @@
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/raw_ostream.h"
+
+#include "llvm/IR/Verifier.h"
 
 #include <chrono>
 
@@ -43,17 +45,29 @@ static cl::opt<std::string>
 static cl::opt<bool>
     OutputAssembly("S", cl::desc("Write output as LLVM assembly (.ll)"));
 
+static cl::opt<uint64_t>
+    Seed("seed", cl::desc("Random seed for instruction set generation"),
+         cl::init(0));
+
+static cl::opt<int>
+    Count("count", cl::desc("Number of instructions to select"),
+          cl::init(10));
+
+static cl::opt<std::string>
+    Arch("arch", cl::desc("Target architecture (x86_64, i386)"),
+         cl::init("x86_64"));
+
 int main(int argc, char **argv) {
   InitLLVM X(argc, argv);
 
   cl::ParseCommandLineOptions(argc, argv,
-      "pic-transform - Eliminate data sections from LLVM IR\n\n"
-      "Transforms global constants (strings, floats, arrays) into\n"
-      "stack-local allocations with immediate-value stores.\n"
-      "Produces binaries with only a .text section.\n");
+      "poly-transform - Polymorphic instruction selection for LLVM IR\n\n"
+      "Constrains instruction selection to a random subset of the\n"
+      "target's instruction set. Each build with a different seed\n"
+      "produces a different instruction vocabulary.\n");
 
   // ── Parse input ─────────────────────────────────────────────────────
-  errs() << "pic-transform: reading " << InputFilename << "\n";
+  errs() << "poly-transform: reading " << InputFilename << "\n";
 
   LLVMContext Context;
   SMDiagnostic Err;
@@ -68,12 +82,15 @@ int main(int argc, char **argv) {
 
   auto ParseMs = std::chrono::duration_cast<std::chrono::milliseconds>(
       ParseEnd - ParseStart).count();
-  errs() << "pic-transform: parsed " << M->getName()
+  errs() << "poly-transform: parsed " << M->getName()
          << " (" << ParseMs << " ms)\n";
 
   // ── Run pass ────────────────────────────────────────────────────────
   ModuleAnalysisManager MAM;
-  PICTransformPass Pass;
+  PolyTransformPass Pass;
+  Pass.Seed = Seed;
+  Pass.Count = Count;
+  Pass.Arch = Arch;
 
   auto PassStart = std::chrono::steady_clock::now();
   PreservedAnalyses PA = Pass.run(*M, MAM);
@@ -83,32 +100,44 @@ int main(int argc, char **argv) {
       PassEnd - PassStart).count();
   bool WasChanged = !PA.areAllPreserved();
 
-  errs() << "pic-transform: pass completed in " << PassMs << " ms"
+  errs() << "poly-transform: pass completed in " << PassMs << " ms"
          << (WasChanged ? " (module modified)" : " (no changes)") << "\n";
 
   // ── Write output ───────────────────────────────────────────────────
   // If no changes were made, copy input to output verbatim to avoid
-  // bitcode round-trip issues (some modules have types/metadata that
-  // don't survive WriteBitcodeToFile → parseIRFile round-trips).
+  // bitcode round-trip issues (some modules with inline asm from
+  // pic-transform don't survive WriteBitcodeToFile round-trips).
   if (!WasChanged && !OutputAssembly && OutputFilename != "-") {
     std::error_code CopyEC =
         sys::fs::copy_file(InputFilename, OutputFilename);
     if (CopyEC) {
-      errs() << "pic-transform: error copying: " << CopyEC.message() << "\n";
+      errs() << "poly-transform: error copying: " << CopyEC.message() << "\n";
       return 1;
     }
-    errs() << "pic-transform: no changes — copied input to "
+    errs() << "poly-transform: no changes — copied input to "
            << OutputFilename << "\n";
-    auto TotalMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::steady_clock::now() - ParseStart).count();
-    errs() << "pic-transform: total time: " << TotalMs << " ms\n";
+    return 0;
+  }
+
+  // Verify the module is valid before writing.  If verification fails
+  // (e.g., pic-transform created IR with types that don't round-trip
+  // through bitcode), fall back to copying the input unchanged.
+  if (verifyModule(*M, &errs())) {
+    errs() << "poly-transform: module verification failed after transform"
+           << " — copying input unchanged\n";
+    std::error_code CopyEC =
+        sys::fs::copy_file(InputFilename, OutputFilename);
+    if (CopyEC) {
+      errs() << "poly-transform: error copying: " << CopyEC.message() << "\n";
+      return 1;
+    }
     return 0;
   }
 
   std::error_code EC;
   ToolOutputFile Out(OutputFilename, EC, sys::fs::OF_None);
   if (EC) {
-    errs() << "pic-transform: error: cannot open output file '"
+    errs() << "poly-transform: error: cannot open output file '"
            << OutputFilename << "': " << EC.message() << "\n";
     return 1;
   }
@@ -125,13 +154,13 @@ int main(int argc, char **argv) {
 
   Out.keep();
 
-  errs() << "pic-transform: wrote " << OutputFilename
+  errs() << "poly-transform: wrote " << OutputFilename
          << (OutputAssembly ? " (assembly)" : " (bitcode)")
          << " (" << WriteMs << " ms)\n";
 
   auto TotalMs = std::chrono::duration_cast<std::chrono::milliseconds>(
       WriteEnd - ParseStart).count();
-  errs() << "pic-transform: total time: " << TotalMs << " ms\n";
+  errs() << "poly-transform: total time: " << TotalMs << " ms\n";
 
   return 0;
 }

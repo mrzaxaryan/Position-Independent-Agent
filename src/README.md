@@ -77,9 +77,22 @@ The entire binary has **only a `.text` section** — no `.data`, `.rdata`, `.rod
 
 6. **No Import Tables** (Windows): All DLL functions resolved at runtime via PEB walking + PE export parsing.
 
+## Polymorphic Instruction Selection
+
+Each build uses a **different random subset of the target's instruction set**, making static instruction-pattern signatures impossible:
+
+1. **Poly Transform LLVM Pass** (`tools/poly-transform/`): Constrains instruction selection to a random N-instruction subset (default: 10). Transforms IR operations into algebraically equivalent sequences that compile to the allowed instructions only.
+
+2. **Per-Module Seeding**: Each source file gets a unique seed derived via FNV-1a hash of its module identifier. Every file in a build uses a different instruction vocabulary.
+
+3. **Algebraic Substitutions**: `ADD ↔ SUB` (negate operand), `XOR → AND + OR` (De Morgan's), `AND ↔ OR` (De Morgan's), `SHL ↔ MUL` (power-of-2), `CMP → SUB` (for eq/ne comparisons).
+
+4. **Billions of Combinations**: ~4.8 billion valid 10-instruction subsets on x86_64, ~1.9 billion on AArch64, ~33 million on RISC-V 32. No two builds share the same instruction fingerprint.
+
 ## Build System
 
 See `cmake/` for the build system:
 - `CompilerFlags.cmake` — C++23, `-nostdlib`, `-fno-exceptions`, `-fno-rtti`, `-fno-jump-tables`
-- `PICTransform.cmake` — LLVM pass acquisition and integration
-- `Target.cmake` — Platform-specific link scripts and post-build processing
+- `PICTransform.cmake` — PIC transform LLVM pass acquisition and integration
+- `PolyTransform.cmake` — Polymorphic transform LLVM pass acquisition and integration
+- `Target.cmake` — Platform-specific link scripts, LLVM pass pipeline, and post-build processing

@@ -90,6 +90,51 @@ if(PIC_TRANSFORM_TARGET)
     add_dependencies(${PIR_TRIPLE} ${PIC_TRANSFORM_TARGET})
 endif()
 
+# ── poly-transform integration ──────────────────────────────────────────────
+# Polymorphic instruction selection — constrains backend to a random subset.
+# Plugin mode: adds -fpass-plugin= alongside pic-transform.
+# Standalone mode: adds an extra step in the compile pipeline.
+# The seed is passed via environment variable POLY_TRANSFORM_SEED.
+if(POLY_TRANSFORM_EXECUTABLE AND PIC_TRANSFORM_EXECUTABLE)
+    # Both tools are standalone: 4-step pipeline
+    #   clang -emit-llvm → pic-transform → poly-transform → clang -c
+    if(CMAKE_HOST_WIN32)
+        set(CMAKE_CXX_COMPILE_OBJECT
+            "cmd /C \"<CMAKE_CXX_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -emit-llvm -c <SOURCE> -o <OBJECT>.bc && ${PIC_TRANSFORM_EXECUTABLE} <OBJECT>.bc -o <OBJECT>.pic.bc && ${POLY_TRANSFORM_EXECUTABLE} --seed=${POLY_TRANSFORM_SEED} --count=10 <OBJECT>.pic.bc -o <OBJECT>.poly.bc && <CMAKE_CXX_COMPILER> -Wno-unused-command-line-argument <FLAGS> -c <OBJECT>.poly.bc -o <OBJECT>\""
+        )
+    else()
+        set(CMAKE_CXX_COMPILE_OBJECT
+            "<CMAKE_CXX_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -emit-llvm -c <SOURCE> -o <OBJECT>.bc && ${PIC_TRANSFORM_EXECUTABLE} <OBJECT>.bc -o <OBJECT>.pic.bc && ${POLY_TRANSFORM_EXECUTABLE} --seed=${POLY_TRANSFORM_SEED} --count=10 <OBJECT>.pic.bc -o <OBJECT>.poly.bc && <CMAKE_CXX_COMPILER> -Wno-unused-command-line-argument <FLAGS> -c <OBJECT>.poly.bc -o <OBJECT>"
+        )
+    endif()
+    pir_log_verbose_at("poly-transform" "Mode: standalone (4-step pipeline with pic-transform)")
+elseif(POLY_TRANSFORM_EXECUTABLE AND NOT PIC_TRANSFORM_PLUGIN)
+    # Only poly-transform is standalone, no pic-transform: 3-step pipeline
+    if(CMAKE_HOST_WIN32)
+        set(CMAKE_CXX_COMPILE_OBJECT
+            "cmd /C \"<CMAKE_CXX_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -emit-llvm -c <SOURCE> -o <OBJECT>.bc && ${POLY_TRANSFORM_EXECUTABLE} --seed=${POLY_TRANSFORM_SEED} --count=10 <OBJECT>.bc -o <OBJECT>.poly.bc && <CMAKE_CXX_COMPILER> -Wno-unused-command-line-argument <FLAGS> -c <OBJECT>.poly.bc -o <OBJECT>\""
+        )
+    else()
+        set(CMAKE_CXX_COMPILE_OBJECT
+            "<CMAKE_CXX_COMPILER> <DEFINES> <INCLUDES> <FLAGS> -emit-llvm -c <SOURCE> -o <OBJECT>.bc && ${POLY_TRANSFORM_EXECUTABLE} --seed=${POLY_TRANSFORM_SEED} --count=10 <OBJECT>.bc -o <OBJECT>.poly.bc && <CMAKE_CXX_COMPILER> -Wno-unused-command-line-argument <FLAGS> -c <OBJECT>.poly.bc -o <OBJECT>"
+        )
+    endif()
+    pir_log_verbose_at("poly-transform" "Mode: standalone (3-step pipeline)")
+elseif(POLY_TRANSFORM_EXECUTABLE AND PIC_TRANSFORM_PLUGIN)
+    # pic-transform is a plugin but poly-transform is standalone.
+    # Can't mix: the plugin in <FLAGS> would double-run on the final clang -c.
+    # Skip poly-transform standalone — it needs pic-transform to also be standalone.
+    pir_log_verbose_at("poly-transform" "Mode: skipped (pic-transform is plugin; poly-transform needs standalone pic-transform)")
+    pir_log_at("poly-transform" "Requires pic-transform in standalone mode (use -DPIC_TRANSFORM_LLVM_DIR=DISABLED to force standalone)")
+else()
+    pir_log_verbose_at("poly-transform" "Mode: disabled")
+endif()
+
+# Ensure poly-transform is built before the main target
+if(POLY_TRANSFORM_TARGET)
+    add_dependencies(${PIR_TRIPLE} ${POLY_TRANSFORM_TARGET})
+endif()
+
 # =============================================================================
 # Post-Build
 # =============================================================================
@@ -136,8 +181,10 @@ pir_log_kv("Triple"        "${PIR_TRIPLE}")
 pir_log_kv("Compiler"      "clang ${_compiler_version}")
 pir_log_kv("Sources"       "${_final_src_count} sources, ${_final_hdr_count} headers")
 pir_log_kv("pic-transform" "${_pt_mode}")
-if(POLY_TRANSFORM_EXECUTABLE)
-    pir_log_kv("poly-transform" "enabled (seed=${POLY_TRANSFORM_SEED})")
+if(POLY_TRANSFORM_PLUGIN)
+    pir_log_kv("poly-transform" "plugin (seed=${POLY_TRANSFORM_SEED})")
+elseif(POLY_TRANSFORM_EXECUTABLE)
+    pir_log_kv("poly-transform" "standalone (seed=${POLY_TRANSFORM_SEED})")
 else()
     pir_log_kv("poly-transform" "disabled")
 endif()

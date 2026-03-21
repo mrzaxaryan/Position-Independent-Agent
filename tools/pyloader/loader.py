@@ -575,8 +575,8 @@ def main():
             code = run_mmap(shellcode)
 
     elapsed = time.time() - _log_start
-    _log('ok', "Exit code: %d  (%.3fs elapsed)" % (code, elapsed))
-    os._exit(code)
+    _log('ok', "Exit code: %d (0x%x)  (%.3fs elapsed)" % (code, code & 0xFFFFFFFF, elapsed))
+    os._exit(code & 0x7F)  # Clamp to valid range for os._exit
 
 
 if __name__ == '__main__':
