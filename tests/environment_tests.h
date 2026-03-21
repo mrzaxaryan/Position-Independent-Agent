@@ -87,19 +87,15 @@ private:
 		CHAR buffer[128];
 		Memory::Zero(buffer, sizeof(buffer));
 
-		USIZE len = Environment::GetOSVersion(Span<CHAR>(buffer, 127));
+		auto result = Environment::GetOSVersion(Span<CHAR>(buffer, 127));
 
-		if (len == 0)
+		if (!result)
 		{
-			LOG_ERROR("GetOSVersion returned length 0");
+			LOG_ERROR("GetOSVersion failed");
 			return false;
 		}
 
-		if (buffer[0] == '\0')
-		{
-			LOG_ERROR("GetOSVersion returned empty string");
-			return false;
-		}
+		USIZE len = result.Value();
 
 		// On Windows, should start with "Windows"
 #if defined(PLATFORM_WINDOWS)
@@ -128,21 +124,15 @@ private:
 		CHAR buffer[256];
 		Memory::Zero(buffer, sizeof(buffer));
 
-		USIZE len = Environment::GetHostname(Span<CHAR>(buffer, 255));
+		auto result = Environment::GetHostname(Span<CHAR>(buffer, 255));
 
-		if (len == 0)
+		if (!result)
 		{
-			LOG_ERROR("GetHostname returned length 0");
+			LOG_ERROR("GetHostname failed");
 			return false;
 		}
 
-		if (buffer[0] == '\0')
-		{
-			LOG_ERROR("GetHostname returned empty string");
-			return false;
-		}
-
-		LOG_INFO("  Hostname: %s (len=%llu)", buffer, (UINT64)len);
+		LOG_INFO("  Hostname: %s (len=%llu)", buffer, (UINT64)result.Value());
 		return true;
 	}
 

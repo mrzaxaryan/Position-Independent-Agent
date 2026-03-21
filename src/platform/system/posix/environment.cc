@@ -192,10 +192,10 @@ USIZE Environment::GetAgentPlatform(Span<CHAR> buffer) noexcept
 	return StringUtils::Length(buffer.Data());
 }
 
-USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
+Result<USIZE, Error> Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 {
 	if (buffer.Size() == 0)
-		return 0;
+		return Result<USIZE, Error>::Err(Error(Error::None));
 
 #if defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)
 	// Use the uname syscall to get kernel release info
@@ -216,7 +216,7 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 
 		StringUtils::Copy(Span<CHAR>(buffer.Data() + pos, buffer.Size() - pos), Span<const CHAR>(uts.Release, relLen + 1));
 		pos += relLen;
-		return pos;
+		return Result<USIZE, Error>::Ok(pos);
 	}
 
 	// Fallback: try reading /proc/version via raw syscalls
@@ -238,7 +238,7 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 					buffer.Data()[bytesRead - 1] = '\0';
 				else
 					buffer.Data()[bytesRead] = '\0';
-				return StringUtils::Length(buffer.Data());
+				return Result<USIZE, Error>::Ok(StringUtils::Length(buffer.Data()));
 			}
 		}
 	}
@@ -258,10 +258,7 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 		Memory::Zero(ostype, sizeof(ostype));
 		SSIZE ret = System::Call(SYS_SYSCTL, (USIZE)mib, 2, (USIZE)ostype, (USIZE)&len, 0, 0);
 		if (ret < 0)
-		{
-			buffer.Data()[0] = '\0';
-			return 0;
-		}
+			return Result<USIZE, Error>::Err(Error(Error::None));
 
 		// CTL_KERN=1, KERN_OSRELEASE=2 → e.g. "23.1.0" or "14.0-RELEASE"
 		mib[1] = 2;
@@ -269,10 +266,7 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 		Memory::Zero(osrelease, sizeof(osrelease));
 		ret = System::Call(SYS_SYSCTL, (USIZE)mib, 2, (USIZE)osrelease, (USIZE)&len, 0, 0);
 		if (ret < 0)
-		{
-			buffer.Data()[0] = '\0';
-			return 0;
-		}
+			return Result<USIZE, Error>::Err(Error(Error::None));
 
 		// Format: "{ostype} {osrelease}" e.g. "Darwin 23.1.0"
 		USIZE sysLen = StringUtils::Length(ostype);
@@ -286,7 +280,7 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 
 		StringUtils::Copy(Span<CHAR>(buffer.Data() + pos, buffer.Size() - pos), Span<const CHAR>(osrelease, relLen + 1));
 		pos += relLen;
-		return pos;
+		return Result<USIZE, Error>::Ok(pos);
 	}
 #elif defined(PLATFORM_SOLARIS)
 	// Try utssys syscall first (works on illumos/OpenIndiana)
@@ -309,7 +303,7 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 
 			StringUtils::Copy(Span<CHAR>(buffer.Data() + pos, buffer.Size() - pos), Span<const CHAR>(uts.Release, relLen + 1));
 			pos += relLen;
-			return pos;
+			return Result<USIZE, Error>::Ok(pos);
 		}
 	}
 
@@ -345,22 +339,21 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 
 				buffer.Data()[pos] = '\0';
 				if (pos > 0)
-					return pos;
+					return Result<USIZE, Error>::Ok(pos);
 			}
 		}
 	}
 #endif
 
-	buffer.Data()[0] = '\0';
-	return 0;
+	return Result<USIZE, Error>::Err(Error(Error::None));
 }
 
-USIZE Environment::GetHostname(Span<CHAR> buffer) noexcept
+Result<USIZE, Error> Environment::GetHostname(Span<CHAR> buffer) noexcept
 {
 	// Try HOSTNAME environment variable first (works on Linux/Android)
 	USIZE len = Environment::GetVariable("HOSTNAME", buffer);
 	if (len > 0)
-		return len;
+		return Result<USIZE, Error>::Ok(len);
 
 #if defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)
 	// Fallback: read /etc/hostname
@@ -382,7 +375,7 @@ USIZE Environment::GetHostname(Span<CHAR> buffer) noexcept
 					buffer.Data()[bytesRead - 1] = '\0';
 				else
 					buffer.Data()[bytesRead] = '\0';
-				return StringUtils::Length(buffer.Data());
+				return Result<USIZE, Error>::Ok(StringUtils::Length(buffer.Data()));
 			}
 		}
 	}
@@ -397,7 +390,7 @@ USIZE Environment::GetHostname(Span<CHAR> buffer) noexcept
 		Memory::Zero(buffer.Data(), buffer.Size());
 		SSIZE ret = System::Call(SYS_SYSCTL, (USIZE)mib, 2, (USIZE)buffer.Data(), (USIZE)&slen, 0, 0);
 		if (ret == 0 && buffer.Data()[0] != '\0')
-			return StringUtils::Length(buffer.Data());
+			return Result<USIZE, Error>::Ok(StringUtils::Length(buffer.Data()));
 	}
 #elif defined(PLATFORM_SOLARIS)
 	// Try utssys nodename field (works on illumos)
@@ -409,7 +402,7 @@ USIZE Environment::GetHostname(Span<CHAR> buffer) noexcept
 		{
 			USIZE nodeLen = StringUtils::Length(uts.Nodename);
 			StringUtils::Copy(buffer, Span<const CHAR>(uts.Nodename, nodeLen + 1));
-			return nodeLen;
+			return Result<USIZE, Error>::Ok(nodeLen);
 		}
 	}
 
@@ -431,14 +424,13 @@ USIZE Environment::GetHostname(Span<CHAR> buffer) noexcept
 				else
 					buffer.Data()[bytesRead] = '\0';
 				if (buffer.Data()[0] != '\0')
-					return StringUtils::Length(buffer.Data());
+					return Result<USIZE, Error>::Ok(StringUtils::Length(buffer.Data()));
 			}
 		}
 	}
 #endif
 
-	buffer.Data()[0] = '\0';
-	return 0;
+	return Result<USIZE, Error>::Err(Error(Error::None));
 }
 
 USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept

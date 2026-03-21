@@ -25,17 +25,17 @@ USIZE Environment::GetAgentPlatform(Span<CHAR> buffer) noexcept
 	return StringUtils::Length(buffer.Data());
 }
 
-USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
+Result<USIZE, Error> Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 {
 	StringUtils::Copy(buffer, Span<const CHAR>("uefi"));
-	return StringUtils::Length(buffer.Data());
+	return Result<USIZE, Error>::Ok(StringUtils::Length(buffer.Data()));
 }
 
-USIZE Environment::GetHostname(Span<CHAR> buffer) noexcept
+Result<USIZE, Error> Environment::GetHostname(Span<CHAR> buffer) noexcept
 {
 	if (buffer.Size() > 0)
 		buffer[0] = '\0';
-	return 0;
+	return Result<USIZE, Error>::Err(Error(Error::None));
 }
 
 USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept

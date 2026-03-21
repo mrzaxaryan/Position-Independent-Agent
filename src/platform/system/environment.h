@@ -19,6 +19,7 @@
 #pragma once
 
 #include "core/core.h"
+#include "core/types/result.h"
 
 /**
  * @class Environment
@@ -62,8 +63,10 @@ public:
 	 * - macOS/iOS/FreeBSD: "{ostype} {osrelease}" from sysctl
 	 * - Solaris: "{sysname} {release}" from utssys syscall
 	 * - UEFI: "uefi"
+	 *
+	 * @return Ok(length) on success, Err on failure
 	 */
-	static USIZE GetOSVersion(Span<CHAR> buffer) noexcept;
+	[[nodiscard]] static Result<USIZE, Error> GetOSVersion(Span<CHAR> buffer) noexcept;
 
 	/**
 	 * @brief Retrieves the machine hostname.
@@ -77,8 +80,10 @@ public:
 	 * - macOS/FreeBSD/Solaris/iOS: HOSTNAME environment variable, fallback
 	 *   to /etc/hostname
 	 * - UEFI: returns 0 (no hostname concept)
+	 *
+	 * @return Ok(length) on success, Err on failure
 	 */
-	static USIZE GetHostname(Span<CHAR> buffer) noexcept;
+	[[nodiscard]] static Result<USIZE, Error> GetHostname(Span<CHAR> buffer) noexcept;
 
 	/**
 	 * @brief Retrieves the compile-time CPU architecture string.

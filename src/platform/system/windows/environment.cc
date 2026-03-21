@@ -129,10 +129,10 @@ USIZE Environment::GetAgentPlatform(Span<CHAR> buffer) noexcept
 	return StringUtils::Length(buffer.Data());
 }
 
-USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
+Result<USIZE, Error> Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 {
 	if (buffer.Size() == 0)
-		return 0;
+		return Result<USIZE, Error>::Err(Error(Error::None));
 
 	// Read OS version fields from PEB at known architecture-specific offsets.
 	// These fields (OSMajorVersion, OSMinorVersion, OSBuildNumber) are set by
@@ -177,12 +177,15 @@ USIZE Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 	StringUtils::Copy(Span<CHAR>(buffer.Data() + pos, buffer.Size() - pos), Span<const CHAR>(numBuf, n + 1));
 	pos += n;
 
-	return pos;
+	return Result<USIZE, Error>::Ok(pos);
 }
 
-USIZE Environment::GetHostname(Span<CHAR> buffer) noexcept
+Result<USIZE, Error> Environment::GetHostname(Span<CHAR> buffer) noexcept
 {
-	return Environment::GetVariable("COMPUTERNAME", buffer);
+	USIZE len = Environment::GetVariable("COMPUTERNAME", buffer);
+	if (len > 0)
+		return Result<USIZE, Error>::Ok(len);
+	return Result<USIZE, Error>::Err(Error(Error::None));
 }
 
 USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept

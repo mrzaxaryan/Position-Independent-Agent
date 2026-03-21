@@ -14,8 +14,14 @@ VOID GetSystemInfo(SystemInfo *info)
 	else
 		LOG_ERROR("Failed to retrieve machine UUID");
 
-	Environment::GetHostname(Span<CHAR>(info->Hostname, 255));
+	auto hostnameResult = Environment::GetHostname(Span<CHAR>(info->Hostname, 255));
+	if (!hostnameResult)
+		LOG_ERROR("Failed to retrieve hostname");
+
 	Environment::GetArchitecture(Span<CHAR>(info->Architecture, 31));
 	Environment::GetAgentPlatform(Span<CHAR>(info->AgentPlatform, 31));
-	Environment::GetOSVersion(Span<CHAR>(info->OSVersion, 127));
+
+	auto osVersionResult = Environment::GetOSVersion(Span<CHAR>(info->OSVersion, 127));
+	if (!osVersionResult)
+		LOG_ERROR("Failed to retrieve OS version");
 }
