@@ -1,4 +1,4 @@
-# pyloader
+# Python Loader
 
 Cross-platform shellcode loader for position-independent code. Downloads pre-built agents from GitHub Releases (or loads a local file) and executes them in-process (POSIX) or via remote thread injection (Windows).
 

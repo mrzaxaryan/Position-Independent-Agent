@@ -358,9 +358,12 @@ See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for the full project structure an
 │   ├── beacon/              # Agent: command dispatcher, shell, screen capture
 │   └── entry_point.cc       # Platform entry point
 ├── tests/                   # Test suite (31 test suites across all layers)
-└── tools/
-    ├── pic-transform/       # Custom LLVM pass for PIC enforcement
-    └── pyloader/            # Cross-platform shellcode loader (Python)
+├── tools/
+│   └── pic-transform/       # Custom LLVM pass for PIC enforcement
+└── loaders/
+    ├── python/              # Cross-platform shellcode loader (Python)
+    └── windows/
+        └── powershell/      # Windows shellcode loader (PowerShell)
 ```
 
 ---
@@ -416,7 +419,8 @@ The [beacon documentation](src/beacon/README.md) covers the full connection pipe
 ### Tools
 
 - **[PIC Transform](tools/pic-transform/README.md)** — Custom LLVM Module pass that converts string literals into stack `alloca` + word-packed immediate stores with register barriers (`asm("": "+r"(val))`) to defeat optimizer re-coalescing; floating-point constants into integer bitcasts; function pointers into PC-relative assembly
-- **[Python Loader](tools/pyloader/README.md)** — Cross-platform shellcode loader for testing
+- **[Python Loader](loaders/python/README.md)** — Cross-platform shellcode loader for testing
+- **[PowerShell Loader](loaders/windows/powershell/README.md)** — Windows in-process shellcode loader via function pointer
 
 ---
 

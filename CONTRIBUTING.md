@@ -150,10 +150,13 @@ For more information, see the [VSCode WSL documentation](https://code.visualstud
 ├── tests/                     # Test suite (31 test suites across all layers)
 │   ├── start.cc               # Test harness entry point
 │   └── *_tests.h              # Individual test suites
-└── tools/
-    ├── pic-transform/         # Custom LLVM pass for PIC enforcement
-    ├── poly-engine/           # Polymorphic engine
-    └── pyloader/              # Cross-platform shellcode loader (Python)
+├── tools/
+│   ├── pic-transform/         # Custom LLVM pass for PIC enforcement
+│   └── poly-engine/           # Polymorphic engine
+└── loaders/
+    ├── python/                # Cross-platform shellcode loader (Python)
+    └── windows/
+        └── powershell/        # Windows shellcode loader (PowerShell)
 ```
 
 The project is a self-contained monorepo. The `cmake/` directory contains the full build system, and `src/` contains the runtime library and agent code in a layered architecture (core → platform → lib → beacon).

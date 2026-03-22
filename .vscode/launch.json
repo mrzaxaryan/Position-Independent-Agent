@@ -5,7 +5,7 @@
             "name": "windows-i386-pic",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "i386",
@@ -19,7 +19,7 @@
             "name": "windows-x86_64-pic",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "x86_64",
@@ -33,7 +33,7 @@
             "name": "windows-aarch64-pic",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "aarch64",
@@ -47,7 +47,7 @@
             "name": "windows-armv7a-pic",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "armv7a",
@@ -97,7 +97,7 @@
             "name": "macos-x86_64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "x86_64",
@@ -111,7 +111,7 @@
             "name": "macos-aarch64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "aarch64",
@@ -143,7 +143,7 @@
             "name": "linux-i386-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "i386",
@@ -157,7 +157,7 @@
             "name": "linux-x86_64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "x86_64",
@@ -171,7 +171,7 @@
             "name": "linux-armv7a-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "armv7a",
@@ -185,7 +185,7 @@
             "name": "linux-aarch64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "aarch64",
@@ -199,7 +199,7 @@
             "name": "linux-riscv32-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "riscv32",
@@ -213,7 +213,7 @@
             "name": "linux-riscv64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "riscv64",
@@ -227,7 +227,7 @@
             "name": "linux-mips64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "mips64",
@@ -304,7 +304,7 @@
             "name": "solaris-i386-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "i386",
@@ -318,7 +318,7 @@
             "name": "solaris-x86_64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "x86_64",
@@ -332,7 +332,7 @@
             "name": "solaris-aarch64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "aarch64",
@@ -373,7 +373,7 @@
             "name": "freebsd-i386-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "i386",
@@ -396,7 +396,7 @@
             "name": "freebsd-x86_64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "x86_64",
@@ -419,7 +419,7 @@
             "name": "freebsd-aarch64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "aarch64",
@@ -442,7 +442,7 @@
             "name": "freebsd-riscv64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "riscv64",
@@ -465,7 +465,7 @@
             "name": "android-x86_64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "x86_64",
@@ -479,7 +479,7 @@
             "name": "android-armv7a-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "armv7a",
@@ -493,7 +493,7 @@
             "name": "android-aarch64-release (PIC)",
             "type": "debugpy",
             "request": "launch",
-            "program": "${workspaceFolder}/tools/pyloader/loader.py",
+            "program": "${workspaceFolder}/loaders/python/loader.py",
             "args": [
                 "--arch",
                 "aarch64",
