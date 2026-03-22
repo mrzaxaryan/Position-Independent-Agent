@@ -664,14 +664,63 @@ Captures a JPEG-encoded screenshot of a specified display.
 
 Designed for execution environments where traditional runtime assumptions do not apply:
 
-- Authorized penetration testing with written scope and client approval
-- Security research with proper disclosure practices
-- Shellcode and loaderless code execution research
-- Embedded and bare-metal system programming
-- Cross-architecture C++ development without CRT
-- UEFI pre-boot environments
+### Penetration Testing & Red Team Operations
 
-**Disclaimer:** Any unauthorized or malicious use of this software is strictly prohibited and falls outside the scope of the project's design goals.
+- **Authorized penetration testing** — Deploy as a lightweight implant during engagements with written scope and client approval. The position-independent design allows injection into arbitrary process memory without touching disk
+- **Red team exercises** — Simulate advanced adversary tradecraft (reflective loading, direct syscalls, encrypted C2) to test blue team detection capabilities and validate security controls
+- **Adversary simulation** — Use as a reference for building custom tooling that mirrors real-world threat actor techniques (PEB walking, indirect syscalls, in-memory execution)
+- **Purple team collaboration** — Provides a fully open-source implant with documented internals, enabling defenders to study each technique and build targeted detections
+
+### Security Research & Education
+
+- **Shellcode development research** — Study how a full C++23 application compiles to position-independent shellcode via LLVM transformations
+- **OS internals exploration** — Reference implementations of direct syscall interfaces across 8 platforms and 7 architectures
+- **Cryptographic protocol implementation** — From-scratch TLS 1.3, ChaCha20-Poly1305, and ECC without external dependencies
+- **Security tooling development** — Learn techniques used in modern offensive tooling: API hashing, indirect syscalls, in-memory networking stacks
+
+### Systems Programming
+
+- **Embedded and bare-metal systems** — No runtime dependencies make it suitable for constrained environments
+- **UEFI pre-boot environments** — Full networking stack available before any OS loads
+- **Cross-architecture C++ without CRT** — Reference for building portable, dependency-free C++ across i386, x86_64, ARM, RISC-V, and MIPS
+
+**Disclaimer:** This tool is intended exclusively for authorized security testing, research, and educational purposes. Any unauthorized or malicious use is strictly prohibited and falls outside the scope of the project's design goals. Always obtain proper written authorization before deploying in any environment.
+
+---
+
+## Inspired By
+
+This project draws inspiration from several pioneering works in position-independent code, offensive security tooling, and C2 frameworks:
+
+### Position-Independent Code & Shellcode
+
+| Project | Description |
+|---------|-------------|
+| [Stardust](https://github.com/Cracked5pider/Stardust) | Position-independent implant template by 5pider — demonstrated that full-featured PIC agents are viable in C |
+| [Donut](https://github.com/TheWover/donut) | Generates position-independent shellcode from .NET assemblies, PE files, and DLLs — pioneered PIC generation tooling |
+| [sRDI](https://github.com/monoxgas/sRDI) | Shellcode Reflective DLL Injection — converts DLLs to position-independent shellcode with reflective loading |
+| [Shellcode Compiler (ShcMaker)](https://github.com/nickcano/ShellcodeCompiler) | Early exploration of compiling high-level code to shellcode |
+| [TitanLdr](https://github.com/realoriginal/TitanLdr) | Position-independent reflective loader with advanced evasion techniques |
+
+### C2 Frameworks & Implant Design
+
+| Project | Description |
+|---------|-------------|
+| [Sliver](https://github.com/BishopFox/sliver) | Open-source cross-platform C2 framework by BishopFox — set the standard for modern open-source adversary simulation |
+| [Havoc](https://github.com/HavocFramework/Havoc) | Modern C2 framework with a clean implant architecture and extensive post-exploitation capabilities |
+| [Mythic](https://github.com/its-a-feature/Mythic) | Collaborative, multi-platform C2 framework with pluggable agent support |
+| [Metasploit Framework](https://github.com/rapid7/metasploit-framework) | The foundational penetration testing framework — decades of shellcode and payload research |
+| [Cobalt Strike](https://www.cobaltstrike.com/) | Commercial adversary simulation platform that defined the modern beacon/C2 architecture |
+| [Brute Ratel C4](https://bruteratel.com/) | Advanced C2 framework focused on EDR evasion and detection-resistant operations |
+
+### Techniques & Research
+
+| Project | Description |
+|---------|-------------|
+| [SysWhispers](https://github.com/jthuraisamy/SysWhispers) | Direct system call generation for evasion — inspired the indirect syscall approach |
+| [Hell's Gate](https://github.com/am0nsec/HellsGate) | Runtime SSN resolution technique for dynamic syscall dispatch |
+| [LLVM Pass Tutorial](https://llvm.org/docs/WritingAnLLVMPass.html) | Foundation for the custom pic-transform LLVM pass |
+| [PE-bear](https://github.com/hasherezade/pe-bear) | PE analysis tool by hasherezade — invaluable for debugging PE parsing and export resolution |
 
 ---
 
