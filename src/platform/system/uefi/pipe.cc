@@ -12,16 +12,14 @@ Result<Pipe, Error> Pipe::Create() noexcept
 	return Result<Pipe, Error>::Err(Error::Pipe_NotSupported);
 }
 
-Result<USIZE, Error> Pipe::Read(Span<UINT8> buffer) noexcept
+Result<USIZE, Error> Pipe::Read([[maybe_unused]] Span<UINT8> buffer) noexcept
 {
-	(void)buffer;
 	return Result<USIZE, Error>::Err(Error::Pipe_NotSupported);
 }
 
-Result<USIZE, Error> Pipe::Write(Span<const UINT8> data) noexcept
+Result<USIZE, Error> Pipe::Write([[maybe_unused]] Span<const UINT8> data) noexcept
 {
-	(void)data;
-	return Result<USIZE, Error>::Err(Error::Pipe_NotSupported);
+`	return Result<USIZE, Error>::Err(Error::Pipe_NotSupported);
 }
 
 Result<void, Error> Pipe::CloseRead() noexcept
