@@ -94,7 +94,7 @@ public:
 	~Pipe() noexcept
 	{
 		if (IsValid())
-			(void)Close();
+			(VOID)Close();
 	}
 
 	Pipe(Pipe &&other) noexcept
