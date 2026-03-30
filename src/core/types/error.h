@@ -242,7 +242,7 @@ struct Error
 		Pty_NotSupported = 133,	  // PTY not supported on this platform
 
 		// -------------------------
-		// ShellProcess errors (135–136)
+		// ShellProcess errors (135–137)
 		// -------------------------
 		ShellProcess_CreateFailed = 135, // shell process creation failed
 		ShellProcess_NotSupported = 136, // shell not supported on this platform
