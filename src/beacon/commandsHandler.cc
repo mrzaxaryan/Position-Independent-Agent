@@ -326,11 +326,11 @@ VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
     StringUtils::Copy(Span<CHAR>(*response + sizeof(UINT32), bytesRead), Span<const CHAR>(buffer, bytesRead));
 }
 
-// Reset Shell command
+// Reset Shell instance
 VOID Handle_ResetShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
     LOG_INFO("Handling ResetShellCommand.");
-    
+
     if(context->shell != nullptr){
         delete context->shell;
         context->shell = nullptr;
