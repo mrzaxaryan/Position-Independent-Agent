@@ -36,6 +36,7 @@ Result<USIZE, Error> Shell::Read(char *buffer, USIZE capacity) noexcept
             return Result<USIZE, Error>::Err(Error::ShellProcess_ReadFailed);
 
         bool promptFound = false;
+
         for (USIZE i = 0; i < ret.Value(); ++i)
         {
             if (buffer[totalRead + i] == ShellProcess::EndOfLineChar())
