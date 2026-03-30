@@ -353,7 +353,7 @@ extern "C"
 	 *   - Results are loaded directly into output registers per EABI spec
 	 */
 	COMPILER_RUNTIME
-	__attribute__((naked)) VOID __aeabi_uldivmod(VOID)
+	__attribute__((naked)) VOID __aeabi_uldivmod(void)
 	{
 		__asm__ volatile(
 			"push   {r4, r5, lr}\n\t"    // Save callee-saved registers and return address
