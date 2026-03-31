@@ -1336,6 +1336,18 @@
       "complexity": "simple"
     },
     {
+      "id": "function:src/beacon/commandsHandler.cc::Handle_ResetShellCommand",
+      "type": "function",
+      "name": "Handle_ResetShellCommand",
+      "filePath": "src/beacon/commandsHandler.cc",
+      "summary": "Resets the agent's shell process by destroying the existing Shell instance.",
+      "tags": [
+        "command-handler",
+        "shell"
+      ],
+      "complexity": "simple"
+    },
+    {
       "id": "function:src/beacon/commandsHandler.cc::Handle_GetDisplaysCommand",
       "type": "function",
       "name": "Handle_GetDisplaysCommand",
@@ -7989,6 +8001,13 @@
     {
       "source": "file:src/beacon/commandsHandler.cc",
       "target": "function:src/beacon/commandsHandler.cc::Handle_ReadShellCommand",
+      "type": "contains",
+      "weight": 1.0,
+      "direction": "forward"
+    },
+    {
+      "source": "file:src/beacon/commandsHandler.cc",
+      "target": "function:src/beacon/commandsHandler.cc::Handle_ResetShellCommand",
       "type": "contains",
       "weight": 1.0,
       "direction": "forward"
