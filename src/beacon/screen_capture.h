@@ -85,7 +85,7 @@ struct Graphics
     /// @brief Initialize the Graphics instance by allocating necessary buffers based on the provided screen device's dimensions
     /// @param device Screen device containing the dimensions for buffer allocation
     /// @return void
-    Graphics& Init(const ScreenDevice &device)
+    VOID Init(const ScreenDevice &device)
     {
         USIZE pixelCount = (USIZE)device.Width * device.Height;
         if (currentScreenshot == nullptr)
@@ -104,7 +104,6 @@ struct Graphics
         {
             rectBuffer = new RGB[pixelCount];
         }
-        return *this;
     }
 };
 
