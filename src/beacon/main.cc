@@ -56,7 +56,7 @@ INT32 start()
         LOG_INFO("Connection attempt #%u to %s", connectionAttempt, (PCCHAR)url);
 
         auto createResult = WebSocketClient::Create(url);
-        if (!createResult)
+        if (!createResult.IsOk())
         {
             LOG_ERROR("Connection attempt #%u failed: unable to open WebSocket to %s", connectionAttempt, (PCCHAR)url);
             return 0;
@@ -107,7 +107,7 @@ INT32 start()
             auto writeResult = wsClient.Write(Span<const CHAR>(response, responseLength), WebSocketOpcode::Binary);
             delete[] response;
 
-            if (!writeResult)
+            if (!writeResult.IsOk())
             {
                 LOG_ERROR("Failed to send response for command %s, reconnecting...", CommandTypeName(commandType));
                 break;

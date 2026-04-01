@@ -47,7 +47,7 @@ Result<File, Error> File::Open(PCWCHAR path, INT32 flags)
 	// Convert DOS path to NT path
 	UNICODE_STRING ntPathU;
 	auto pathResult = NTDLL::RtlDosPathNameToNtPathName_U(path, &ntPathU, nullptr, nullptr);
-	if (!pathResult)
+	if (!pathResult.IsOk())
 		return Result<File, Error>::Err(pathResult, Error::Fs_OpenFailed);
 
 	OBJECT_ATTRIBUTES objAttr;
@@ -71,7 +71,7 @@ Result<File, Error> File::Open(PCWCHAR path, INT32 flags)
 
 	NTDLL::RtlFreeUnicodeString(&ntPathU);
 
-	if (!createResult || hFile == INVALID_HANDLE_VALUE)
+	if (!createResult.IsOk() || hFile == INVALID_HANDLE_VALUE)
 		return Result<File, Error>::Err(createResult, Error::Fs_OpenFailed);
 
 	// Query file size before constructing the File (keeps the constructor trivial)
@@ -81,7 +81,7 @@ Result<File, Error> File::Open(PCWCHAR path, INT32 flags)
 	Memory::Zero(&fileStandardInfo, sizeof(FILE_STANDARD_INFORMATION));
 	Memory::Zero(&sizeIoBlock, sizeof(IO_STATUS_BLOCK));
 	auto sizeResult = NTDLL::ZwQueryInformationFile(hFile, &sizeIoBlock, &fileStandardInfo, sizeof(fileStandardInfo), FileStandardInformation);
-	if (sizeResult)
+	if (sizeResult.IsOk())
 		size = fileStandardInfo.EndOfFile.QuadPart;
 
 	return Result<File, Error>::Ok(File((PVOID)hFile, size));
@@ -95,7 +95,7 @@ Result<VOID, Error> File::Delete(PCWCHAR path)
 	IO_STATUS_BLOCK io;
 
 	auto pathResult = NTDLL::RtlDosPathNameToNtPathName_U(path, &ntName, nullptr, nullptr);
-	if (!pathResult)
+	if (!pathResult.IsOk())
 		return Result<VOID, Error>::Err(pathResult, Error::Fs_DeleteFailed);
 
 	InitializeObjectAttributes(&attr, &ntName, OBJ_CASE_INSENSITIVE, nullptr, nullptr);
@@ -104,7 +104,7 @@ Result<VOID, Error> File::Delete(PCWCHAR path)
 											FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
 											FILE_OPEN, FILE_DELETE_ON_CLOSE | FILE_NON_DIRECTORY_FILE, nullptr, 0);
 
-	if (!createResult)
+	if (!createResult.IsOk())
 	{
 		NTDLL::RtlFreeUnicodeString(&ntName);
 		return Result<VOID, Error>::Err(createResult, Error::Fs_DeleteFailed);
@@ -122,7 +122,7 @@ Result<VOID, Error> File::Exists(PCWCHAR path)
 	FILE_BASIC_INFORMATION fileBasicInfo;
 
 	auto pathResult = NTDLL::RtlDosPathNameToNtPathName_U(path, &uniName, nullptr, nullptr);
-	if (!pathResult)
+	if (!pathResult.IsOk())
 		return Result<VOID, Error>::Err(pathResult, Error::Fs_OpenFailed);
 
 	InitializeObjectAttributes(&objAttr, &uniName, 0, nullptr, nullptr);
@@ -130,7 +130,7 @@ Result<VOID, Error> File::Exists(PCWCHAR path)
 
 	NTDLL::RtlFreeUnicodeString(&uniName);
 
-	if (!queryResult)
+	if (!queryResult.IsOk())
 		return Result<VOID, Error>::Err(queryResult, Error::Fs_OpenFailed);
 
 	if (fileBasicInfo.FileAttributes == 0xFFFFFFFF)
@@ -193,7 +193,7 @@ Result<UINT32, Error> File::Read(Span<UINT8> buffer)
 
 	auto readResult = NTDLL::ZwReadFile((PVOID)fileHandle, nullptr, nullptr, nullptr, &ioStatusBlock, buffer.Data(), (UINT32)buffer.Size(), nullptr, nullptr);
 
-	if (readResult)
+	if (readResult.IsOk())
 	{
 		return Result<UINT32, Error>::Ok((UINT32)ioStatusBlock.Information);
 	}
@@ -211,7 +211,7 @@ Result<UINT32, Error> File::Write(Span<const UINT8> buffer)
 
 	auto writeResult = NTDLL::ZwWriteFile((PVOID)fileHandle, nullptr, nullptr, nullptr, &ioStatusBlock, (PVOID)buffer.Data(), (UINT32)buffer.Size(), nullptr, nullptr);
 
-	if (writeResult)
+	if (writeResult.IsOk())
 	{
 		return Result<UINT32, Error>::Ok((UINT32)ioStatusBlock.Information);
 	}
@@ -229,7 +229,7 @@ Result<USIZE, Error> File::GetOffset() const
 	Memory::Zero(&ioStatusBlock, sizeof(ioStatusBlock));
 
 	auto queryResult = NTDLL::ZwQueryInformationFile((PVOID)fileHandle, &ioStatusBlock, &posFile, sizeof(posFile), FilePositionInformation);
-	if (queryResult)
+	if (queryResult.IsOk())
 		return Result<USIZE, Error>::Ok((USIZE)posFile.CurrentByteOffset.QuadPart);
 	return Result<USIZE, Error>::Err(queryResult, Error::Fs_SeekFailed);
 }
@@ -246,7 +246,7 @@ Result<VOID, Error> File::SetOffset(USIZE absoluteOffset)
 	posInfo.CurrentByteOffset.QuadPart = (INT64)absoluteOffset;
 
 	auto setResult = NTDLL::ZwSetInformationFile((PVOID)fileHandle, &ioStatusBlock, &posInfo, sizeof(posInfo), FilePositionInformation);
-	if (setResult)
+	if (setResult.IsOk())
 		return Result<VOID, Error>::Ok();
 	return Result<VOID, Error>::Err(setResult, Error::Fs_SeekFailed);
 }
@@ -265,7 +265,7 @@ Result<VOID, Error> File::MoveOffset(SSIZE relativeAmount, OffsetOrigin origin)
 	INT64 distance = 0;
 
 	auto queryResult = NTDLL::ZwQueryInformationFile((PVOID)fileHandle, &ioStatusBlock, &posInfo, sizeof(posInfo), FilePositionInformation);
-	if (!queryResult)
+	if (!queryResult.IsOk())
 		return Result<VOID, Error>::Err(queryResult, Error::Fs_SeekFailed);
 
 	switch (origin)
@@ -278,7 +278,7 @@ Result<VOID, Error> File::MoveOffset(SSIZE relativeAmount, OffsetOrigin origin)
 		break;
 	case OffsetOrigin::End:
 		queryResult = NTDLL::ZwQueryInformationFile((PVOID)fileHandle, &ioStatusBlock, &fileStandardInfo, sizeof(fileStandardInfo), FileStandardInformation);
-		if (!queryResult)
+		if (!queryResult.IsOk())
 			return Result<VOID, Error>::Err(queryResult, Error::Fs_SeekFailed);
 		distance = fileStandardInfo.EndOfFile.QuadPart + relativeAmount;
 		break;
@@ -288,7 +288,7 @@ Result<VOID, Error> File::MoveOffset(SSIZE relativeAmount, OffsetOrigin origin)
 	posInfo.CurrentByteOffset.QuadPart = distance;
 
 	auto setResult = NTDLL::ZwSetInformationFile((PVOID)fileHandle, &ioStatusBlock, &posInfo, sizeof(posInfo), FilePositionInformation);
-	if (setResult)
+	if (setResult.IsOk())
 		return Result<VOID, Error>::Ok();
 	return Result<VOID, Error>::Err(setResult, Error::Fs_SeekFailed);
 }

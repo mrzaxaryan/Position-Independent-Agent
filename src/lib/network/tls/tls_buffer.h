@@ -70,7 +70,7 @@ public:
 	INT32 Append(T value)
 	{
 		auto r = CheckSize(sizeof(T));
-		if (!r)
+		if (!r.IsOk())
 			return -1;
 		Memory::Copy(buffer + size, &value, sizeof(T));
 		size += sizeof(T);

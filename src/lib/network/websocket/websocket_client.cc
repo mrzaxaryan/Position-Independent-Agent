@@ -20,12 +20,12 @@ Result<VOID, Error> WebSocketClient::Open(PCCHAR path)
 
 	auto openResult = tlsContext.Open();
 
-	if (!openResult && ipAddress.IsIPv6())
+	if (!openResult.IsOk() && ipAddress.IsIPv6())
 	{
 		LOG_DEBUG("Failed to open network transport for WebSocket client using IPv6 address, attempting IPv4 fallback");
 
 		auto dnsResult = DnsClient::Resolve(Span<const CHAR>(hostName, StringUtils::Length(hostName)), DnsRecordType::A);
-		if (!dnsResult)
+		if (!dnsResult.IsOk())
 		{
 			LOG_ERROR("Failed to resolve IPv4 address for %s, cannot connect to WebSocket server (error: %e)", hostName, dnsResult.Error());
 			return Result<VOID, Error>::Err(dnsResult, Error::Ws_DnsFailed);
@@ -35,7 +35,7 @@ Result<VOID, Error> WebSocketClient::Open(PCCHAR path)
 
 		(VOID)tlsContext.Close();
 		auto tlsResult = TlsClient::Create(hostName, ipAddress, port, isSecure);
-		if (!tlsResult)
+		if (!tlsResult.IsOk())
 		{
 			LOG_ERROR("Failed to create TLS client for IPv4 fallback (error: %e)", tlsResult.Error());
 			return Result<VOID, Error>::Err(tlsResult, Error::Ws_TransportFailed);
@@ -44,7 +44,7 @@ Result<VOID, Error> WebSocketClient::Open(PCCHAR path)
 		openResult = tlsContext.Open();
 	}
 
-	if (!openResult)
+	if (!openResult.IsOk())
 	{
 		LOG_DEBUG("Failed to open network transport for WebSocket client (error: %e)", openResult.Error());
 		return Result<VOID, Error>::Err(openResult, Error::Ws_TransportFailed);
@@ -82,7 +82,7 @@ Result<VOID, Error> WebSocketClient::Open(PCCHAR path)
 	}
 
 	auto headerResult = HttpClient::ReadResponseHeaders(tlsContext, 101);
-	if (!headerResult)
+	if (!headerResult.IsOk())
 	{
 		(VOID)Close();
 		return Result<VOID, Error>::Err(headerResult, Error::Ws_HandshakeFailed);
@@ -190,7 +190,7 @@ Result<UINT32, Error> WebSocketClient::Write(Span<const CHAR> buffer, WebSocketO
 
 	// Large frames: write header, then mask and write payload in chunks
 	auto headerWrite = tlsContext.Write(Span<const CHAR>((PCHAR)header, headerLength));
-	if (!headerWrite)
+	if (!headerWrite.IsOk())
 		return Result<UINT32, Error>::Err(headerWrite, Error::Ws_WriteFailed);
 	if (headerWrite.Value() != headerLength)
 		return Result<UINT32, Error>::Err(Error::Ws_WriteFailed);
@@ -206,7 +206,7 @@ Result<UINT32, Error> WebSocketClient::Write(Span<const CHAR> buffer, WebSocketO
 			chunk[i] = src[offset + i] ^ maskKey[(offset + i) & 3];
 
 		auto chunkWrite = tlsContext.Write(Span<const CHAR>((PCHAR)chunk, chunkSize));
-		if (!chunkWrite)
+		if (!chunkWrite.IsOk())
 			return Result<UINT32, Error>::Err(chunkWrite, Error::Ws_WriteFailed);
 		if (chunkWrite.Value() != chunkSize)
 			return Result<UINT32, Error>::Err(Error::Ws_WriteFailed);
@@ -230,7 +230,7 @@ Result<VOID, Error> WebSocketClient::ReceiveRestrict(Span<CHAR> buffer)
 	while (totalBytesRead < buffer.Size())
 	{
 		auto readResult = tlsContext.Read(Span<CHAR>(buffer.Data() + totalBytesRead, buffer.Size() - totalBytesRead));
-		if (!readResult)
+		if (!readResult.IsOk())
 			return Result<VOID, Error>::Err(readResult, Error::Ws_ReceiveFailed);
 		if (readResult.Value() <= 0)
 			return Result<VOID, Error>::Err(Error::Ws_ReceiveFailed);
@@ -284,7 +284,7 @@ Result<VOID, Error> WebSocketClient::ReceiveFrame(WebSocketFrame &frame)
 {
 	UINT8 header[2] = {0};
 	auto headerResult = ReceiveRestrict(Span<CHAR>((PCHAR)header, sizeof(header)));
-	if (!headerResult)
+	if (!headerResult.IsOk())
 		return Result<VOID, Error>::Err(headerResult, Error::Ws_ReceiveFailed);
 
 	UINT8 b1 = header[0];
@@ -307,7 +307,7 @@ Result<VOID, Error> WebSocketClient::ReceiveFrame(WebSocketFrame &frame)
 	{
 		UINT16 len16 = 0;
 		auto lenResult = ReceiveRestrict(Span<CHAR>((PCHAR)&len16, sizeof(len16)));
-		if (!lenResult)
+		if (!lenResult.IsOk())
 			return Result<VOID, Error>::Err(lenResult, Error::Ws_ReceiveFailed);
 		frame.Length = ByteOrder::Swap16(len16);
 	}
@@ -315,7 +315,7 @@ Result<VOID, Error> WebSocketClient::ReceiveFrame(WebSocketFrame &frame)
 	{
 		UINT64 len64 = 0;
 		auto lenResult = ReceiveRestrict(Span<CHAR>((PCHAR)&len64, sizeof(len64)));
-		if (!lenResult)
+		if (!lenResult.IsOk())
 			return Result<VOID, Error>::Err(lenResult, Error::Ws_ReceiveFailed);
 		frame.Length = ByteOrder::Swap64(len64);
 	}
@@ -332,7 +332,7 @@ Result<VOID, Error> WebSocketClient::ReceiveFrame(WebSocketFrame &frame)
 	if (frame.Mask)
 	{
 		auto maskResult = ReceiveRestrict(Span<CHAR>((PCHAR)&frameMask, sizeof(frameMask)));
-		if (!maskResult)
+		if (!maskResult.IsOk())
 			return Result<VOID, Error>::Err(maskResult, Error::Ws_ReceiveFailed);
 	}
 
@@ -344,7 +344,7 @@ Result<VOID, Error> WebSocketClient::ReceiveFrame(WebSocketFrame &frame)
 			return Result<VOID, Error>::Err(Error::Ws_AllocFailed);
 
 		auto dataResult = ReceiveRestrict(Span<CHAR>(frame.Data, (USIZE)frame.Length));
-		if (!dataResult)
+		if (!dataResult.IsOk())
 		{
 			delete[] frame.Data;
 			frame.Data = nullptr;
@@ -389,7 +389,7 @@ Result<WebSocketMessage, Error> WebSocketClient::Read()
 	{
 		frame = WebSocketFrame();
 		auto frameResult = ReceiveFrame(frame);
-		if (!frameResult)
+		if (!frameResult.IsOk())
 			break;
 
 		if (frame.Opcode == WebSocketOpcode::Text || frame.Opcode == WebSocketOpcode::Binary || frame.Opcode == WebSocketOpcode::Continue)
@@ -509,12 +509,12 @@ Result<WebSocketClient, Error> WebSocketClient::Create(Span<const CHAR> url)
 	UINT16 port;
 	BOOL isSecure = false;
 	auto parseResult = HttpClient::ParseUrl(url, host, parsedPath, port, isSecure);
-	if (!parseResult)
+	if (!parseResult.IsOk())
 		return Result<WebSocketClient, Error>::Err(parseResult, Error::Ws_CreateFailed);
 
 	Span<const CHAR> hostSpan(host, StringUtils::Length(host));
 	auto dnsResult = DnsClient::Resolve(hostSpan);
-	if (!dnsResult)
+	if (!dnsResult.IsOk())
 	{
 		LOG_ERROR("Failed to resolve hostname %s (error: %e)", host, dnsResult.Error());
 		return Result<WebSocketClient, Error>::Err(dnsResult, Error::Ws_CreateFailed);
@@ -524,23 +524,23 @@ Result<WebSocketClient, Error> WebSocketClient::Create(Span<const CHAR> url)
 	auto tlsResult = TlsClient::Create(host, ip, port, isSecure);
 
 	// IPv6 socket creation can fail on platforms without IPv6 support (e.g. UEFI)
-	if (!tlsResult && ip.IsIPv6())
+	if (!tlsResult.IsOk() && ip.IsIPv6())
 	{
 		auto dnsResultV4 = DnsClient::Resolve(hostSpan, DnsRecordType::A);
-		if (dnsResultV4)
+		if (dnsResultV4.IsOk())
 		{
 			ip = dnsResultV4.Value();
 			tlsResult = TlsClient::Create(host, ip, port, isSecure);
 		}
 	}
 
-	if (!tlsResult)
+	if (!tlsResult.IsOk())
 		return Result<WebSocketClient, Error>::Err(tlsResult, Error::Ws_CreateFailed);
 
 	WebSocketClient client(host, ip, port, static_cast<TlsClient &&>(tlsResult.Value()));
 
 	auto openResult = client.Open(parsedPath);
-	if (!openResult)
+	if (!openResult.IsOk())
 		return Result<WebSocketClient, Error>::Err(openResult, Error::Ws_CreateFailed);
 
 	return Result<WebSocketClient, Error>::Ok(static_cast<WebSocketClient &&>(client));

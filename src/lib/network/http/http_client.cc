@@ -23,11 +23,11 @@ Result<HttpClient, Error> HttpClient::Create(Span<const CHAR> url)
 	UINT16 port;
 	BOOL isSecure = false;
 	auto parseResult = ParseUrl(url, host, parsedPath, port, isSecure);
-	if (!parseResult)
+	if (!parseResult.IsOk())
 		return Result<HttpClient, Error>::Err(parseResult, Error::Http_CreateFailed);
 
 	auto dnsResult = DnsClient::Resolve(Span<const CHAR>(host, StringUtils::Length(host)));
-	if (!dnsResult)
+	if (!dnsResult.IsOk())
 	{
 		LOG_ERROR("Failed to resolve hostname %s (error: %e)", host, dnsResult.Error());
 		return Result<HttpClient, Error>::Err(dnsResult, Error::Http_CreateFailed);
@@ -37,17 +37,17 @@ Result<HttpClient, Error> HttpClient::Create(Span<const CHAR> url)
 	auto tlsResult = TlsClient::Create(host, ip, port, isSecure);
 
 	// IPv6 socket creation can fail on platforms without IPv6 support (e.g. UEFI)
-	if (!tlsResult && ip.IsIPv6())
+	if (!tlsResult.IsOk() && ip.IsIPv6())
 	{
 		auto dnsResultV4 = DnsClient::Resolve(Span<const CHAR>(host, StringUtils::Length(host)), DnsRecordType::A);
-		if (dnsResultV4)
+		if (dnsResultV4.IsOk())
 		{
 			ip = dnsResultV4.Value();
 			tlsResult = TlsClient::Create(host, ip, port, isSecure);
 		}
 	}
 
-	if (!tlsResult)
+	if (!tlsResult.IsOk())
 		return Result<HttpClient, Error>::Err(tlsResult, Error::Http_CreateFailed);
 
 	HttpClient client(ip, port, static_cast<TlsClient &&>(tlsResult.Value()));
@@ -60,7 +60,7 @@ Result<HttpClient, Error> HttpClient::Create(Span<const CHAR> url)
 Result<VOID, Error> HttpClient::Open()
 {
 	auto r = tlsContext.Open();
-	if (!r)
+	if (!r.IsOk())
 		return Result<VOID, Error>::Err(r, Error::Http_OpenFailed);
 	return Result<VOID, Error>::Ok();
 }
@@ -71,7 +71,7 @@ Result<VOID, Error> HttpClient::Open()
 Result<VOID, Error> HttpClient::Close()
 {
 	auto r = tlsContext.Close();
-	if (!r)
+	if (!r.IsOk())
 		return Result<VOID, Error>::Err(r, Error::Http_CloseFailed);
 	return Result<VOID, Error>::Ok();
 }
@@ -83,7 +83,7 @@ Result<VOID, Error> HttpClient::Close()
 Result<SSIZE, Error> HttpClient::Read(Span<CHAR> buffer)
 {
 	auto r = tlsContext.Read(buffer);
-	if (!r)
+	if (!r.IsOk())
 		return Result<SSIZE, Error>::Err(r, Error::Http_ReadFailed);
 	return Result<SSIZE, Error>::Ok(r.Value());
 }
@@ -95,7 +95,7 @@ Result<SSIZE, Error> HttpClient::Read(Span<CHAR> buffer)
 Result<UINT32, Error> HttpClient::Write(Span<const CHAR> buffer)
 {
 	auto r = tlsContext.Write(buffer);
-	if (!r)
+	if (!r.IsOk())
 		return Result<UINT32, Error>::Err(r, Error::Http_WriteFailed);
 	return Result<UINT32, Error>::Ok(r.Value());
 }
@@ -119,7 +119,7 @@ Result<VOID, Error> HttpClient::SendGetRequest(PCCHAR host, PCCHAR path)
 	request[pos] = '\0';
 
 	auto r = Write(Span<const CHAR>(request, (UINT32)pos));
-	if (!r)
+	if (!r.IsOk())
 		return Result<VOID, Error>::Err(r, Error::Http_SendGetFailed);
 	if (r.Value() != (UINT32)pos)
 		return Result<VOID, Error>::Err(Error::Http_SendGetFailed);
@@ -156,7 +156,7 @@ Result<VOID, Error> HttpClient::SendPostRequest(PCCHAR host, PCCHAR path, Span<c
 
 	// Send headers
 	auto r = Write(Span<const CHAR>(request, (UINT32)pos));
-	if (!r)
+	if (!r.IsOk())
 		return Result<VOID, Error>::Err(r, Error::Http_SendPostFailed);
 	if (r.Value() != (UINT32)pos)
 		return Result<VOID, Error>::Err(Error::Http_SendPostFailed);
@@ -165,7 +165,7 @@ Result<VOID, Error> HttpClient::SendPostRequest(PCCHAR host, PCCHAR path, Span<c
 	if (data.Size() > 0)
 	{
 		auto bodyResult = Write(data);
-		if (!bodyResult)
+		if (!bodyResult.IsOk())
 			return Result<VOID, Error>::Err(bodyResult, Error::Http_SendPostFailed);
 		if (bodyResult.Value() != (UINT32)data.Size())
 			return Result<VOID, Error>::Err(Error::Http_SendPostFailed);
@@ -258,8 +258,9 @@ Result<VOID, Error> HttpClient::ParseUrl(Span<const CHAR> url, CHAR (&host)[254]
 				return Result<VOID, Error>::Err(Error::Http_ParseUrlFailed);
 
 		auto pnumResult = StringUtils::ParseInt64(portBuffer);
-		if (!pnumResult)
+		if (!pnumResult.IsOk())
 			return Result<VOID, Error>::Err(pnumResult, Error::Http_ParseUrlFailed);
+		
 		auto& pnum = pnumResult.Value();
 		if (pnum == 0 || pnum > 65535)
 			return Result<VOID, Error>::Err(Error::Http_ParseUrlFailed);
@@ -313,7 +314,7 @@ Result<INT64, Error> HttpClient::ReadResponseHeaders(TlsClient &client, UINT16 e
 	{
 		CHAR c;
 		auto readResult = client.Read(Span<CHAR>(&c, 1));
-		if (!readResult)
+		if (!readResult.IsOk())
 			return Result<INT64, Error>::Err(readResult, Error::Http_ReadHeadersFailed_Read);
 		if (readResult.Value() <= 0)
 			return Result<INT64, Error>::Err(Error::Http_ReadHeadersFailed_Read);

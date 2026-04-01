@@ -175,7 +175,7 @@ Result<UUID, Error> GetMachineUUID()
 			auto ep = (SMBIOS_ENTRY_POINT *)entry->VendorTable;
 			auto tableData = (PUINT8)(USIZE)ep->TableAddress;
 			auto result = ParseSmbiosTable(tableData, ep->TableLength);
-			if (result)
+			if (result.IsOk())
 				return result;
 		}
 	}

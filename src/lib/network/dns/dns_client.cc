@@ -178,7 +178,7 @@ static_assert(sizeof(DNS_REQUEST_QUESTION) == 4, "DNS question must be 4 bytes (
 			break;
 
 		auto skipResult = SkipName(Span<const UINT8>((const UINT8 *)reader.Current(), reader.Remaining()));
-		if (!skipResult)
+		if (!skipResult.IsOk())
 		{
 			LOG_WARNING("ParseAnswer: failed to skip answer name");
 			break;
@@ -248,7 +248,7 @@ static_assert(sizeof(DNS_REQUEST_QUESTION) == 4, "DNS question must be 4 bytes (
 		}
 
 		auto skipResult = SkipName(Span<const UINT8>((const UINT8 *)reader.Current(), reader.Remaining()));
-		if (!skipResult)
+		if (!skipResult.IsOk())
 		{
 			LOG_WARNING("ParseQuery: invalid name length");
 			return Result<INT32, Error>::Err(skipResult, Error::Dns_ParseFailed);
@@ -333,7 +333,7 @@ static_assert(sizeof(DNS_REQUEST_QUESTION) == 4, "DNS question must be 4 bytes (
 	if (qCount > 0)
 	{
 		auto queryResult = ParseQuery(Span<const UINT8>((const UINT8 *)reader.Current(), reader.Remaining()), qCount);
-		if (!queryResult)
+		if (!queryResult.IsOk())
 		{
 			LOG_WARNING("ParseDnsResponse: invalid query section");
 			return Result<IPAddress, Error>::Err(queryResult, Error::Dns_ParseFailed);
@@ -469,7 +469,7 @@ static_assert(sizeof(DNS_REQUEST_QUESTION) == 4, "DNS question must be 4 bytes (
 	UINT8 *qname = buffer.Data() + sizeof(DNS_REQUEST_HEADER);
 	INT32 nameSpaceLeft = (INT32)(buffer.Size() - sizeof(DNS_REQUEST_HEADER) - sizeof(DNS_REQUEST_QUESTION));
 	auto nameResult = FormatDnsName(Span<UINT8>(qname, (USIZE)nameSpaceLeft), host);
-	if (!nameResult)
+	if (!nameResult.IsOk())
 	{
 		LOG_WARNING("GenerateQuery: hostname too long for buffer");
 		return Result<UINT32, Error>::Err(nameResult, Error::Dns_QueryFailed);
@@ -516,7 +516,7 @@ Result<IPAddress, Error> DnsClient::ResolveOverHttp(Span<const CHAR> host, const
 		return Result<IPAddress, Error>::Ok(IPAddress::LocalHost(dnstype == DnsRecordType::AAAA));
 
 	auto tlsResult = TlsClient::Create(dnsServerName.Data(), dnsServerIp, 443);
-	if (!tlsResult)
+	if (!tlsResult.IsOk())
 	{
 		LOG_WARNING("Failed to create TLS client for DNS server");
 		return Result<IPAddress, Error>::Err(tlsResult, Error::Dns_ConnectFailed);
@@ -524,7 +524,7 @@ Result<IPAddress, Error> DnsClient::ResolveOverHttp(Span<const CHAR> host, const
 	auto& tlsClient = tlsResult.Value();
 
 	auto openResult = tlsClient.Open();
-	if (!openResult)
+	if (!openResult.IsOk())
 	{
 		LOG_WARNING("Failed to connect to DNS server");
 		return Result<IPAddress, Error>::Err(openResult, Error::Dns_ConnectFailed);
@@ -532,7 +532,7 @@ Result<IPAddress, Error> DnsClient::ResolveOverHttp(Span<const CHAR> host, const
 
 	UINT8 queryBuffer[256];
 	auto queryResult = GenerateQuery(host, dnstype, Span<UINT8>(queryBuffer));
-	if (!queryResult)
+	if (!queryResult.IsOk())
 	{
 		LOG_WARNING("Failed to generate DNS query");
 		return Result<IPAddress, Error>::Err(queryResult, Error::Dns_QueryFailed);
@@ -542,7 +542,7 @@ Result<IPAddress, Error> DnsClient::ResolveOverHttp(Span<const CHAR> host, const
 	auto writeSpan = [&tlsClient](Span<const CHAR> s) -> Result<VOID, Error>
 	{
 		auto r = tlsClient.Write(s);
-		if (!r || r.Value() != s.Size())
+		if (!r.IsOk() || r.Value() != s.Size())
 			return Result<VOID, Error>::Err(r, Error::Dns_SendFailed);
 		return Result<VOID, Error>::Ok();
 	};
@@ -562,14 +562,14 @@ Result<IPAddress, Error> DnsClient::ResolveOverHttp(Span<const CHAR> host, const
 	}
 
 	auto writeBody = tlsClient.Write(Span<const CHAR>((PCHAR)queryBuffer, querySize));
-	if (!writeBody || writeBody.Value() != querySize)
+	if (!writeBody.IsOk() || writeBody.Value() != querySize)
 	{
 		LOG_WARNING("Failed to send DNS query");
 		return Result<IPAddress, Error>::Err(writeBody, Error::Dns_SendFailed);
 	}
 
 	auto headerResult = HttpClient::ReadResponseHeaders(tlsClient, 200);
-	if (!headerResult)
+	if (!headerResult.IsOk())
 	{
 		LOG_WARNING("DNS server returned non-200 response");
 		return Result<IPAddress, Error>::Err(headerResult, Error::Dns_ResponseFailed);
@@ -587,7 +587,7 @@ Result<IPAddress, Error> DnsClient::ResolveOverHttp(Span<const CHAR> host, const
 	while (totalRead < (UINT32)contentLength)
 	{
 		auto readResult = tlsClient.Read(Span<CHAR>((PCHAR)(binaryResponse + totalRead), (UINT32)contentLength - totalRead));
-		if (!readResult || readResult.Value() <= 0)
+		if (!readResult.IsOk() || readResult.Value() <= 0)
 		{
 			LOG_WARNING("Failed to read DNS binary response");
 			return Result<IPAddress, Error>::Err(readResult, Error::Dns_ResponseFailed);
@@ -596,7 +596,7 @@ Result<IPAddress, Error> DnsClient::ResolveOverHttp(Span<const CHAR> host, const
 	}
 
 	auto parseResult = ParseDnsResponse(Span<const UINT8>(binaryResponse, (USIZE)contentLength));
-	if (!parseResult)
+	if (!parseResult.IsOk())
 	{
 		LOG_WARNING("Failed to parse DNS response");
 		return Result<IPAddress, Error>::Err(parseResult, Error::Dns_ParseFailed);
@@ -668,14 +668,14 @@ Result<IPAddress, Error> DnsClient::Resolve(Span<const CHAR> host, DnsRecordType
 	LOG_DEBUG("Resolve(host: %s) called", host.Data());
 
 	auto result = CloudflareResolve(host, dnstype);
-	if (!result)
+	if (!result.IsOk())
 		result = GoogleResolve(host, dnstype);
 
-	if (!result && dnstype == DnsRecordType::AAAA)
+	if (!result.IsOk() && dnstype == DnsRecordType::AAAA)
 	{
 		LOG_DEBUG("IPv6 resolution failed, falling back to IPv4 (A) for %s", host.Data());
 		result = CloudflareResolve(host, DnsRecordType::A);
-		if (!result)
+		if (!result.IsOk())
 			result = GoogleResolve(host, DnsRecordType::A);
 	}
 

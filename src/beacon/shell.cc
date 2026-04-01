@@ -9,7 +9,7 @@ Shell::Shell(Shell &&other) noexcept
 Result<Shell, Error> Shell::Create() noexcept
 {
     auto result = ShellProcess::Create();
-    if (!result)
+    if (!result.IsOk())
         return Result<Shell, Error>::Err(Error::Process_CreateFailed);
 
     return Result<Shell, Error>::Ok(
@@ -32,7 +32,7 @@ Result<USIZE, Error> Shell::Read(char *buffer, USIZE capacity) noexcept
             break;
 
         auto ret = shellProcess.Read(buffer + totalRead, (capacity - 1) - totalRead);
-        if (!ret || ret.Value() == 0)
+        if (!ret.IsOk() || ret.Value() == 0)
             return Result<USIZE, Error>::Err(Error::ShellProcess_ReadFailed);
 
         bool promptFound = false;

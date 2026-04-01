@@ -112,7 +112,7 @@ private:
 		for (USIZE i = 0; i < N; i++)
 		{
 			auto result = ResolveOverHttp(host, ips[i], serverName, dnstype);
-			if (result)
+			if (result.IsOk())
 				return result;
 		}
 		return Result<IPAddress, Error>::Err(Error::Dns_ResolveFailed);

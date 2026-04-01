@@ -172,7 +172,7 @@ Result<IPAddress, Error> IPAddress::FromString(Span<const CHAR> ipString)
 				}
 
 				auto octetResult = StringUtils::ParseInt64(Span<const CHAR>(currentOctet, currentOctetIndex));
-				if (!octetResult)
+				if (!octetResult.IsOk())
 				{
 					return Result<IPAddress, Error>::Err(octetResult, Error::IpAddress_ParseFailed);
 				}

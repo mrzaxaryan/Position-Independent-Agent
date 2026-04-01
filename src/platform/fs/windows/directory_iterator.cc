@@ -61,7 +61,7 @@ Result<DirectoryIterator, Error> DirectoryIterator::Create(PCWCHAR path)
 			sizeof(processDeviceMapInfo.Query),
 			nullptr);
 
-		if (!queryResult)
+		if (!queryResult.IsOk())
 		{
 			return Result<DirectoryIterator, Error>::Err(queryResult, Error::Fs_OpenFailed);
 		}
@@ -78,7 +78,7 @@ Result<DirectoryIterator, Error> DirectoryIterator::Create(PCWCHAR path)
 	// Convert path to NT path and open directory handle
 	UNICODE_STRING uniPath;
 	auto pathResult = NTDLL::RtlDosPathNameToNtPathName_U(path, &uniPath, nullptr, nullptr);
-	if (!pathResult)
+	if (!pathResult.IsOk())
 		return Result<DirectoryIterator, Error>::Err(pathResult, Error::Fs_PathResolveFailed);
 
 	OBJECT_ATTRIBUTES objAttr;
@@ -95,7 +95,7 @@ Result<DirectoryIterator, Error> DirectoryIterator::Create(PCWCHAR path)
 
 	NTDLL::RtlFreeUnicodeString(&uniPath);
 
-	if (!openResult)
+	if (!openResult.IsOk())
 	{
 		iter.handle = (PVOID)-1;
 		return Result<DirectoryIterator, Error>::Err(openResult, Error::Fs_OpenFailed);
@@ -118,7 +118,7 @@ Result<DirectoryIterator, Error> DirectoryIterator::Create(PCWCHAR path)
 		nullptr,
 		true);
 
-	if (dirResult)
+	if (dirResult.IsOk())
 	{
 		const FILE_BOTH_DIR_INFORMATION &info = *(const FILE_BOTH_DIR_INFORMATION *)buffer;
 		FillEntry(iter.currentEntry, info);
@@ -215,7 +215,7 @@ Result<VOID, Error> DirectoryIterator::Next()
 		nullptr,
 		false);
 
-	if (dirResult)
+	if (dirResult.IsOk())
 	{
 		const FILE_BOTH_DIR_INFORMATION &dirInfo = *(const FILE_BOTH_DIR_INFORMATION *)buffer;
 		FillEntry(currentEntry, dirInfo);

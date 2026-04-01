@@ -13,7 +13,7 @@ Result<VOID, Error> Directory::Create(PCWCHAR path)
 	IO_STATUS_BLOCK ioStatusBlock;
 
 	auto pathResult = NTDLL::RtlDosPathNameToNtPathName_U(path, &uniName, nullptr, nullptr);
-	if (!pathResult)
+	if (!pathResult.IsOk())
 		return Result<VOID, Error>::Err(pathResult, Error::Fs_CreateDirFailed);
 
 	InitializeObjectAttributes(&objAttr, &uniName, 0, nullptr, nullptr);
@@ -33,7 +33,7 @@ Result<VOID, Error> Directory::Create(PCWCHAR path)
 
 	NTDLL::RtlFreeUnicodeString(&uniName);
 
-	if (createResult)
+	if (createResult.IsOk())
 	{
 		(VOID)NTDLL::ZwClose(hDir);
 		return Result<VOID, Error>::Ok();
@@ -53,13 +53,13 @@ Result<VOID, Error> Directory::Delete(PCWCHAR path)
 	disp.DeleteFile = true;
 
 	auto pathResult = NTDLL::RtlDosPathNameToNtPathName_U(path, &uniName, nullptr, nullptr);
-	if (!pathResult)
+	if (!pathResult.IsOk())
 		return Result<VOID, Error>::Err(pathResult, Error::Fs_DeleteDirFailed);
 
 	InitializeObjectAttributes(&objAttr, &uniName, 0, nullptr, nullptr);
 
 	auto openResult = NTDLL::ZwOpenFile(&hDir, DELETE | SYNCHRONIZE, &objAttr, &ioStatusBlock, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT);
-	if (!openResult)
+	if (!openResult.IsOk())
 	{
 		NTDLL::RtlFreeUnicodeString(&uniName);
 		return Result<VOID, Error>::Err(openResult, Error::Fs_DeleteDirFailed);
@@ -75,7 +75,7 @@ Result<VOID, Error> Directory::Delete(PCWCHAR path)
 	(VOID)NTDLL::ZwClose(hDir);
 	NTDLL::RtlFreeUnicodeString(&uniName);
 
-	if (!setResult)
+	if (!setResult.IsOk())
 		return Result<VOID, Error>::Err(setResult, Error::Fs_DeleteDirFailed);
 
 	return Result<VOID, Error>::Ok();

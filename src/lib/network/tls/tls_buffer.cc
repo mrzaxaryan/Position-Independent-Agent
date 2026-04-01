@@ -22,7 +22,7 @@ INT32 TlsBuffer::Append(Span<const CHAR> data)
 INT32 TlsBuffer::AppendSize(INT32 count)
 {
 	auto r = CheckSize(count);
-	if (!r)
+	if (!r.IsOk())
 		return -1;
 	size += count;
 	return size - count;
@@ -35,7 +35,7 @@ Result<VOID, Error> TlsBuffer::SetSize(INT32 newSize)
 {
 	size = 0;
 	auto r = CheckSize(newSize);
-	if (!r)
+	if (!r.IsOk())
 		return Result<VOID, Error>::Err(r.Error());
 	size = newSize;
 	return Result<VOID, Error>::Ok();

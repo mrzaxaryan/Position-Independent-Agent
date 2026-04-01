@@ -417,11 +417,11 @@ Result<VOID, Error> Socket::Open()
 	EFI_BOOT_SERVICES *bs = ctx->SystemTable->BootServices;
 
 	auto netResult = InitializeNetworkInterface(*ctx);
-	if (!netResult)
+	if (!netResult.IsOk())
 		return Result<VOID, Error>::Err(netResult, Error::Socket_OpenFailed_Connect);
 
 	auto dhcpResult = InitializeDhcp(*ctx);
-	if (!dhcpResult)
+	if (!dhcpResult.IsOk())
 		return Result<VOID, Error>::Err(dhcpResult, Error::Socket_OpenFailed_Connect);
 
 	LOG_DEBUG("Socket: Creating connect event...");

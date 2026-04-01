@@ -25,7 +25,7 @@ CHAR ShellProcess::EndOfLineChar() noexcept
 Result<ShellProcess, Error> ShellProcess::Create() noexcept
 {
 	auto ptyResult = Pty::Create();
-	if (!ptyResult)
+	if (!ptyResult.IsOk())
 	{
 		LOG_ERROR("Failed to create PTY for shell process: %e", ptyResult.Error());
 		return Result<ShellProcess, Error>::Err(ptyResult, Error::ShellProcess_CreateFailed);
@@ -37,7 +37,7 @@ Result<ShellProcess, Error> ShellProcess::Create() noexcept
 	auto processResult = Process::Create("/bin/sh", args, pty.SlaveFd(), pty.SlaveFd(), pty.SlaveFd());
 	(VOID)pty.CloseSlave();
 
-	if (!processResult)
+	if (!processResult.IsOk())
 	{
 		LOG_ERROR("Failed to spawn shell process: %e", processResult.Error());
 		return Result<ShellProcess, Error>::Err(processResult, Error::ShellProcess_CreateFailed);

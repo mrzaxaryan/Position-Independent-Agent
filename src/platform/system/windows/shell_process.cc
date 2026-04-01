@@ -39,7 +39,7 @@ Result<ShellProcess, Error> ShellProcess::Create() noexcept
 	auto processResult = Process::Create("cmd.exe", args,
 		stdinPipe.ReadEnd(), stdoutPipe.WriteEnd(), stderrPipe.WriteEnd());
 
-	if (!processResult)
+	if (!processResult.IsOk())
 		return Result<ShellProcess, Error>::Err(Error::ShellProcess_CreateFailed);
 
 	(VOID)stdinPipe.CloseRead();

@@ -19,7 +19,7 @@
 static Result<UUID, Error> ReadMachineIdFromFile(const WCHAR *path, bool hasDashes)
 {
 	auto openResult = File::Open(path, File::ModeRead);
-	if (!openResult)
+	if (!openResult.IsOk())
 		return Result<UUID, Error>::Err(Error(Error::None));
 
 	File &file = openResult.Value();
@@ -29,7 +29,7 @@ static Result<UUID, Error> ReadMachineIdFromFile(const WCHAR *path, bool hasDash
 		// boot_id format: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (36 chars)
 		UINT8 buf[37]{};
 		auto readResult = file.Read(Span<UINT8>(buf, 36));
-		if (!readResult || readResult.Value() < 36)
+		if (!readResult.IsOk() || readResult.Value() < 36)
 			return Result<UUID, Error>::Err(Error(Error::None));
 
 		return UUID::FromString(Span<const CHAR>((const CHAR *)buf, 36));
@@ -38,7 +38,7 @@ static Result<UUID, Error> ReadMachineIdFromFile(const WCHAR *path, bool hasDash
 	// machine-id format: 32 hex characters, no dashes
 	UINT8 buf[33]{};
 	auto readResult = file.Read(Span<UINT8>(buf, 32));
-	if (!readResult || readResult.Value() < 32)
+	if (!readResult.IsOk() || readResult.Value() < 32)
 		return Result<UUID, Error>::Err(Error(Error::None));
 
 	// Format as 8-4-4-4-12 for UUID::FromString by inserting dashes.
@@ -62,14 +62,14 @@ Result<UUID, Error> GetMachineUUID()
 {
 	// Try /etc/machine-id first (systemd, 32-char hex, constant across reboots)
 	auto result = ReadMachineIdFromFile(L"/etc/machine-id", false);
-	if (result)
+	if (result.IsOk())
 		return result;
 
 #if defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)
 	// Fall back to /proc/sys/kernel/random/boot_id (UUID format with dashes).
 	// Available on all Linux kernels. Note: boot_id changes on each reboot.
 	result = ReadMachineIdFromFile(L"/proc/sys/kernel/random/boot_id", true);
-	if (result)
+	if (result.IsOk())
 		return result;
 #endif
 
@@ -100,7 +100,7 @@ Result<UUID, Error> GetMachineUUID()
 			if (ret == 0 && uuidStr[0] != '\0')
 			{
 				auto parseResult = UUID::FromString(Span<const CHAR>(uuidStr, StringUtils::Length(uuidStr)));
-				if (parseResult)
+				if (parseResult.IsOk())
 					return parseResult;
 			}
 		}

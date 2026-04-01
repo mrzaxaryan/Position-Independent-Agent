@@ -87,7 +87,7 @@ PVOID ResolveExportAddress(const WCHAR *moduleName, UINT64 functionNameHash)
 
 		// Load the DLL and get the base address
 		auto r = NTDLL::LdrLoadDll(nullptr, nullptr, &dllName, &moduleBase);
-		if (!r || moduleBase == nullptr)
+		if (!r.IsOk() || moduleBase == nullptr)
 			return nullptr;
 	}
 

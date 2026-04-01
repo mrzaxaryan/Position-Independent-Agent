@@ -33,12 +33,15 @@ Result<VOID, Error> ChaCha20Encoder::Initialize(Span<const UINT8, POLY1305_KEYLE
 	UINT32 counter = 1;
 	this->ivLength = TLS_CHACHA20_IV_LENGTH;
 	LOG_DEBUG("Initializing ChaCha20 encoder with key length: %d bits", (INT32)localKey.Size() * 8);
+	
 	auto localSetup = this->localCipher.KeySetup(localKey);
-	if (!localSetup)
+	if (!localSetup.IsOk())
 		return Result<VOID, Error>::Err(localSetup, Error::ChaCha20_KeySetupFailed);
+	
 	auto remoteSetup = this->remoteCipher.KeySetup(remoteKey);
-	if (!remoteSetup)
+	if (!remoteSetup.IsOk())
 		return Result<VOID, Error>::Err(remoteSetup, Error::ChaCha20_KeySetupFailed);
+	
 	this->localCipher.IVSetup96BitNonce(localIv, (PUCHAR)&counter);
 	Memory::Copy(this->localNonce, localIv, sizeof(localIv));
 	this->remoteCipher.IVSetup96BitNonce(remoteIv, (PUCHAR)&counter);
@@ -68,7 +71,7 @@ VOID ChaCha20Encoder::Encode(TlsBuffer &out, Span<const CHAR> packet, Span<const
 Result<VOID, Error> ChaCha20Encoder::Decode(TlsBuffer &in, TlsBuffer &out, Span<const UCHAR> aad)
 {
 	auto checkResult = out.CheckSize(in.GetSize());
-	if (!checkResult)
+	if (!checkResult.IsOk())
 		return Result<VOID, Error>::Err(checkResult, Error::ChaCha20_DecodeFailed);
 
 	const UCHAR *sequence = aad.Data() + TLS_RECORD_HEADER_SIZE;
