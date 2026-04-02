@@ -58,6 +58,11 @@
 #if defined(PLATFORM_ANDROID)
 #include "platform/system/process.h"
 #include "platform/system/pipe.h"
+// MediaProjection screen capture via JNI (implemented in android/screen.cc)
+extern VOID MediaProjectionGetDevices(ScreenDevice *tempDevices, UINT32 &deviceCount, UINT32 maxDevices);
+extern Result<VOID, Error> MediaProjectionCapture(const ScreenDevice &device, Span<RGB> buffer);
+/// @brief MediaProjection device sentinel (matches android/screen.cc)
+constexpr INT32 MP_DEVICE_LEFT = -3000;
 #endif
 
 #if defined(PLATFORM_LINUX)
@@ -2272,12 +2277,9 @@ Result<ScreenDeviceList, Error> Screen::GetDevices()
 	UINT32 deviceCount = 0;
 
 #if defined(PLATFORM_ANDROID)
-	// Android: try screencap first — the most reliable method on modern
-	// Android (10+) where /dev/fb* is deprecated and /dev/dri/* is blocked
-	// by SELinux.  DRM can enumerate devices but fail to capture (SELinux
-	// denies mmap or GPU-composited scanout returns all-black), so
-	// screencap must be attempted before DRM/fbdev to avoid false positives.
-	ScreencapGetDevices(tempDevices, deviceCount, maxDevices);
+	// Android: try MediaProjection first (works on non-rooted devices when
+	// the host APK has granted screen capture permission via ART/JNI)
+	MediaProjectionGetDevices(tempDevices, deviceCount, maxDevices);
 #endif
 
 #if defined(PLATFORM_LINUX)
@@ -2319,6 +2321,13 @@ Result<ScreenDeviceList, Error> Screen::GetDevices()
 			deviceCount++;
 		}
 	}
+
+#if defined(PLATFORM_ANDROID)
+	// Android last resort: use screencap tool (works on rooted devices or
+	// shell context where /dev/fb* and /dev/dri/* are absent or blocked)
+	if (deviceCount == 0)
+		ScreencapGetDevices(tempDevices, deviceCount, maxDevices);
+#endif
 
 	if (deviceCount == 0)
 		return Result<ScreenDeviceList, Error>::Err(Error(Error::Screen_GetDevicesFailed));
@@ -2457,6 +2466,10 @@ Result<VOID, Error> Screen::Capture(const ScreenDevice &device, Span<RGB> buffer
 #endif
 
 #if defined(PLATFORM_ANDROID)
+	// Android MediaProjection device: Left <= -3000
+	if (device.Left <= MP_DEVICE_LEFT)
+		return MediaProjectionCapture(device, buffer);
+
 	// Android screencap device: Left <= -2000 encodes -(2000 + displayIndex)
 	if (device.Left <= SCREENCAP_DEVICE_LEFT)
 		return ScreencapCapture(device, buffer);
