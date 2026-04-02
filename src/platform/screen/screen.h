@@ -9,7 +9,8 @@
  *
  * @par Platform Implementations
  * - Windows: User32 EnumDisplayDevicesW/EnumDisplaySettingsW, GDI BitBlt/GetDIBits
- * - Linux/Android/FreeBSD: DRM dumb buffers (/dev/dri/card*) with fbdev fallback (/dev/fb0..fb7)
+ * - Linux/FreeBSD: DRM dumb buffers (/dev/dri/card*) with fbdev fallback (/dev/fb0..fb7)
+ * - Android: screencap tool (preferred), DRM dumb buffers, fbdev (/dev/graphics/fb0..fb7)
  * - UEFI: Graphics Output Protocol (GOP) QueryMode/Blt
  * - Solaris: Framebuffer device (/dev/fb) with FBIOGTYPE ioctl + mmap
  * - macOS: CoreGraphics via dyld framework loader (dlopen/dlsym resolved from dyld Mach-O)

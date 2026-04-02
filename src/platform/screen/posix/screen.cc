@@ -2,7 +2,12 @@
  * @file screen.cc
  * @brief POSIX Screen Implementation (Linux/Android/FreeBSD/Solaris)
  *
- * @details Implements screen device enumeration and capture via three backends:
+ * @details Implements screen device enumeration and capture via multiple backends:
+ *
+ * On Android, screencap is tried first (most reliable on modern Android 10+
+ * where DRM/fbdev are blocked by SELinux or deprecated). Falls back to
+ * DRM and fbdev if screencap is unavailable. Screencap devices are encoded
+ * in ScreenDevice as Left = -(2000 + displayIndex).
  *
  * 1. X11 raw protocol (/tmp/.X11-unix/X<N>): The preferred backend on
  *    Linux desktops running X11 compositors (GNOME, KDE, XFCE, etc.).
@@ -19,7 +24,8 @@
  *    or CAP_SYS_ADMIN for framebuffer mapping. DRM devices are encoded in
  *    ScreenDevice as Left = -(cardIndex + 1), Top = crtcId. If the mapped
  *    buffer is all-black (GPU-composited scanout), falls back to
- *    framebuffer.
+ *    framebuffer. On Android, further falls back to screencap if
+ *    framebuffer also fails.
  *
  * 3. Linux framebuffer (/dev/fb0..fb7): Legacy fallback when both X11 and
  *    DRM are unavailable. Uses FBIOGET_VSCREENINFO and FBIOGET_FSCREENINFO
@@ -28,7 +34,8 @@
  *    /dev/graphics/fb0..fb7 is tried when /dev/fb* is unavailable.
  *    ScreenDevice::Left stores the framebuffer index.
  *
- * GetDevices() tries X11 first (Linux only), then DRM, then framebuffer.
+ * GetDevices() tries screencap first on Android, then X11 (Linux only),
+ * then DRM, then framebuffer.
  * Capture() dispatches based on the Left field encoding.
  *
  * Solaris uses the SunOS framebuffer API (sys/fbio.h) with FBIOGTYPE
@@ -2256,9 +2263,19 @@ Result<ScreenDeviceList, Error> Screen::GetDevices()
 	ScreenDevice tempDevices[maxDevices];
 	UINT32 deviceCount = 0;
 
+#if defined(PLATFORM_ANDROID)
+	// Android: try screencap first — the most reliable method on modern
+	// Android (10+) where /dev/fb* is deprecated and /dev/dri/* is blocked
+	// by SELinux.  DRM can enumerate devices but fail to capture (SELinux
+	// denies mmap or GPU-composited scanout returns all-black), so
+	// screencap must be attempted before DRM/fbdev to avoid false positives.
+	ScreencapGetDevices(tempDevices, deviceCount, maxDevices);
+#endif
+
 #if defined(PLATFORM_LINUX)
 	// Try X11 first (works on composited desktops where DRM/framebuffer fail)
-	X11GetDevices(tempDevices, deviceCount, maxDevices);
+	if (deviceCount == 0)
+		X11GetDevices(tempDevices, deviceCount, maxDevices);
 #endif
 
 	// Try DRM (/dev/dri/card*)
@@ -2294,13 +2311,6 @@ Result<ScreenDeviceList, Error> Screen::GetDevices()
 			deviceCount++;
 		}
 	}
-
-#if defined(PLATFORM_ANDROID)
-	// Android last resort: use screencap tool (works on modern Android 10+
-	// where /dev/fb* and /dev/dri/* are absent or blocked by SELinux)
-	if (deviceCount == 0)
-		ScreencapGetDevices(tempDevices, deviceCount, maxDevices);
-#endif
 
 	if (deviceCount == 0)
 		return Result<ScreenDeviceList, Error>::Err(Error(Error::Screen_GetDevicesFailed));
@@ -2473,7 +2483,16 @@ Result<VOID, Error> Screen::Capture(const ScreenDevice &device, Span<RGB> buffer
 		}
 
 		// DRM capture failed or returned all-black — try framebuffer
-		return FbCaptureFallback(device, buffer);
+		auto fbResult = FbCaptureFallback(device, buffer);
+		if (fbResult)
+			return fbResult;
+
+#if defined(PLATFORM_ANDROID)
+		// DRM and framebuffer both failed — last resort: screencap
+		return ScreencapCapture(device, buffer);
+#else
+		return fbResult;
+#endif
 	}
 
 	// Framebuffer device: Left encodes /dev/fb index

@@ -140,7 +140,7 @@ Pixel formats vary by firmware: `PixelRedGreenBlueReserved8BitPerColor` (RGBX) o
 |---|---|---|---|
 | Windows | GDI BitBlt | Yes | User32 + GDI32 via PEB resolution |
 | Linux | X11 / DRM / fbdev | Yes (X11/DRM) | Three-tier fallback chain |
-| Android | DRM / fbdev | Yes (DRM) | `/dev/graphics/fb*` variant |
+| Android | screencap / DRM / fbdev | Yes (screencap/DRM) | screencap preferred, `/dev/graphics/fb*` fallback |
 | macOS | CoreGraphics | Yes | Fork-based probing, Retina handling |
 | Solaris | `/dev/fb` ioctl | No | Single framebuffer |
 | UEFI | GOP BLT | No | Firmware-provided framebuffer |
