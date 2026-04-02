@@ -227,32 +227,43 @@ PVOID ResolveElfSymbol(PVOID base, const CHAR *symbolName)
 		return nullptr;
 #endif
 
-	// Find PT_DYNAMIC and the first PT_LOAD (for base address calculation)
+	// Sanity check program header offset
+	if (ehdr->PhOff == 0 || ehdr->PhNum == 0 || ehdr->PhNum > 128)
+		return nullptr;
+
 	const ElfPhdr *phdr = (const ElfPhdr *)((UINT8 *)base + ehdr->PhOff);
+
+	// Pass 1: find load bias from first PT_LOAD segment
+	USIZE loadBias = (USIZE)base; // default: assume VAddr starts at 0
+	for (UINT16 i = 0; i < ehdr->PhNum; i++)
+	{
+		if (phdr[i].Type == PT_LOAD)
+		{
+			loadBias = (USIZE)base - (USIZE)phdr[i].VAddr;
+			break;
+		}
+	}
+
+	// Pass 2: find PT_DYNAMIC using loadBias + VAddr (NOT base + Offset)
 	const ElfDyn *dynamic = nullptr;
 	USIZE dynamicCount = 0;
-	USIZE loadBias = 0;
-	BOOL foundLoad = false;
-
 	for (UINT16 i = 0; i < ehdr->PhNum; i++)
 	{
 		if (phdr[i].Type == PT_DYNAMIC)
 		{
-			dynamic = (const ElfDyn *)((UINT8 *)base + phdr[i].Offset);
-			dynamicCount = phdr[i].MemSz / sizeof(ElfDyn);
-		}
-		else if (phdr[i].Type == PT_LOAD && !foundLoad)
-		{
-			// Load bias = actual base - expected VAddr of first PT_LOAD
-			loadBias = (USIZE)base - (USIZE)phdr[i].VAddr;
-			foundLoad = true;
+			dynamic = (const ElfDyn *)(loadBias + (USIZE)phdr[i].VAddr);
+			dynamicCount = (USIZE)phdr[i].MemSz / sizeof(ElfDyn);
+			break;
 		}
 	}
 
-	if (dynamic == nullptr)
+	if (dynamic == nullptr || dynamicCount == 0)
 		return nullptr;
 
-	// Extract DT_SYMTAB, DT_STRTAB, DT_HASH from PT_DYNAMIC
+	// Extract DT_SYMTAB, DT_STRTAB, DT_HASH from dynamic section
+	// Values are virtual addresses — use directly (already include base)
+	// On Android, DT_SYMTAB/DT_STRTAB values are relative VAddrs
+	// that need loadBias added to get the actual memory address.
 	const ElfSym *symtab = nullptr;
 	const CHAR *strtab = nullptr;
 	USIZE strtabSize = 0;
@@ -264,19 +275,30 @@ PVOID ResolveElfSymbol(PVOID base, const CHAR *symbolName)
 		if (dynamic[i].Tag == (decltype(dynamic[i].Tag))DT_NULL)
 			break;
 
+		USIZE val = (USIZE)dynamic[i].Val;
+
+		// Heuristic: if val looks like an absolute address (close to base),
+		// use it directly; otherwise add loadBias.
+		// On Android, the linker patches these to absolute addresses.
+		USIZE addr;
+		if (val >= (USIZE)base && val < (USIZE)base + 0x10000000)
+			addr = val; // already absolute
+		else
+			addr = loadBias + val; // relative, add bias
+
 		switch ((USIZE)dynamic[i].Tag)
 		{
 		case DT_SYMTAB:
-			symtab = (const ElfSym *)(loadBias + (USIZE)dynamic[i].Val);
+			symtab = (const ElfSym *)addr;
 			break;
 		case DT_STRTAB:
-			strtab = (const CHAR *)(loadBias + (USIZE)dynamic[i].Val);
+			strtab = (const CHAR *)addr;
 			break;
 		case DT_STRSZ:
-			strtabSize = (USIZE)dynamic[i].Val;
+			strtabSize = val;
 			break;
 		case DT_HASH:
-			hashTable = (const ElfHashTable *)(loadBias + (USIZE)dynamic[i].Val);
+			hashTable = (const ElfHashTable *)addr;
 			break;
 		}
 	}
@@ -284,13 +306,17 @@ PVOID ResolveElfSymbol(PVOID base, const CHAR *symbolName)
 	if (symtab == nullptr || strtab == nullptr)
 		return nullptr;
 
+	// Validate strtab looks like a string table (first byte should be '\0')
+	if (strtab[0] != '\0')
+		return nullptr;
+
 	// Determine symbol count from DT_HASH if available
-	if (hashTable != nullptr)
+	if (hashTable != nullptr && hashTable->NChain > 0 && hashTable->NChain < 100000)
 		symCount = hashTable->NChain;
 
-	// Fallback: bounded linear scan if no hash table
+	// Fallback: bounded linear scan
 	if (symCount == 0)
-		symCount = 8192; // reasonable upper bound
+		symCount = 4096;
 
 	// Walk symbol table looking for matching name
 	for (USIZE i = 0; i < symCount; i++)
@@ -308,7 +334,7 @@ PVOID ResolveElfSymbol(PVOID base, const CHAR *symbolName)
 
 		// Compare name
 		USIZE nameOffset = sym.Name;
-		if (nameOffset >= strtabSize && strtabSize > 0)
+		if (strtabSize > 0 && nameOffset >= strtabSize)
 			continue;
 
 		const CHAR *name = strtab + nameOffset;
