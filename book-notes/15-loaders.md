@@ -65,6 +65,7 @@ CreateRemoteThread(process.handle, remote_addr)
 ```
 The shellcode ends up running inside cmd.exe's process space. The suspended process never actually executes cmd.exe — it's just a container for the shellcode. Running under cmd.exe's identity rather than the loader's is the whole point.
 
+---
 
 ### What is the difference between in-process and injected execution?
 **File:** `loaders/python/README.md` **Line(s):** (POSIX vs Windows)
