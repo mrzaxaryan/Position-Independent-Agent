@@ -1,6 +1,6 @@
 # 15 - Loaders (Python and PowerShell)
 
-How shellcode gets loaded into memory and executed. The agent binary is just raw bytes — it needs something to put it in executable meormy and jump to it.
+How shellcode gets loaded into memory and executed. The agent binary is just raw bytes — it needs something to put it in executable memory and jump to it.
 
 ---
 
