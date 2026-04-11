@@ -1,6 +1,6 @@
 {
-  "windows_armv7a_exe": "80.0 KB",
-  "windows_armv7a_bin": "77.5 KB",
+  "windows_armv7a_exe": "80.5 KB",
+  "windows_armv7a_bin": "78.2 KB",
   "solaris_i386_exe": "97.5 KB",
   "solaris_i386_bin": "93.2 KB",
   "linux_riscv64_exe": "79.4 KB",
@@ -13,8 +13,8 @@
   "freebsd_riscv64_bin": "78.6 KB",
   "android_aarch64_exe": "85.1 KB",
   "android_aarch64_bin": "83.7 KB",
-  "windows_aarch64_exe": "87.0 KB",
-  "windows_aarch64_bin": "85.1 KB",
+  "windows_aarch64_exe": "87.5 KB",
+  "windows_aarch64_bin": "86.0 KB",
   "linux_mips64_exe": "184.6 KB",
   "linux_mips64_bin": "112.9 KB",
   "android_armv7a_exe": "111.6 KB",
@@ -33,8 +33,8 @@
   "linux_armv7a_bin": "105.2 KB",
   "freebsd_i386_exe": "100.0 KB",
   "freebsd_i386_bin": "98.9 KB",
-  "windows_x86_64_exe": "100.0 KB",
-  "windows_x86_64_bin": "98.4 KB",
+  "windows_x86_64_exe": "101.0 KB",
+  "windows_x86_64_bin": "99.1 KB",
   "uefi_aarch64_exe": "79.5 KB",
   "uefi_aarch64_bin": "77.8 KB",
   "freebsd_x86_64_exe": "87.3 KB",
@@ -49,6 +49,6 @@
   "macos_x86_64_bin": "86.7 KB",
   "solaris_aarch64_exe": "139.2 KB",
   "solaris_aarch64_bin": "74.8 KB",
-  "windows_i386_exe": "103.0 KB",
-  "windows_i386_bin": "101.4 KB"
+  "windows_i386_exe": "104.0 KB",
+  "windows_i386_bin": "102.0 KB"
 }
