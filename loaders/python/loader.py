@@ -521,7 +521,7 @@ def main():
     # run_mmap executes shellcode in-process, so it must match the Python
     # interpreter's bitness --not the CPU's.  run_injected (Windows) spawns
     # a native-arch process, so it can use the true OS bitness.
-    exec_bits = python_bits if host_os != 'windows' else host_bits
+    exec_bits = python_bits 
 
     _log('inf', "Host: %s/%s/%dbit" % (host_os, host_family, host_bits))
     _log('inf', "Python: %s (%dbit)" % (platform.python_version(), python_bits))
