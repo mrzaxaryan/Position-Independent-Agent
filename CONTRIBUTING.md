@@ -31,7 +31,7 @@ Thank you for your interest in contributing to PIA! This guide covers everything
 | Platform         | Python Version |
 |------------------|----------------|
 | Windows 7        | 3.6            |
-| Windows 8.1 / 10 | 3.13           |
+| Windows 8.1 / 10 | 3.13 +         |
 
 > ⚠️ Due to platform limitations, Windows 7 is restricted to Python 3.6, as newer Python versions no longer support this OS. 
 
