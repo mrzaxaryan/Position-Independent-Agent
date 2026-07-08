@@ -28,6 +28,11 @@ endif()
 # essential since the PIC binary has no dynamic linker to populate them.
 list(APPEND PIR_BASE_FLAGS -fvisibility=hidden)
 
+# Disable stack protector — Clang enables -fstack-protector-strong by default for
+# the android target. The canary (TLS slot) requires CRT-initialized TLS, which is
+# unavailable in this freestanding/-nostdlib binary, leaving __stack_chk_fail undefined.
+list(APPEND PIR_BASE_FLAGS -fno-stack-protector)
+
 # Linker configuration (ELF)
 pir_add_link_flags(
     -e,entry_point
