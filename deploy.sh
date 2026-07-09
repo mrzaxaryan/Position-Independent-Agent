@@ -103,6 +103,16 @@ clean_stale_cmake_cache() {
 	if grep -q '/usr/bin/clang++' "$cmake_dir/CMakeCache.txt" 2>/dev/null; then
 		echo "==> Removing stale cmake cache (was using system clang): $cmake_dir"
 		rm -rf "$cmake_dir"
+		return 0
+	fi
+	# Drop the cache if RELAY_URL changed since the last configure — otherwise the
+	# agent bakes a stale relay endpoint (CMake keeps the cached value and ignores
+	# the new -DRELAY_URL on reconfigure).
+	local cached_relay
+	cached_relay="$(grep -E '^RELAY_URL:STRING=' "$cmake_dir/CMakeCache.txt" | head -1 | cut -d= -f2-)"
+	if [[ -n "$cached_relay" && -n "${RELAY_URL:-}" && "$cached_relay" != "$RELAY_URL" ]]; then
+		echo "==> Removing stale cmake cache (RELAY_URL changed: '$cached_relay' -> '$RELAY_URL'): $cmake_dir"
+		rm -rf "$cmake_dir"
 	fi
 }
 
@@ -122,7 +132,7 @@ build_target() {
 		-DCMAKE_C_COMPILER="$CC" \
 		-DCMAKE_CXX_COMPILER="$CXX" \
 		-DPIC_TRANSFORM_LLVM_DIR="$llvm_cmake" \
-		-DPIR_HOST_LLD=/usr/bin/ld.lld \
+		-DPIR_HOST_LLD="$LLVM_INSTALL_DIR/bin/ld.lld" \
 		-DBUILD_NUMBER="$build_number" \
 		-DCOMMIT_HASH="$commit_hash"
 	cmake --build --preset "$preset"
@@ -176,7 +186,7 @@ main() {
 		if [[ -n "$TARGET_FILTER" && "$t" != "$TARGET_FILTER" ]]; then
 			continue
 		fi
-		build_target "$t"
+		build_target "$t" || echo "==> WARNING: $t failed, continuing with remaining targets" >&2
 	done
 
 	if [[ -n "$STAGE_DIR" ]]; then
