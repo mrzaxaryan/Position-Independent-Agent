@@ -127,6 +127,10 @@ build_target() {
 	commit_hash="$(git -C "$ROOT" rev-parse --short=8 HEAD 2>/dev/null || echo 00000000)"
 	llvm_cmake="$LLVM_INSTALL_DIR/lib/cmake/llvm"
 
+	# build_target runs under `if ! build_target` in main(), which SUSPENDS set -e
+	# for the whole call — a failed configure/link won't abort on its own, and a
+	# stale output.bin from a prior build then makes it look like success. Check
+	# every build command explicitly instead of relying on set -e.
 	cmake --preset "$preset" \
 		-DRELAY_URL="$RELAY_URL" \
 		-DCMAKE_C_COMPILER="$CC" \
@@ -134,8 +138,11 @@ build_target() {
 		-DPIC_TRANSFORM_LLVM_DIR="$llvm_cmake" \
 		-DPIR_HOST_LLD="$LLVM_INSTALL_DIR/bin/ld.lld" \
 		-DBUILD_NUMBER="$build_number" \
-		-DCOMMIT_HASH="$commit_hash"
-	cmake --build --preset "$preset"
+		-DCOMMIT_HASH="$commit_hash" || return 1
+	cmake --build --preset "$preset" || {
+		echo "==> ERROR: $artifact build failed" >&2
+		return 1
+	}
 
 	local platform="" arch=""
 	case "$artifact" in
@@ -148,18 +155,28 @@ build_target() {
 	local src_dir="$ROOT/build/release/$platform/$arch"
 
 	mkdir -p "$DIST_DIR"
+	local copied=0
 	if [[ -f "$src_dir/output.bin" ]]; then
 		cp "$src_dir/output.bin" "$DIST_DIR/${artifact}.bin"
 		echo "    -> dist/${artifact}.bin"
+		copied=1
 	fi
 	if [[ -f "$src_dir/output.elf" ]]; then
 		cp "$src_dir/output.elf" "$DIST_DIR/${artifact}.elf"
 		echo "    -> dist/${artifact}.elf"
+		copied=1
 	fi
 	if [[ -f "$src_dir/output.exe" ]]; then
 		cp "$src_dir/output.exe" "$DIST_DIR/${artifact}.exe"
 		echo "    -> dist/${artifact}.exe"
+		copied=1
 	fi
+	# A "successful" build that emits no artifact is a silent total failure —
+	# treat it as one so the caller (and CI) can't mistake it for success.
+	(( copied )) || {
+		echo "==> ERROR: $artifact build produced no artifact in $src_dir" >&2
+		return 1
+	}
 }
 
 stage_artifacts() {
@@ -179,6 +196,7 @@ main() {
 	ensure_llvm
 
 	mkdir -p "$DIST_DIR"
+	local -a failed=()
 	IFS=',' read -r -a targets <<<"$AGENT_TARGETS"
 	for t in "${targets[@]}"; do
 		t="${t// /}"
@@ -186,11 +204,23 @@ main() {
 		if [[ -n "$TARGET_FILTER" && "$t" != "$TARGET_FILTER" ]]; then
 			continue
 		fi
-		build_target "$t" || echo "==> WARNING: $t failed, continuing with remaining targets" >&2
+		if ! build_target "$t"; then
+			failed+=("$t")
+			echo "==> WARNING: $t failed, continuing with remaining targets" >&2
+		fi
 	done
 
 	if [[ -n "$STAGE_DIR" ]]; then
 		stage_artifacts "$STAGE_DIR"
+	fi
+
+	# Never exit 0 unless every requested target produced an artifact. Without
+	# this, a broken toolchain looks like success and ships no agent (or stale
+	# ones from a prior build) — exactly the silent failure we hit before.
+	if (( ${#failed[@]} > 0 )); then
+		echo "==> FAILED agent target(s) (${#failed[@]}): ${failed[*]}" >&2
+		echo "==> Agent build INCOMPLETE — exiting non-zero so the deploy fails loudly." >&2
+		exit 1
 	fi
 
 	echo "==> Agent build complete (RELAY_URL=$RELAY_URL)"
