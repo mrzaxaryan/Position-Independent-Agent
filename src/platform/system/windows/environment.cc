@@ -153,6 +153,14 @@ Result<USIZE, Error> Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 	UINT16 build = 0;
 #endif
 
+	// Windows 11 is still NT 10.0 at the PEB level (OSMajorVersion was never
+	// bumped by Microsoft). The build number distinguishes the marketing
+	// release: >= 22000 is Windows 11. Promote major so the reported label
+	// matches reality — otherwise Win11 hosts report "Windows 10.0 Build 26200"
+	// (the root cause of nostdlib/C2#20; the C2 displays what the agent sends).
+	if (major == 10 && minor == 0 && build >= 22000)
+		major = 11;
+
 	// Format: "Windows {Major}.{Minor} Build {Build}"
 	CHAR numBuf[16];
 	USIZE pos = 0;
