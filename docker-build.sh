@@ -30,6 +30,13 @@ LLVM_VERSION="${LLVM_VERSION:-22.1.0}"
 BUILDER="${BUILDER:-piabuild}"
 CACHE_DIR="${CACHE_DIR:-$ROOT/.docker-cache}"
 
+# Derive the build number + commit hash on the HOST. .git is excluded from the
+# docker context (.dockerignore), so the in-container deploy.sh can't compute
+# them and would fall back to 0 / 00000000 — thread them through as build args,
+# the same way RELAY_URL flows.
+BUILD_NUMBER="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 0)"
+COMMIT_HASH="$(git -C "$ROOT" rev-parse --short=8 HEAD 2>/dev/null || echo 00000000)"
+
 mkdir -p "$CACHE_DIR" "$ROOT/dist"
 
 # buildx builder with the docker-container driver (enables --cache-to/--cache-from
@@ -42,6 +49,8 @@ docker buildx use "$BUILDER"
 echo "==> Building payloads in container (ubuntu:24.04 + LLVM ${LLVM_VERSION})"
 echo "    RELAY_URL     = $RELAY_URL"
 echo "    AGENT_TARGETS = $AGENT_TARGETS"
+echo "    BUILD_NUMBER  = $BUILD_NUMBER"
+echo "    COMMIT_HASH   = $COMMIT_HASH"
 echo "    cache         = $CACHE_DIR"
 
 docker buildx build \
@@ -51,6 +60,8 @@ docker buildx build \
 	--build-arg "LLVM_VERSION=$LLVM_VERSION" \
 	--build-arg "RELAY_URL=$RELAY_URL" \
 	--build-arg "AGENT_TARGETS=$AGENT_TARGETS" \
+	--build-arg "BUILD_NUMBER=$BUILD_NUMBER" \
+	--build-arg "COMMIT_HASH=$COMMIT_HASH" \
 	--cache-from "type=local,src=$CACHE_DIR" \
 	--cache-to "type=local,dest=$CACHE_DIR,mode=max" \
 	-f Dockerfile \

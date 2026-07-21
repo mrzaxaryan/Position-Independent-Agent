@@ -123,8 +123,12 @@ build_target() {
 	echo "==> Building $artifact ($preset)"
 	clean_stale_cmake_cache "$artifact"
 	local build_number commit_hash llvm_cmake
-	build_number="$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 0)"
-	commit_hash="$(git -C "$ROOT" rev-parse --short=8 HEAD 2>/dev/null || echo 00000000)"
+	# Prefer a host-injected value (set by docker-build.sh, where .git is present)
+	# over computing from git here — inside the docker build .git is excluded, so the
+	# git call would silently fall back to 0 / 00000000. Native builds set no env, so
+	# the git computation runs as before.
+	build_number="${BUILD_NUMBER:-$(git -C "$ROOT" rev-list --count HEAD 2>/dev/null || echo 0)}"
+	commit_hash="${COMMIT_HASH:-$(git -C "$ROOT" rev-parse --short=8 HEAD 2>/dev/null || echo 00000000)}"
 	llvm_cmake="$LLVM_INSTALL_DIR/lib/cmake/llvm"
 
 	# build_target runs under `if ! build_target` in main(), which SUSPENDS set -e
