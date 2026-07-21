@@ -76,6 +76,17 @@ INT32 start()
             }
 
             messageCount++;
+
+            // Guard against zero-length / too-short frames: a 0-byte WS message has
+            // Data==nullptr, so command[0] would null-deref and commandLength would
+            // underflow to SIZE_MAX. Skip frames too small to carry a command byte.
+            if (readResult.Value().Length < sizeof(UINT8))
+            {
+                LOG_WARNING("Received a %u-byte frame; too small for a command byte — skipping",
+                            (UINT32)readResult.Value().Length);
+                continue;
+            }
+
             PCHAR command = (PCHAR)(readResult.Value().Data);
             UINT8 commandType = command[0];
             command++;
@@ -91,6 +102,11 @@ INT32 start()
             {
                 LOG_DEBUG("Dispatching command %s to handler", CommandTypeName(commandType));
                 commandHandlers[commandType](command, commandLength, &response, &responseLength, &context);
+                if (response == nullptr)
+                {
+                    LOG_ERROR("Command %s handler returned no response (out of memory)", CommandTypeName(commandType));
+                    continue;
+                }
                 UINT32 statusCode = *(PUINT32)response;
                 LOG_INFO("Command %s completed: status=%u, response_length=%u",
                          CommandTypeName(commandType), statusCode, (UINT32)responseLength);
@@ -100,6 +116,11 @@ INT32 start()
                 LOG_ERROR("Unknown command type 0x%02x received (max valid: 0x%02x), returning StatusUnknownCommand",
                           (UINT32)commandType, (UINT32)(CommandType::CommandTypeCount - 1));
                 response = new CHAR[responseLength];
+                if (response == nullptr)
+                {
+                    LOG_ERROR("Out of memory building unknown-command response");
+                    continue;
+                }
                 *(PUINT32)response = StatusCode::StatusUnknownCommand;
             }
 
