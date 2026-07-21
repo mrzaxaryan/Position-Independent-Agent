@@ -53,16 +53,28 @@ INT32 start()
     while (1)
     {
         connectionAttempt++;
+#ifdef AGENT_VERBOSE_LOG
         LOG_INFO("Connection attempt #%u to %s", connectionAttempt, (PCCHAR)url);
+#else
+        LOG_INFO("Connection attempt #%u", connectionAttempt);
+#endif
 
         auto createResult = WebSocketClient::Create(url);
         if (!createResult)
         {
+#ifdef AGENT_VERBOSE_LOG
             LOG_ERROR("Connection attempt #%u failed: unable to open WebSocket to %s", connectionAttempt, (PCCHAR)url);
+#else
+            LOG_ERROR("Connection attempt #%u failed: unable to open WebSocket", connectionAttempt);
+#endif
             return 0;
         }
         WebSocketClient &wsClient = createResult.Value();
+#ifdef AGENT_VERBOSE_LOG
         LOG_INFO("WebSocket connection established (attempt #%u) to %s", connectionAttempt, (PCCHAR)url);
+#else
+        LOG_INFO("WebSocket connection established (attempt #%u)", connectionAttempt);
+#endif
 
         UINT32 messageCount = 0;
         while (1)
