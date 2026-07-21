@@ -75,6 +75,22 @@ INT32 start()
                 break;
             }
 
+            // Relay heartbeat/control frames arrive as TEXT (e.g. {"type":"ping"}).
+            // The beacon speaks a binary command protocol, so a text frame is not a
+            // command — reply with a pong (keeps the relay's lastActiveAt fresh so it
+            // doesn't reap us as idle after 60s) and skip dispatch. Command traffic is binary.
+            if (readResult.Value().Opcode == WebSocketOpcode::Text)
+            {
+                const CHAR pong[] = "{\"type\":\"pong\"}";
+                LOG_DEBUG("Relay control frame (text), replying pong");
+                if (!wsClient.Write(Span<const CHAR>(pong, sizeof(pong) - 1), WebSocketOpcode::Text))
+                {
+                    LOG_ERROR("Failed to send pong, reconnecting...");
+                    break;
+                }
+                continue;
+            }
+
             messageCount++;
             PCHAR command = (PCHAR)(readResult.Value().Data);
             UINT8 commandType = command[0];
