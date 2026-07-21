@@ -239,6 +239,9 @@ Result<VOID, Error> TlsCipher::ComputeKey(ECC_GROUP ecc, Span<const CHAR> server
 		TlsHKDF::Extract(Span<UCHAR>(data13.pseudoRandomKey, hashLen), Span<const UCHAR>(zeroSalt, hashLen), Span<const UCHAR>(earlysecret, hashLen));
 		TlsHKDF::ExpandLabel(Span<UCHAR>(salt, hashLen), Span<const UCHAR>(data13.pseudoRandomKey, hashLen), Span<const CHAR>("derived", 7), Span<const UCHAR>(hash, hashLen));
 		TlsHKDF::Extract(Span<UCHAR>(data13.pseudoRandomKey, hashLen), Span<const UCHAR>(salt, hashLen), Span<const UCHAR>((UINT8 *)premaster_key.GetBuffer(), premaster_key.GetSize()));
+		// Zero the pre-master key now that it has been mixed into the HKDF chain. TlsBuffer's
+		// dtor only frees the heap, leaving the secret in reusable pages (info-leak -> retrospective decrypt).
+		Memory::Zero(premaster_key.GetBuffer(), premaster_key.GetSize());
 
 		GetHash(Span<CHAR>((CHAR *)hash, CIPHER_HASH_SIZE));
 	}

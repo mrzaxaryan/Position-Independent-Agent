@@ -792,6 +792,25 @@ Result<UINT32, Error> ECC::ComputeSharedSecret(Span<const UINT8> publicKey, Span
 	this->Bytes2Native(peerPoint.X, publicKey.Subspan(1, this->eccBytes));
 	this->Bytes2Native(peerPoint.Y, publicKey.Subspan(1 + this->eccBytes, this->eccBytes));
 
+	// Validate the peer point before Mult. Otherwise a malicious server can send a small-subgroup
+	// or off-curve point and recover the ephemeral private key via an invalid-curve attack.
+	// (a) reject point at infinity; (b) range-check x,y < p; (c) verify on-curve y^2 == x^3 - 3x + b.
+	UINT64 negA[MAX_NUM_ECC_DIGITS] = {3}; // -a = 3 for the NIST prime curves used here (a == -3 mod p)
+	if (this->IsZero(peerPoint) ||
+	    this->VliCmp(peerPoint.X, this->curveP) >= 0 ||
+	    this->VliCmp(peerPoint.Y, this->curveP) >= 0)
+		return Result<UINT32, Error>::Err(Error::Ecc_SharedSecretFailed);
+
+	UINT64 lhs[MAX_NUM_ECC_DIGITS];
+	UINT64 rhs[MAX_NUM_ECC_DIGITS];
+	this->VliModSquareFast(lhs, peerPoint.Y);              // lhs = y^2
+	this->VliModSquareFast(rhs, peerPoint.X);              // rhs = x^2
+	this->VliModSub(rhs, rhs, negA, this->curveP);         // rhs = x^2 - 3
+	this->VliModMultFast(rhs, rhs, peerPoint.X);           // rhs = x^3 - 3x
+	this->VliModAdd(rhs, rhs, this->curveB, this->curveP); // rhs = x^3 - 3x + b
+	if (this->VliCmp(lhs, rhs) != 0)
+		return Result<UINT32, Error>::Err(Error::Ecc_SharedSecretFailed);
+
 	ECCPoint product;
 	this->Mult(product, peerPoint, this->privateKey, randomData);
 	this->Native2Bytes(Span<UINT8>(secret.Data(), this->eccBytes), product.X);
