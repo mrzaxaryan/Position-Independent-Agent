@@ -358,8 +358,10 @@ VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
         return;
     }
 
-    // Construct the response with status code and the data read from the shell
-    USIZE bytesRead = readResult.Value() + 1;
+    // bytesRead is exactly what Shell::Read wrote into `buffer` (a 4096-byte
+    // uninitialized stack buffer). The old `+1` shipped one uninitialized stack
+    // byte per ReadShell (an abandoned null-terminator attempt) — drop it.
+    USIZE bytesRead = readResult.Value();
     *responseLength += bytesRead;
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = StatusCode::StatusSuccess;

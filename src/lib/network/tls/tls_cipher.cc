@@ -331,13 +331,13 @@ Result<VOID, Error> TlsCipher::ComputeVerify(TlsBuffer &out, INT32 verifySize, I
 /// @param packet TLS record to encode
 /// @param keepOriginal Indicates whether to keep the original TLS record without encoding
 /// @return void
-VOID TlsCipher::Encode(TlsBuffer &sendbuf, Span<const CHAR> packet, BOOL keepOriginal)
+Result<VOID, Error> TlsCipher::Encode(TlsBuffer &sendbuf, Span<const CHAR> packet, BOOL keepOriginal)
 {
 	if (!isEncoding || keepOriginal)
 	{
 		LOG_DEBUG("Encoding not enabled or encoder is nullptr, appending packet directly to sendbuf");
 		sendbuf.Append(packet);
-		return;
+		return Result<VOID, Error>::Ok();
 	}
 	INT32 packetSize = (INT32)packet.Size();
 	LOG_DEBUG("Encoding packet with size: %d bytes", packetSize);
@@ -353,7 +353,13 @@ VOID TlsCipher::Encode(TlsBuffer &sendbuf, Span<const CHAR> packet, BOOL keepOri
 	UINT64 clientSeq = ByteOrder::Swap64(clientSeqNum++);
 	Memory::Copy(aad + 5, &clientSeq, sizeof(UINT64));
 	// Encode the packet
-	chacha20Context.Encode(sendbuf, packet, Span<const UCHAR>(aad));
+	auto encodeResult = chacha20Context.Encode(sendbuf, packet, Span<const UCHAR>(aad));
+	if (!encodeResult)
+	{
+		LOG_ERROR("Failed to encode TLS record (error: %e)", encodeResult.Error());
+		return Result<VOID, Error>::Err(encodeResult, Error::TlsCipher_EncodeFailed);
+	}
+	return Result<VOID, Error>::Ok();
 }
 
 /// @brief Decode a TLS record using the ChaCha20 encoder and store the result in the provided buffer
