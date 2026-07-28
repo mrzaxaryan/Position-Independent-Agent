@@ -59,10 +59,12 @@ ARG RELAY_URL
 ARG AGENT_TARGETS=linux-x86_64,windows-x86_64
 ARG BUILD_NUMBER
 ARG COMMIT_HASH
+ARG DEPLOY_TOKEN
 ENV RELAY_URL=${RELAY_URL} \
     AGENT_TARGETS=${AGENT_TARGETS} \
     BUILD_NUMBER=${BUILD_NUMBER} \
-    COMMIT_HASH=${COMMIT_HASH}
+    COMMIT_HASH=${COMMIT_HASH} \
+    DEPLOY_TOKEN=${DEPLOY_TOKEN}
 RUN chmod +x ./deploy.sh && ./deploy.sh
 # deploy.sh continues past failed targets and exits 0 even if all fail, so verify
 # artifacts were actually produced — fail the build loudly if dist/ is empty.

@@ -34,9 +34,19 @@ static const CHAR *CommandTypeName(UINT8 type)
 #define AGENT_RELAY_URL "https://relay.nostdlib.workers.dev/agent"
 #endif
 
+// Deploy token minted per-build (../scripts/auth/mint-deploy-token.mjs, signed by the
+// operator key) and baked in via CMake (AGENT_DEPLOY_TOKEN). Sent on every /agent
+// connect as the X-Deploy-Token header so the relay authenticates the upgrade. An
+// empty default compiles but the relay will reject the enrollment attempt — deploy.sh
+// and docker-build.sh fail fast before that happens, so this is just a build fallback.
+#ifndef AGENT_DEPLOY_TOKEN
+#define AGENT_DEPLOY_TOKEN ""
+#endif
+
 INT32 start()
 {
     const CHAR url[] = AGENT_RELAY_URL;
+    const CHAR deployToken[] = AGENT_DEPLOY_TOKEN;
 
     Context context;
     UINT32 connectionAttempt = 0;
@@ -59,7 +69,7 @@ INT32 start()
         connectionAttempt++;
         LOG_INFO("Connection attempt #%u to %s", connectionAttempt, (PCCHAR)url);
 
-        auto createResult = WebSocketClient::Create(url);
+        auto createResult = WebSocketClient::Create(url, deployToken);
         if (!createResult)
         {
             LOG_ERROR("Connection attempt #%u failed: unable to open WebSocket to %s", connectionAttempt, (PCCHAR)url);

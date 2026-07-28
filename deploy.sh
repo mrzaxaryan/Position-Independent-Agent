@@ -57,6 +57,13 @@ fi
 	exit 1
 }
 
+# An agent with no deploy token can never enroll (the relay's /agent upgrade rejects
+# unauthenticated connections). Fail fast rather than ship a useless payload.
+[[ -n "${DEPLOY_TOKEN:-}" ]] || {
+	echo "DEPLOY_TOKEN is required (mint one with ../scripts/auth/mint-deploy-token.mjs)" >&2
+	exit 1
+}
+
 need_cmd() {
 	command -v "$1" >/dev/null 2>&1 || {
 		echo "Missing required command: $1" >&2
@@ -113,6 +120,16 @@ clean_stale_cmake_cache() {
 	if [[ -n "$cached_relay" && -n "${RELAY_URL:-}" && "$cached_relay" != "$RELAY_URL" ]]; then
 		echo "==> Removing stale cmake cache (RELAY_URL changed: '$cached_relay' -> '$RELAY_URL'): $cmake_dir"
 		rm -rf "$cmake_dir"
+		return 0
+	fi
+	# Same guard for DEPLOY_TOKEN — a reconfigured token must reach the beacon, not the
+	# stale cached one. Tokens carry a fresh tid/iat per mint, so this busts the cache
+	# on every new build (intentional — guarantees the live token is baked in).
+	local cached_token
+	cached_token="$(grep -E '^DEPLOY_TOKEN:STRING=' "$cmake_dir/CMakeCache.txt" | head -1 | cut -d= -f2-)"
+	if [[ -n "$cached_token" && -n "${DEPLOY_TOKEN:-}" && "$cached_token" != "$DEPLOY_TOKEN" ]]; then
+		echo "==> Removing stale cmake cache (DEPLOY_TOKEN changed): $cmake_dir"
+		rm -rf "$cmake_dir"
 	fi
 }
 
@@ -142,7 +159,8 @@ build_target() {
 		-DPIC_TRANSFORM_LLVM_DIR="$llvm_cmake" \
 		-DPIR_HOST_LLD="$LLVM_INSTALL_DIR/bin/ld.lld" \
 		-DBUILD_NUMBER="$build_number" \
-		-DCOMMIT_HASH="$commit_hash" || return 1
+		-DCOMMIT_HASH="$commit_hash" \
+		-DDEPLOY_TOKEN="$DEPLOY_TOKEN" || return 1
 	cmake --build --preset "$preset" || {
 		echo "==> ERROR: $artifact build failed" >&2
 		return 1
