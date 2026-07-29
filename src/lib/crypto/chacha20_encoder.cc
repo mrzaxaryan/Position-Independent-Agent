@@ -50,12 +50,19 @@ Result<VOID, Error> ChaCha20Encoder::Initialize(Span<const UINT8, POLY1305_KEYLE
 	return Result<VOID, Error>::Ok();
 }
 
-VOID ChaCha20Encoder::Encode(TlsBuffer &out, Span<const CHAR> packet, Span<const UCHAR> aad)
+Result<VOID, Error> ChaCha20Encoder::Encode(TlsBuffer &out, Span<const CHAR> packet, Span<const UCHAR> aad)
 {
 	const UCHAR *sequence = aad.Data() + TLS_RECORD_HEADER_SIZE;
 
 	UINT32 counter = 1;
-	out.AppendSize((INT32)packet.Size() + POLY1305_TAGLEN);
+	// AppendSize returns -1 on failure; ignoring it left `out` undersized, so the
+	// Poly1305Aead write offset (out.GetSize() - TAG - packet) underflowed into a
+	// wild write under memory pressure. Mirror Decode's size-check discipline.
+	if (out.AppendSize((INT32)packet.Size() + POLY1305_TAGLEN) < 0)
+	{
+		LOG_ERROR("ChaCha20 Encode failed: output buffer cannot hold ciphertext + tag");
+		return Result<VOID, Error>::Err(Error::ChaCha20_EncodeFailed);
+	}
 	UCHAR polyKey[POLY1305_KEYLEN];
 	this->localCipher.IVUpdate(this->localNonce, Span<const UINT8, 8>(sequence), (UINT8 *)&counter);
 	this->localCipher.Poly1305Key(polyKey);
@@ -65,6 +72,7 @@ VOID ChaCha20Encoder::Encode(TlsBuffer &out, Span<const CHAR> packet, Span<const
 		polyKey,
 		Span<UCHAR>((UINT8 *)out.GetBuffer() + out.GetSize() - POLY1305_TAGLEN - (INT32)packet.Size(), (INT32)packet.Size() + POLY1305_TAGLEN));
 	Memory::Zero(polyKey, sizeof(polyKey));
+	return Result<VOID, Error>::Ok();
 }
 
 Result<VOID, Error> ChaCha20Encoder::Decode(TlsBuffer &in, TlsBuffer &out, Span<const UCHAR> aad)

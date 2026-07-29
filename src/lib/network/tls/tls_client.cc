@@ -85,7 +85,12 @@ Result<VOID, Error> TlsClient::SendPacket(INT32 packetType, INT32 ver, TlsBuffer
 		(tempBuffer.GetBuffer())[0] = CONTENT_APPLICATION_DATA;
 	}
 	LOG_DEBUG("Encoding buffer with size: %d bytes, keepOriginal: %d", buf.GetSize(), keepOriginal);
-	crypto.Encode(tempBuffer, Span<const CHAR>(buf.GetBuffer(), buf.GetSize()), keepOriginal);
+	auto encodeResult = crypto.Encode(tempBuffer, Span<const CHAR>(buf.GetBuffer(), buf.GetSize()), keepOriginal);
+	if (!encodeResult)
+	{
+		LOG_ERROR("Failed to encode outgoing TLS record (error: %e)", encodeResult.Error());
+		return Result<VOID, Error>::Err(encodeResult, Error::Tls_SendPacketFailed);
+	}
 	// Swap the body size to big-endian and write it to the temporary buffer
 	UINT16 bodySize = ByteOrder::Swap16(tempBuffer.GetSize() - bodySizeIndex - 2);
 	Memory::Copy(tempBuffer.GetBuffer() + bodySizeIndex, &bodySize, sizeof(UINT16));

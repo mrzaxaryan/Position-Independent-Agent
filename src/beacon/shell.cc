@@ -23,6 +23,11 @@ Result<USIZE, Error> Shell::Write(const char *data, USIZE length) noexcept
 
 Result<USIZE, Error> Shell::Read(char *buffer, USIZE capacity) noexcept
 {
+    // capacity - 1 below underflows to SIZE_MAX when capacity == 0, turning the
+    // read loop near-unbounded. Guard explicitly (current sole caller passes 4096).
+    if (capacity == 0)
+        return Result<USIZE, Error>::Ok(0);
+
     USIZE totalRead = 0;
 
     while (totalRead < capacity - 1)

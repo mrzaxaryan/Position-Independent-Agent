@@ -147,7 +147,7 @@ public:
 	[[nodiscard]] Result<VOID, Error> ComputeKey(ECC_GROUP ecc, Span<const CHAR> serverKey, Span<CHAR> finishedHash);
 	[[nodiscard]] Result<VOID, Error> ComputeVerify(TlsBuffer &out, INT32 verifySize, INT32 localOrRemote);
 	// Functions for encoding and decoding TLS records
-	VOID Encode(TlsBuffer &sendbuf, Span<const CHAR> packet, BOOL keepOriginal);
+	[[nodiscard]] Result<VOID, Error> Encode(TlsBuffer &sendbuf, Span<const CHAR> packet, BOOL keepOriginal);
 	[[nodiscard]] Result<VOID, Error> Decode(TlsBuffer &inout, INT32 version);
 	VOID SetEncoding(BOOL encoding);
 	// Function to reset sequence numbers
