@@ -43,6 +43,26 @@ static const CHAR *CommandTypeName(UINT8 type)
 #define AGENT_DEPLOY_TOKEN ""
 #endif
 
+// Exponential reconnect backoff bounds (milliseconds).
+static constexpr UINT32 BACKOFF_FLOOR_MS = 1000;
+static constexpr UINT32 BACKOFF_CEIL_MS = 30000;
+
+// 0 (no prior failure) -> floor; otherwise double, capped at the ceiling.
+static UINT32 NextBackoffMs(UINT32 current)
+{
+    if (current == 0) return BACKOFF_FLOOR_MS;
+    return current >= (BACKOFF_CEIL_MS / 2) ? BACKOFF_CEIL_MS : current * 2;
+}
+
+// Freestanding busy-wait sleep (no libc/syscall-sleep dependency; matches the
+// codebase's monotonic-clock polling pattern). Used only between failed
+// connection attempts — never on the hot path.
+static void SleepMs(UINT32 ms)
+{
+    const UINT64 deadline = DateTime::GetMonotonicNanoseconds() + (UINT64)ms * 1000000ULL;
+    while (DateTime::GetMonotonicNanoseconds() < deadline) { /* busy-wait */ }
+}
+
 INT32 start()
 {
     const CHAR url[] = AGENT_RELAY_URL;
@@ -50,6 +70,7 @@ INT32 start()
 
     Context context;
     UINT32 connectionAttempt = 0;
+    UINT32 backoffMs = 0; // exponential reconnect backoff (0 = no prior failure)
 
     CommandHandler commandHandlers[CommandType::CommandTypeCount] = {nullptr};
     commandHandlers[CommandType::Command_GetSystemInfo] = Handle_GetSystemInfoCommand;
@@ -81,8 +102,12 @@ INT32 start()
 #else
             LOG_ERROR("Connection attempt #%u failed: unable to open WebSocket", connectionAttempt);
 #endif
-            return 0;
+            backoffMs = NextBackoffMs(backoffMs);
+            LOG_INFO("Reconnecting in %ums (exponential backoff)", backoffMs);
+            SleepMs(backoffMs);
+            continue; // #61: retry instead of exiting on first connection failure
         }
+        backoffMs = 0; // connected — reset backoff
         WebSocketClient &wsClient = createResult.Value();
 #ifdef AGENT_VERBOSE_LOG
         LOG_INFO("WebSocket connection established (attempt #%u) to %s", connectionAttempt, (PCCHAR)url);
