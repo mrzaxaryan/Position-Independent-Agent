@@ -75,8 +75,16 @@ static USIZE DecodeWirePath(PCHAR command, USIZE commandLength, WCHAR *widePath,
 // Writes a simple error response with the given status code
 static VOID WriteErrorResponse(PPCHAR response, PUSIZE responseLength, StatusCode code)
 {
-    *response = new CHAR[*responseLength];
-    *(PUINT32)*response = code;
+    CHAR *buf = new CHAR[*responseLength];
+    if (buf == nullptr)
+    {
+        // OOM — operator new returns null in this freestanding build. Leave *response null;
+        // main.cc's dispatcher checks for a null response rather than dereferencing it.
+        *response = nullptr;
+        return;
+    }
+    *response = buf;
+    *(PUINT32)buf = code;
 }
 
 // Checks if a directory entry is "." or ".."
@@ -174,9 +182,30 @@ VOID Handle_GetDirectoryContentCommand([[maybe_unused]] PCHAR command, [[maybe_u
 VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
     LOG_INFO("Handling GetFileContentCommand.");
+
+    // Min payload: readCount(8) + offset(8) + path. Reject short commands (would OOB-read the header).
+    if (commandLength < sizeof(UINT64) + sizeof(UINT64))
+    {
+        LOG_ERROR("GetFileContent: command too short (%u bytes)", (UINT32)commandLength);
+        WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        return;
+    }
+
     // Getting parameters from command buffer: read count, offset and file path
     UINT64 readCount = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
+
+    // Clamp readCount + reject overflow so the response-length calc can't wrap to a tiny
+    // allocation (e.g. UINT64_MAX -> 11-byte alloc -> file.Read writes off the end -> SIGSEGV).
+    const UINT64 MAX_FILE_CHUNK = 0x100000; // 1 MiB
+    if (readCount > MAX_FILE_CHUNK)
+        readCount = MAX_FILE_CHUNK;
+    if (readCount > (UINT64)(~(USIZE)0) - sizeof(UINT32) - sizeof(UINT64))
+    {
+        WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        return;
+    }
+
     LOG_INFO("Reading file content with offset: %llu and count: %llu.", offset, readCount);
 
     // Decoding file path from command buffer
@@ -193,16 +222,23 @@ VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused
     }
     LOG_INFO("File opened successfully: %ws", filePath);
 
-    // Prepare the response buffer - writing status code, bytes read and file content chunk
     File &file = openResult.Value();
-    *responseLength = sizeof(UINT32) + sizeof(UINT64) + (USIZE)readCount;
-    *response = new CHAR[*responseLength];
 
     auto setOffsetResult = file.SetOffset((USIZE)offset);
-
-    if(!setOffsetResult){
+    if (!setOffsetResult)
+    {
         LOG_ERROR("Failed to set file offset: %llu, error: %e", offset, setOffsetResult.Error());
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        return;
+    }
+
+    // Allocate the response buffer only AFTER SetOffset succeeds. The old code allocated
+    // first, so a SetOffset failure would leak the buffer (WriteErrorResponse overwrote *response).
+    *responseLength = sizeof(UINT32) + sizeof(UINT64) + (USIZE)readCount;
+    *response = new CHAR[*responseLength];
+    if (*response == nullptr)
+    {
+        LOG_ERROR("GetFileContent: out of memory allocating %u-byte response", (UINT32)*responseLength);
         return;
     }
 
@@ -220,6 +256,15 @@ VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused
 VOID Handle_GetFileChunkHashCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
     LOG_INFO("Handling GetFileChunkHashCommand.");
+
+    // Min payload: chunkSize(8) + offset(8) + path. Reject short commands (would OOB-read the header).
+    if (commandLength < sizeof(UINT64) + sizeof(UINT64))
+    {
+        LOG_ERROR("GetFileChunkHash: command too short (%u bytes)", (UINT32)commandLength);
+        WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        return;
+    }
+
     // Getting parameters from command buffer: chunk size, offset and file path
     UINT64 chunkSize = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
@@ -446,6 +491,14 @@ VOID JpegCallback(PVOID context, PVOID data, INT32 size)
 // Gets a screenshot of the specified display device
 VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
+    // Min payload: displayIndex(4) + quality(4) + isFullScreen(4). Reject short commands (would OOB-read the header).
+    if (commandLength < sizeof(UINT32) + sizeof(UINT32) + sizeof(UINT32))
+    {
+        LOG_ERROR("GetScreenshot: command too short (%u bytes)", (UINT32)commandLength);
+        WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        return;
+    }
+
     // Retrieve parameters from command buffer
     auto displayIndex = *(PUINT32)(command);
     auto quality = *(PUINT32)(command + sizeof(UINT32));
@@ -468,6 +521,17 @@ VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
         }
         context->screenCaptureContext->DeviceList = displays.Value();
         LOG_INFO("Display devices enumerated successfully with %u display(s)", context->screenCaptureContext->DeviceList.Count);
+    }
+
+    // Bounds-check displayIndex vs the enumerated device count. Was used to index Devices[]
+    // and graphicsArray[] with no check -> OOB read of garbage Width/Height -> huge/undersized
+    // alloc -> SIGSEGV or heap overflow.
+    if (displayIndex >= context->screenCaptureContext->DeviceList.Count)
+    {
+        LOG_ERROR("GetScreenshot: display index %u out of range (count=%u)",
+                  displayIndex, context->screenCaptureContext->DeviceList.Count);
+        WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        return;
     }
 
     const ScreenDevice &device = context->screenCaptureContext->DeviceList.Devices[displayIndex];
