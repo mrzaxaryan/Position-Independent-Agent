@@ -74,7 +74,14 @@ if(NOT LLVM_ENABLE_PLUGINS)
 	if(NOT LLVM_ENABLE_RTTI)
 		target_compile_options(pic-transform PRIVATE -fno-rtti)
 	endif()
-	target_link_libraries(pic-transform PRIVATE ${LLVM_LIBS})
+	# Distros (e.g. Arch) ship component libs as LTO bitcode archives that plain ld
+	# cannot link; prefer the monolithic shared libLLVM-<major>.so in that case.
+	find_library(_PT_LLVM_SHARED NAMES "LLVM-${LLVM_VERSION_MAJOR}" LLVM)
+	if(_PT_LLVM_SHARED)
+		target_link_libraries(pic-transform PRIVATE ${_PT_LLVM_SHARED})
+	else()
+		target_link_libraries(pic-transform PRIVATE ${LLVM_LIBS})
+	endif()
 
 	if(STATIC_LINK)
 		message(STATUS "[pic-transform] Static linking enabled")
