@@ -549,6 +549,8 @@ USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept
 	StringUtils::Copy(buffer, Span<const CHAR>("riscv32"));
 #elif defined(ARCHITECTURE_MIPS64)
 	StringUtils::Copy(buffer, Span<const CHAR>("mips64"));
+#elif defined(ARCHITECTURE_MIPS)
+	StringUtils::Copy(buffer, Span<const CHAR>("mips"));
 #else
 	buffer.Data()[0] = '\0';
 	return 0;
