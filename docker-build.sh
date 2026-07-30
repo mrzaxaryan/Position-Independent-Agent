@@ -41,7 +41,7 @@ if [[ -z "${DEPLOY_TOKEN:-}" ]]; then
 	exit 1
 fi
 
-AGENT_TARGETS="${AGENT_TARGETS:-linux-x86_64,windows-x86_64}"
+AGENT_TARGETS="${AGENT_TARGETS:-linux-x86_64,windows-x86_64,android-aarch64}"
 LLVM_VERSION="${LLVM_VERSION:-22.1.0}"
 BUILDER="${BUILDER:-piabuild}"
 CACHE_DIR="${CACHE_DIR:-$ROOT/.docker-cache}"
