@@ -41,6 +41,7 @@
     { "name": "arch-riscv32", "hidden": true, "cacheVariables": { "ARCHITECTURE": "riscv32" } },
     { "name": "arch-riscv64", "hidden": true, "cacheVariables": { "ARCHITECTURE": "riscv64" } },
     { "name": "arch-mips64",  "hidden": true, "cacheVariables": { "ARCHITECTURE": "mips64" } },
+    { "name": "arch-mips",    "hidden": true, "cacheVariables": { "ARCHITECTURE": "mips" } },
 
     { "name": "type-debug",   "hidden": true, "cacheVariables": { "BUILD_TYPE": "debug",   "OPTIMIZATION_LEVEL": "O0" } },
     { "name": "type-release", "hidden": true, "cacheVariables": { "BUILD_TYPE": "release", "OPTIMIZATION_LEVEL": "Oz" } },
@@ -186,6 +187,18 @@
       "displayName": "Linux MIPS64 (Release)",
       "inherits": ["base","platform-linux", "arch-mips64", "type-release"],
       "binaryDir": "${sourceDir}/build/release/linux/mips64/cmake"
+    },
+    {
+      "name": "linux-mips-debug",
+      "displayName": "Linux MIPS o32 (Debug)",
+      "inherits": ["base","platform-linux", "arch-mips", "type-debug"],
+      "binaryDir": "${sourceDir}/build/debug/linux/mips/cmake"
+    },
+    {
+      "name": "linux-mips-release",
+      "displayName": "Linux MIPS o32 (Release)",
+      "inherits": ["base","platform-linux", "arch-mips", "type-release"],
+      "binaryDir": "${sourceDir}/build/release/linux/mips/cmake"
     },
 
     {
@@ -386,6 +399,7 @@
     { "name": "test-linux-riscv32-release",   "inherits": ["linux-riscv32-release",   "app-tests"] },
     { "name": "test-linux-riscv64-release",   "inherits": ["linux-riscv64-release",   "app-tests"] },
     { "name": "test-linux-mips64-release",    "inherits": ["linux-mips64-release",    "app-tests"] },
+    { "name": "test-linux-mips-release",     "inherits": ["linux-mips-release",     "app-tests"] },
 
     { "name": "test-macos-x86_64-release",    "inherits": ["macos-x86_64-release",    "app-tests"] },
     { "name": "test-macos-aarch64-release",   "inherits": ["macos-aarch64-release",   "app-tests"] },
@@ -438,6 +452,8 @@
     { "name": "linux-riscv64-release",   "configurePreset": "linux-riscv64-release" },
     { "name": "linux-mips64-debug",      "configurePreset": "linux-mips64-debug" },
     { "name": "linux-mips64-release",    "configurePreset": "linux-mips64-release" },
+    { "name": "linux-mips-debug",        "configurePreset": "linux-mips-debug" },
+    { "name": "linux-mips-release",      "configurePreset": "linux-mips-release" },
 
     { "name": "macos-x86_64-debug",      "configurePreset": "macos-x86_64-debug" },
     { "name": "macos-x86_64-release",    "configurePreset": "macos-x86_64-release" },
@@ -487,6 +503,7 @@
     { "name": "test-linux-riscv32-release",   "configurePreset": "test-linux-riscv32-release" },
     { "name": "test-linux-riscv64-release",   "configurePreset": "test-linux-riscv64-release" },
     { "name": "test-linux-mips64-release",    "configurePreset": "test-linux-mips64-release" },
+    { "name": "test-linux-mips-release",     "configurePreset": "test-linux-mips-release" },
 
     { "name": "test-macos-x86_64-release",    "configurePreset": "test-macos-x86_64-release" },
     { "name": "test-macos-aarch64-release",   "configurePreset": "test-macos-aarch64-release" },

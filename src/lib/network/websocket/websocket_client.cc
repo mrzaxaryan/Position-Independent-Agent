@@ -10,10 +10,12 @@
  * @brief Performs the WebSocket opening handshake (RFC 6455 Section 4)
  * @details Sends the HTTP Upgrade request with Sec-WebSocket-Key (16 random bytes,
  * Base64-encoded per Section 4.1) and validates the server responds with HTTP 101.
- * Falls back to IPv4 if the initial IPv6 connection attempt fails.
+ * When @p deployToken is non-null and non-empty, an `X-Deploy-Token` header carrying it
+ * is added so the relay's extractDeployToken authenticates the /agent upgrade. Falls
+ * back to IPv4 if the initial IPv6 connection attempt fails.
  * @see https://datatracker.ietf.org/doc/html/rfc6455#section-4
  */
-Result<VOID, Error> WebSocketClient::Open(PCCHAR path)
+Result<VOID, Error> WebSocketClient::Open(PCCHAR path, PCCHAR deployToken)
 {
 	BOOL isSecure = tlsContext.IsSecure();
 	LOG_DEBUG("Opening WebSocket client to %s:%u%s (secure: %s)", hostName, port, path, isSecure ? "true" : "false");
@@ -75,6 +77,11 @@ Result<VOID, Error> WebSocketClient::Open(PCCHAR path)
 		!writeStr("\r\nSec-WebSocket-Version: 13\r\nOrigin: ") ||
 		!writeStr(isSecure ? "https://" : "http://") ||
 		!writeStr(hostName) ||
+		// Deploy token (relay /agent enrollment). Sent as a header rather than a
+		// Sec-WebSocket-Protocol subprotocol so the 101 response need not echo one back
+		// and the handshake completes for non-relay peers (echo test suite) that pass null.
+		(deployToken != nullptr && deployToken[0] != '\0' &&
+			(!writeStr("\r\nX-Deploy-Token: ") || !writeStr(deployToken))) ||
 		!writeStr("\r\n\r\n"))
 	{
 		(VOID)Close();
@@ -488,6 +495,8 @@ Result<WebSocketMessage, Error> WebSocketClient::Read()
 /**
  * @brief Factory method — creates and connects a WebSocketClient from a ws:// or wss:// URL
  * @param url WebSocket URL (ws:// or wss://)
+ * @param deployToken Optional deploy token forwarded to Open() as the X-Deploy-Token header
+ *                    for relay /agent enrollment; null for non-enrolling peers.
  * @return Ok(WebSocketClient) in the OPEN state, or Err on parse/DNS/TLS/handshake failure
  *
  * @details Performs the full connection sequence:
@@ -502,7 +511,7 @@ Result<WebSocketMessage, Error> WebSocketClient::Read()
  * @see https://datatracker.ietf.org/doc/html/rfc6455#section-3
  * @see https://datatracker.ietf.org/doc/html/rfc6455#section-4
  */
-Result<WebSocketClient, Error> WebSocketClient::Create(Span<const CHAR> url)
+Result<WebSocketClient, Error> WebSocketClient::Create(Span<const CHAR> url, PCCHAR deployToken)
 {
 	CHAR host[254];
 	CHAR parsedPath[2048];
@@ -539,7 +548,7 @@ Result<WebSocketClient, Error> WebSocketClient::Create(Span<const CHAR> url)
 
 	WebSocketClient client(host, ip, port, static_cast<TlsClient &&>(tlsResult.Value()));
 
-	auto openResult = client.Open(parsedPath);
+	auto openResult = client.Open(parsedPath, deployToken);
 	if (!openResult)
 		return Result<WebSocketClient, Error>::Err(openResult, Error::Ws_CreateFailed);
 

@@ -85,7 +85,12 @@ Result<VOID, Error> TlsClient::SendPacket(INT32 packetType, INT32 ver, TlsBuffer
 		(tempBuffer.GetBuffer())[0] = CONTENT_APPLICATION_DATA;
 	}
 	LOG_DEBUG("Encoding buffer with size: %d bytes, keepOriginal: %d", buf.GetSize(), keepOriginal);
-	crypto.Encode(tempBuffer, Span<const CHAR>(buf.GetBuffer(), buf.GetSize()), keepOriginal);
+	auto encodeResult = crypto.Encode(tempBuffer, Span<const CHAR>(buf.GetBuffer(), buf.GetSize()), keepOriginal);
+	if (!encodeResult)
+	{
+		LOG_ERROR("Failed to encode outgoing TLS record (error: %e)", encodeResult.Error());
+		return Result<VOID, Error>::Err(encodeResult, Error::Tls_SendPacketFailed);
+	}
 	// Swap the body size to big-endian and write it to the temporary buffer
 	UINT16 bodySize = ByteOrder::Swap16(tempBuffer.GetSize() - bodySizeIndex - 2);
 	Memory::Copy(tempBuffer.GetBuffer() + bodySizeIndex, &bodySize, sizeof(UINT16));
@@ -406,10 +411,19 @@ Result<VOID, Error> TlsClient::VerifyFinished(TlsBuffer &reader)
 		return Result<VOID, Error>::Err(verifyResult, Error::Tls_VerifyFinishedFailed);
 	LOG_DEBUG("Computed verify data for Finished, size: %d bytes", verify.GetSize());
 
-	if (Memory::Compare(verify.GetBuffer(), reader.GetBuffer() + reader.GetReadPosition(), server_finished_size) != 0)
+	// Constant-time compare: the Finished verify data is a MAC. A short-circuiting compare
+	// (memcmp returns on the first differing byte) leaks a timing oracle on the tag.
 	{
-		LOG_DEBUG("Finished verification failed for client: %p, expected size: %d, actual size: %d", this, verify.GetSize(), server_finished_size);
-		return Result<VOID, Error>::Err(Error::Tls_VerifyFinishedFailed);
+		const UINT8 *expected = (const UINT8 *)verify.GetBuffer();
+		const UINT8 *actual = (const UINT8 *)reader.GetBuffer() + reader.GetReadPosition();
+		UINT8 diff = 0;
+		for (INT32 i = 0; i < server_finished_size; i++)
+			diff |= expected[i] ^ actual[i];
+		if (diff != 0)
+		{
+			LOG_DEBUG("Finished verification failed for client: %p, expected size: %d, actual size: %d", this, verify.GetSize(), server_finished_size);
+			return Result<VOID, Error>::Err(Error::Tls_VerifyFinishedFailed);
+		}
 	}
 	LOG_DEBUG("Finished verification succeeded for client: %p", this);
 	return Result<VOID, Error>::Ok();

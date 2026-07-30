@@ -150,6 +150,7 @@ struct Error
 		ChaCha20_DecodeFailed = 63,		 // Poly1305 authentication failed
 		ChaCha20_GenerateKeyFailed = 64, // invalid nonce size in Poly1305 key generation
 		ChaCha20_KeySetupFailed = 65,	 // invalid key size (must be 128 or 256 bits)
+		ChaCha20_EncodeFailed = 66,		 // record encryption output buffer too small
 
 		// -------------------------
 		// TlsCipher errors (70–73)
@@ -158,6 +159,7 @@ struct Error
 		TlsCipher_ComputePreKeyFailed = 71,	   // premaster key computation failed
 		TlsCipher_ComputeKeyFailed = 72,	   // key derivation failed
 		TlsCipher_DecodeFailed = 73,		   // record decryption failed
+		TlsCipher_EncodeFailed = 67,		   // record encryption failed
 		TlsCipher_ComputeVerifyFailed = 86,	   // verify data computation failed
 
 		// -------------------------

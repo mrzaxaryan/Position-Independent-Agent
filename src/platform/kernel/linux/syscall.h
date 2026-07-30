@@ -26,6 +26,8 @@
 #include "platform/kernel/linux/syscall.riscv32.h"
 #elif defined(ARCHITECTURE_MIPS64)
 #include "platform/kernel/linux/syscall.mips64.h"
+#elif defined(ARCHITECTURE_MIPS)
+#include "platform/kernel/linux/syscall.mips.h"
 #else
 #error "Unsupported architecture"
 #endif
@@ -43,7 +45,7 @@ constexpr INT32 STDERR_FILENO = 2;
 constexpr INT32 O_RDONLY = 0x0000;
 constexpr INT32 O_WRONLY = 0x0001;
 constexpr INT32 O_RDWR = 0x0002;
-#if defined(ARCHITECTURE_MIPS64)
+#if defined(ARCHITECTURE_MIPS64) || defined(ARCHITECTURE_MIPS)
 // MIPS Linux inherited IRIX/SVR4 values which differ from the generic ABI
 constexpr INT32 O_CREAT = 0x0100;
 constexpr INT32 O_TRUNC = 0x0200;
@@ -56,7 +58,7 @@ constexpr INT32 O_APPEND = 0x0400;
 constexpr INT32 O_NONBLOCK = 0x0800;
 #endif
 
-#if defined(ARCHITECTURE_X86_64) || defined(ARCHITECTURE_I386) || defined(ARCHITECTURE_MIPS64)
+#if defined(ARCHITECTURE_X86_64) || defined(ARCHITECTURE_I386) || defined(ARCHITECTURE_MIPS64) || defined(ARCHITECTURE_MIPS)
 constexpr INT32 O_DIRECTORY = 0x10000;
 #elif defined(ARCHITECTURE_AARCH64) || defined(ARCHITECTURE_ARMV7A) || defined(ARCHITECTURE_RISCV64) || defined(ARCHITECTURE_RISCV32)
 constexpr INT32 O_DIRECTORY = 0x4000;
@@ -96,7 +98,7 @@ constexpr INT32 PROT_EXEC = 0x04;
 // Memory mapping flags
 constexpr INT32 MAP_SHARED = 0x01;
 constexpr INT32 MAP_PRIVATE = 0x02;
-#if defined(ARCHITECTURE_MIPS64)
+#if defined(ARCHITECTURE_MIPS64) || defined(ARCHITECTURE_MIPS)
 constexpr INT32 MAP_ANONYMOUS = 0x0800;
 #else
 constexpr INT32 MAP_ANONYMOUS = 0x20;
@@ -108,7 +110,7 @@ constexpr INT32 CLOCK_REALTIME = 0;
 constexpr INT32 CLOCK_MONOTONIC = 1;
 
 // Socket options
-#if defined(ARCHITECTURE_MIPS64)
+#if defined(ARCHITECTURE_MIPS64) || defined(ARCHITECTURE_MIPS)
 // MIPS Linux inherited IRIX/SVR4 socket option values
 constexpr INT32 SOL_SOCKET = 0xFFFF;
 constexpr INT32 SO_ERROR = 0x1007;
@@ -137,7 +139,7 @@ constexpr INT32 F_SETFL = 4;
 
 // errno values
 constexpr INT32 EEXIST = 17;
-#if defined(ARCHITECTURE_MIPS64)
+#if defined(ARCHITECTURE_MIPS64) || defined(ARCHITECTURE_MIPS)
 constexpr INT32 EINPROGRESS = 150;
 #else
 constexpr INT32 EINPROGRESS = 115;
@@ -150,7 +152,7 @@ constexpr INT16 POLLERR = 0x0008;
 constexpr INT16 POLLHUP = 0x0010;
 
 // PTY flags
-#if defined(ARCHITECTURE_MIPS64)
+#if defined(ARCHITECTURE_MIPS64) || defined(ARCHITECTURE_MIPS)
 constexpr INT32 O_NOCTTY  = 0x800;
 #else
 constexpr INT32 O_NOCTTY  = 0x100;

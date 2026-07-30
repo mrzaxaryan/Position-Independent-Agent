@@ -136,7 +136,7 @@ if(NOT EXISTS "${_pt_build_dir}/CMakeCache.txt")
             -DCMAKE_BUILD_TYPE=Release
             -DCMAKE_C_COMPILER=${_pt_compiler_dir}/clang
             -DCMAKE_CXX_COMPILER=${_pt_compiler_dir}/clang++
-            -DSTATIC_LINK=ON
+            -DSTATIC_LINK=OFF
         RESULT_VARIABLE _pt_cfg_rc
         OUTPUT_VARIABLE _pt_cfg_out
         ERROR_VARIABLE  _pt_cfg_err

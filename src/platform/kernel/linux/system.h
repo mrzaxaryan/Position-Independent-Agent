@@ -22,6 +22,8 @@
 #include "platform/kernel/linux/system.riscv32.h"
 #elif defined(ARCHITECTURE_MIPS64)
 #include "platform/kernel/linux/system.mips64.h"
+#elif defined(ARCHITECTURE_MIPS)
+#include "platform/kernel/linux/system.mips.h"
 #else
 #error "Unsupported architecture"
 #endif

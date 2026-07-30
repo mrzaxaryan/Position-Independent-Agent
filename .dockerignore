@@ -1,0 +1,11 @@
+# Stale host build artifacts must not enter the container image.
+#
+# build/ holds a CMakeCache.txt baked with host absolute paths. Once `COPY . /src`
+# drags it into the container, in-container CMake rejects it ("source does not
+# match the one used to generate cache"), the agent build fails, and deploy.sh
+# silently stages the pre-existing (stale) binaries as if it succeeded.
+# Keep all build output, prior artifacts, and caches out of the context.
+build/
+dist/
+.docker-cache/
+.git/

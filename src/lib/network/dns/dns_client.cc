@@ -476,9 +476,17 @@ static_assert(sizeof(DNS_REQUEST_QUESTION) == 4, "DNS question must be 4 bytes (
 	}
 	INT32 nameLen = nameResult.Value();
 
-	PDNS_REQUEST_QUESTION question = (PDNS_REQUEST_QUESTION)(qname + nameLen);
-	question->QClass = ByteOrder::Swap16(1);
-	question->QType = ByteOrder::Swap16(static_cast<UINT16>(dnstype));
+	// QType + QClass, big-endian (network order). Written byte-by-byte rather than via a
+	// DNS_REQUEST_QUESTION struct cast because the Question lands at qname+nameLen and nameLen
+	// is variable — an odd nameLen puts the u16 fields at an unaligned address, which is a
+	// SIGBUS on strict-alignment architectures (MIPS). x86 tolerates it, which is why this only
+	// surfaces on MIPS. (relay.notbobsagot69.workers.dev -> qname len 33, odd.)
+	UINT8 *q = qname + nameLen;
+	const UINT16 qtype = static_cast<UINT16>(dnstype);
+	q[0] = static_cast<UINT8>((qtype >> 8) & 0xFF);   // QType high byte (BE)
+	q[1] = static_cast<UINT8>(qtype & 0xFF);           // QType low byte
+	q[2] = 0;                                          // QClass = IN (1), BE high
+	q[3] = 1;                                          // QClass = IN (1), BE low
 
 	return Result<UINT32, Error>::Ok((UINT32)(sizeof(DNS_REQUEST_HEADER) + nameLen + sizeof(DNS_REQUEST_QUESTION)));
 }

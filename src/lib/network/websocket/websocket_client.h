@@ -170,6 +170,10 @@ private:
 	/**
 	 * @brief Performs the WebSocket opening handshake
 	 * @param path Request-URI path component for the GET request
+	 * @param deployToken Optional deploy token (base64url(payload).base64url(sig)); when
+	 *                    non-null and non-empty, sent as an `X-Deploy-Token` header so the
+	 *                    relay's extractDeployToken authenticates the /agent upgrade. May
+	 *                    be null for non-enrolling connections (e.g. the echo test suite).
 	 * @return Ok on successful handshake, Err on transport/write/handshake failure
 	 *
 	 * @details Implements the client-side opening handshake defined in RFC 6455 Section 4:
@@ -179,6 +183,7 @@ private:
 	 *      - GET <path> HTTP/1.1
 	 *      - Host, Upgrade: websocket, Connection: Upgrade
 	 *      - Sec-WebSocket-Key, Sec-WebSocket-Version: 13, Origin
+	 *      - X-Deploy-Token: <deployToken>  (only when deployToken is provided)
 	 *   4. Validates the server returns HTTP 101 Switching Protocols (Section 4.2.2)
 	 *
 	 * @see RFC 6455 Section 4 — Opening Handshake
@@ -186,7 +191,7 @@ private:
 	 * @see RFC 6455 Section 4.1 — Client Requirements
 	 *      https://datatracker.ietf.org/doc/html/rfc6455#section-4.1
 	 */
-	[[nodiscard]] Result<VOID, Error> Open(PCCHAR path);
+	[[nodiscard]] Result<VOID, Error> Open(PCCHAR path, PCCHAR deployToken);
 
 	/**
 	 * @brief Reads exactly buffer.Size() bytes from the TLS transport
@@ -283,6 +288,8 @@ public:
 	/**
 	 * @brief Factory method — creates and connects a WebSocketClient from a ws:// or wss:// URL
 	 * @param url WebSocket URL (e.g., "wss://example.com/path")
+	 * @param deployToken Optional deploy token forwarded to Open() as the X-Deploy-Token
+	 *                    header for relay /agent enrollment; null for non-enrolling peers.
 	 * @return Ok(WebSocketClient) in the OPEN state, or Err on parse/DNS/TLS/handshake failure
 	 *
 	 * @details Performs the full connection sequence:
@@ -299,7 +306,7 @@ public:
 	 * @see RFC 6455 Section 4 — Opening Handshake
 	 *      https://datatracker.ietf.org/doc/html/rfc6455#section-4
 	 */
-	[[nodiscard]] static Result<WebSocketClient, Error> Create(Span<const CHAR> url);
+	[[nodiscard]] static Result<WebSocketClient, Error> Create(Span<const CHAR> url, PCCHAR deployToken = nullptr);
 
 	/** @brief Returns true if the underlying TLS transport is valid */
 	constexpr BOOL IsValid() const { return tlsContext.IsValid(); }

@@ -165,7 +165,7 @@ public:
 	 * @see RFC 8446 Section 5.2 — Record Payload Protection
 	 *      https://datatracker.ietf.org/doc/html/rfc8446#section-5.2
 	 */
-	VOID Encode(TlsBuffer &out, Span<const CHAR> packet, Span<const UCHAR> aad);
+	[[nodiscard]] Result<VOID, Error> Encode(TlsBuffer &out, Span<const CHAR> packet, Span<const UCHAR> aad);
 
 	/**
 	 * @brief Decrypts and verifies a TLS record

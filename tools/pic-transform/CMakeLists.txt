@@ -10,6 +10,18 @@ endif()
 # =============================================================================
 # Find LLVM
 # =============================================================================
+# Official LLVM release tarballs reference zstd::libzstd_static in LLVMExports.
+# Distro packages often only ship zstd::libzstd_shared — provide a compatible alias.
+if(NOT TARGET zstd::libzstd_static)
+	find_library(_PIR_ZSTD_LIB NAMES zstd)
+	if(_PIR_ZSTD_LIB)
+		add_library(zstd::libzstd_static UNKNOWN IMPORTED GLOBAL)
+		set_target_properties(zstd::libzstd_static PROPERTIES
+			IMPORTED_LOCATION "${_PIR_ZSTD_LIB}")
+	endif()
+	unset(_PIR_ZSTD_LIB)
+endif()
+
 # Point LLVM_DIR to the cmake config directory, e.g.:
 #   cmake -B build -DLLVM_DIR=/usr/lib/llvm-22/lib/cmake/llvm
 #   cmake -B build -DLLVM_DIR="D:/git/clang+llvm-22.x/lib/cmake/llvm"
@@ -62,7 +74,14 @@ if(NOT LLVM_ENABLE_PLUGINS)
 	if(NOT LLVM_ENABLE_RTTI)
 		target_compile_options(pic-transform PRIVATE -fno-rtti)
 	endif()
-	target_link_libraries(pic-transform PRIVATE ${LLVM_LIBS})
+	# Distros (e.g. Arch) ship component libs as LTO bitcode archives that plain ld
+	# cannot link; prefer the monolithic shared libLLVM-<major>.so in that case.
+	find_library(_PT_LLVM_SHARED NAMES "LLVM-${LLVM_VERSION_MAJOR}" LLVM)
+	if(_PT_LLVM_SHARED)
+		target_link_libraries(pic-transform PRIVATE ${_PT_LLVM_SHARED})
+	else()
+		target_link_libraries(pic-transform PRIVATE ${LLVM_LIBS})
+	endif()
 
 	if(STATIC_LINK)
 		message(STATUS "[pic-transform] Static linking enabled")
