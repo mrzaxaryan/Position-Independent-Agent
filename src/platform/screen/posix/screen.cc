@@ -505,7 +505,7 @@ constexpr USIZE DRM_IOCTL_MODE_MAP_DUMB     = 0xC01064B3;
 
 /// DRM GEM close: _IOW('d', 0x09, drm_gem_close)
 /// MIPS _IOW direction = 4 at bit 29; standard _IOW direction = 1 at bit 30
-#if defined(ARCHITECTURE_MIPS64)
+#if defined(ARCHITECTURE_MIPS64) || defined(ARCHITECTURE_MIPS)
 constexpr USIZE DRM_IOCTL_GEM_CLOSE         = 0x80086409;
 #else
 constexpr USIZE DRM_IOCTL_GEM_CLOSE         = 0x40086409;
@@ -963,7 +963,7 @@ static Result<VOID, Error> DrmCapture(const ScreenDevice &device, Span<RGB> buff
 constexpr UINT16 X11_AF_UNIX = 1;
 
 /// @brief Stream socket type for X11 (architecture-dependent)
-#if defined(ARCHITECTURE_MIPS64)
+#if defined(ARCHITECTURE_MIPS64) || defined(ARCHITECTURE_MIPS)
 constexpr INT32 X11_SOCK_STREAM = 2;
 #else
 constexpr INT32 X11_SOCK_STREAM = 1;
