@@ -62,13 +62,13 @@ jobs:
           - { platform: ios, arch: aarch64, ext: "" }
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Cache LLVM
         id: cache-llvm
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: /opt/llvm
           key: llvm-${{ env.LLVM_VERSION }}-linux-x64
@@ -118,7 +118,7 @@ jobs:
           [ -n "$bin_file" ] && cp "$bin_file" "artifacts/$name.bin"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: release-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
           retention-days: 1
@@ -131,10 +131,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           path: artifacts
           pattern: release-*
