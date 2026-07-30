@@ -24,7 +24,7 @@ set(PIR_BASE_FLAGS
 # -mno-stack-arg-probe: x86/ARM specific, silently ignored on most targets
 # -mno-implicit-float: not supported on MIPS targets (Clang errors with -Werror)
 list(APPEND PIR_BASE_FLAGS -mno-stack-arg-probe)
-if(NOT PIR_ARCH STREQUAL "mips64")
+if(NOT PIR_ARCH MATCHES "^mips")
     list(APPEND PIR_BASE_FLAGS -mno-implicit-float)
 endif()
 
@@ -33,9 +33,9 @@ endif()
 # direct addressing without GOT/PLT sections.
 # -G0 disables the small data section (.sdata/.sbss): at -O0 the binary is
 # large enough that GP-relative offsets overflow the 16-bit R_MIPS_GPREL16 range.
-if(PIR_ARCH STREQUAL "mips64")
+if(PIR_ARCH MATCHES "^mips")
     list(APPEND PIR_BASE_FLAGS -mno-abicalls -fno-pic -G0)
-    pir_log_debug("MIPS64: -mno-abicalls -fno-pic -G0 (disable GOT-relative addressing and small data)")
+    pir_log_debug("MIPS: -mno-abicalls -fno-pic -G0 (disable GOT-relative addressing and small data)")
 endif()
 
 # Build-type-specific
@@ -74,7 +74,7 @@ set(PIR_BASE_LINK_FLAGS -nostdlib -fno-jump-tables)
 # -no-pie overrides the Clang driver's default -pie for Linux targets; without
 # it the LTO backend attempts PIC code generation which fatally conflicts with
 # -mno-abicalls ("position-independent code requires '-mabicalls'").
-if(PIR_ARCH STREQUAL "mips64")
+if(PIR_ARCH MATCHES "^mips")
     list(APPEND PIR_BASE_LINK_FLAGS -mno-abicalls -fno-pic -no-pie -G0)
 endif()
 

@@ -49,7 +49,7 @@ PVOID Allocator::AllocateMemory(USIZE size)
 	INT32 prot = PROT_READ | PROT_WRITE;
 	INT32 flags = MAP_PRIVATE | MAP_ANONYMOUS;
 
-#if (defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)) && (defined(ARCHITECTURE_I386) || defined(ARCHITECTURE_ARMV7A) || defined(ARCHITECTURE_RISCV32))
+#if (defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)) && (defined(ARCHITECTURE_I386) || defined(ARCHITECTURE_ARMV7A) || defined(ARCHITECTURE_RISCV32) || defined(ARCHITECTURE_MIPS))
 	// 32-bit Linux architectures use mmap2 with page-shifted offset
 	USIZE offset = 0;
 	SSIZE result = System::Call(SYS_MMAP2, (USIZE)addr, totalSize, prot, flags, -1, offset);

@@ -52,6 +52,12 @@ if(PIR_ARCH STREQUAL "mips64")
     pir_log_debug_at("linux" "mips64: custom linker script (rodata->text merge)")
 endif()
 
+# MIPS o32 (32-bit): same rodata/data/bss/got -> .text merge for PIC.
+if(PIR_ARCH STREQUAL "mips")
+    pir_add_link_flags(-T,${PIR_ROOT_DIR}/cmake/data/linker.mips.ld)
+    pir_log_debug_at("linux" "mips: custom linker script (rodata->text merge)")
+endif()
+
 if(PIR_HOST_LLD)
 	list(APPEND PIR_BASE_LINK_FLAGS -fuse-ld=${PIR_HOST_LLD})
 else()
