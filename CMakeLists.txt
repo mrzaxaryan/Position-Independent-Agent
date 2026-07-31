@@ -42,9 +42,11 @@ include(${CMAKE_SOURCE_DIR}/cmake/Common.cmake)
 # =============================================================================
 set(BUILD_NUMBER "0" CACHE STRING "Agent build number")
 set(COMMIT_HASH "00000000" CACHE STRING "Agent commit hash")
+set(RELAY_URL "https://relay.nostdlib.workers.dev/agent" CACHE STRING "Relay /agent endpoint the beacon connects to (baked at build; override with -DRELAY_URL=...)")
 list(APPEND PIR_DEFINES
     AGENT_BUILD_NUMBER=${BUILD_NUMBER}
     AGENT_COMMIT_HASH="${COMMIT_HASH}"
+    AGENT_RELAY_URL="${RELAY_URL}"
 )
 
 include(${PIR_ROOT_DIR}/cmake/Target.cmake)

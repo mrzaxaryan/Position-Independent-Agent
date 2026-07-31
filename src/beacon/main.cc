@@ -30,9 +30,13 @@ static const CHAR *CommandTypeName(UINT8 type)
     }
 }
 
+#ifndef AGENT_RELAY_URL
+#define AGENT_RELAY_URL "https://relay.nostdlib.workers.dev/agent"
+#endif
+
 INT32 start()
 {
-    const CHAR url[] = "https://relay.nostdlib.workers.dev/agent";
+    const CHAR url[] = AGENT_RELAY_URL;
 
     Context context;
     UINT32 connectionAttempt = 0;
