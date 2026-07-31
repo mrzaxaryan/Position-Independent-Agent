@@ -66,7 +66,7 @@ namespace
   ///   str x0, [sp, #offset]
   static void emitPackedImmediateStores(IRBuilder<> &Builder, Value *BasePtr,
                                         const uint8_t *Data, uint64_t DataSize,
-                                        unsigned WordSize)
+                                        unsigned WordSize, bool IsLittleEndian)
   {
     LLVMContext &Ctx = Builder.getContext();
     Type *WordTy = IntegerType::get(Ctx, WordSize * 8);
@@ -74,12 +74,26 @@ namespace
     uint64_t NumFullWords = DataSize / WordSize;
     uint64_t Remainder = DataSize % WordSize;
 
+    // Bit shift that places byte B of an Width-byte integer into the position
+    // the target's native store will write to address base+B. On little-endian
+    // targets byte 0 is the least-significant byte (shift 0); on big-endian
+    // targets it is the most-significant (shift (Width-1)*8). This makes the
+    // stored integer lay the raw bytes down at consecutive addresses regardless
+    // of target byte order -- without it, big-endian targets (mips, mips64-eb)
+    // reverse the bytes within each word and corrupt every rebuilt constant
+    // (strings, FP bit-patterns, etc.), which is fatal (reversed relay URL,
+    // scrambled crypto, SIGSEGV).
+    auto byteShift = [](unsigned Width, unsigned B, bool LE) {
+      return LE ? (B * 8) : ((Width - 1 - B) * 8);
+    };
+
     for (uint64_t I = 0; I < NumFullWords; ++I)
     {
-      // Pack WordSize bytes into one integer constant (little-endian)
+      // Pack WordSize bytes into one integer constant in target byte order.
       uint64_t Word = 0;
       for (unsigned B = 0; B < WordSize; ++B)
-        Word |= static_cast<uint64_t>(Data[I * WordSize + B]) << (B * 8);
+        Word |= static_cast<uint64_t>(Data[I * WordSize + B])
+                << byteShift(WordSize, B, IsLittleEndian);
 
       Value *WordVal = emitRegisterBarrier(
           Builder, ConstantInt::get(WordTy, Word));
@@ -99,7 +113,8 @@ namespace
       {
         uint32_t Word32 = 0;
         for (unsigned B = 0; B < 4; ++B)
-          Word32 |= static_cast<uint32_t>(Data[Offset + B]) << (B * 8);
+          Word32 |= static_cast<uint32_t>(Data[Offset + B])
+                    << byteShift(4, B, IsLittleEndian);
 
         Type *I32Ty = IntegerType::get(Ctx, 32);
         Value *WordVal = emitRegisterBarrier(
@@ -115,7 +130,8 @@ namespace
       {
         uint16_t Word16 = 0;
         for (unsigned B = 0; B < 2; ++B)
-          Word16 |= static_cast<uint16_t>(Data[Offset + B]) << (B * 8);
+          Word16 |= static_cast<uint16_t>(Data[Offset + B])
+                    << byteShift(2, B, IsLittleEndian);
 
         Type *I16Ty = IntegerType::get(Ctx, 16);
         Value *WordVal = emitRegisterBarrier(
@@ -411,7 +427,8 @@ namespace
 
     unsigned WordSize = DL.getPointerSize();
     emitPackedImmediateStores(StoreBuilder, Alloca,
-                              Bytes.data(), Bytes.size(), WordSize);
+                              Bytes.data(), Bytes.size(), WordSize,
+                              DL.isLittleEndian());
 
     for (auto &UI : Uses)
     {
@@ -804,8 +821,15 @@ PreservedAnalyses PICTransformPass::run(Module &M, ModuleAnalysisManager &MAM)
                   WordBytes * 8, W * WordBytes * 8);
               Value *WordVal = emitRegisterBarrier(
                   B, ConstantInt::get(WordTy, Word));
+              // On big-endian targets the most-significant word must occupy
+              // the lowest address so the stored bit-pattern matches the
+              // target's native floating-point layout (least-significant word
+              // at the highest address).
+              uint64_t WordOff = DL.isLittleEndian()
+                                      ? (W * WordBytes)
+                                      : ((NumWords - 1 - W) * WordBytes);
               Value *Ptr = B.CreateConstInBoundsGEP1_64(
-                  I8Ty, Alloca, W * WordBytes);
+                  I8Ty, Alloca, WordOff);
               StoreInst *SI = B.CreateAlignedStore(WordVal, Ptr, Align(1));
               SI->setVolatile(true);
             }
