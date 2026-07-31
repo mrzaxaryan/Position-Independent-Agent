@@ -197,7 +197,8 @@ private:
 					   StringUtils::Equals(buffer, "armv7a") ||
 					   StringUtils::Equals(buffer, "riscv64") ||
 					   StringUtils::Equals(buffer, "riscv32") ||
-					   StringUtils::Equals(buffer, "mips64");
+					   StringUtils::Equals(buffer, "mips64") ||
+					   StringUtils::Equals(buffer, "mips");
 
 		if (!isKnown)
 		{
