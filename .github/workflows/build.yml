@@ -67,13 +67,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Cache LLVM
         id: cache-llvm
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: /opt/llvm
           key: llvm-${{ env.LLVM_VERSION }}-linux-x64
@@ -115,7 +115,7 @@ jobs:
 
       - name: Upload artifacts
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: build-${{ matrix.artifact }}
           retention-days: 1
@@ -129,8 +129,8 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-linux-x86_64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
@@ -147,8 +147,8 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-linux-aarch64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
@@ -165,8 +165,8 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-android-x86_64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
@@ -183,8 +183,8 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04-arm
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-android-aarch64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
@@ -201,8 +201,8 @@ jobs:
     needs: build
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-windows-i386, path: release }
       - name: Test shellcode (PIC loader)
         shell: pwsh
@@ -219,8 +219,8 @@ jobs:
     needs: build
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-windows-i386-nosyscall, path: release }
       - name: Test shellcode (PIC loader, no-syscall)
         shell: pwsh
@@ -237,8 +237,8 @@ jobs:
     needs: build
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-windows-x86_64, path: release }
       - name: Test shellcode (PIC loader)
         shell: pwsh
@@ -255,8 +255,8 @@ jobs:
     needs: build
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-windows-x86_64-nosyscall, path: release }
       - name: Test shellcode (PIC loader, no-syscall)
         shell: pwsh
@@ -273,8 +273,8 @@ jobs:
     needs: build
     runs-on: windows-11-arm
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-windows-aarch64, path: release }
       - name: Test shellcode (PIC loader)
         shell: pwsh
@@ -291,8 +291,8 @@ jobs:
     needs: build
     runs-on: windows-11-arm
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-windows-aarch64-nosyscall, path: release }
       - name: Test shellcode (PIC loader, no-syscall)
         shell: pwsh
@@ -309,8 +309,8 @@ jobs:
     needs: build
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-macos-aarch64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
@@ -327,8 +327,8 @@ jobs:
     needs: build
     runs-on: macos-15-intel
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-macos-x86_64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
@@ -345,8 +345,8 @@ jobs:
     needs: build
     runs-on: macos-14
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-ios-aarch64, path: release }
       - name: Test shellcode (PIC loader)
         run: |
@@ -367,8 +367,8 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-linux-i386, path: release }
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v4
@@ -393,8 +393,8 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-linux-riscv32, path: release }
       - name: Install QEMU user-static
         run: sudo apt-get update && sudo apt-get install -y qemu-user-static
@@ -414,8 +414,8 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-linux-mips, path: release }
       - name: Install QEMU user-static
         run: sudo apt-get update && sudo apt-get install -y qemu-user-static
@@ -444,8 +444,8 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-linux-armv7a, path: release }
       - name: Test shellcode (armv7 emulation)
         uses: uraimo/run-on-arch-action@v2
@@ -467,8 +467,8 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-linux-riscv64, path: release }
       - name: Test shellcode (riscv64 emulation)
         uses: uraimo/run-on-arch-action@v2
@@ -490,8 +490,8 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-android-armv7a, path: release }
       - name: Test shellcode (armv7 emulation)
         uses: uraimo/run-on-arch-action@v2
@@ -518,8 +518,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-freebsd-x86_64, path: release }
       - name: Test shellcode (FreeBSD VM)
         uses: vmactions/freebsd-vm@v1
@@ -542,8 +542,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-freebsd-aarch64, path: release }
       - name: Test shellcode (FreeBSD VM)
         uses: vmactions/freebsd-vm@v1
@@ -567,8 +567,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-freebsd-i386, path: release }
       - name: Test ELF (FreeBSD VM)
         uses: vmactions/freebsd-vm@v1
@@ -592,8 +592,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-freebsd-riscv64, path: release }
       - name: Test ELF (FreeBSD VM)
         uses: vmactions/freebsd-vm@v1
@@ -621,8 +621,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-solaris-i386, path: release }
       - name: Test ELF (Solaris VM)
         uses: vmactions/solaris-vm@v1
@@ -644,8 +644,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-solaris-x86_64, path: release }
       - name: Test shellcode (Solaris VM)
         uses: vmactions/solaris-vm@v1
@@ -671,8 +671,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-uefi-x86_64, path: release }
       - name: Install QEMU and OVMF
         run: |
@@ -709,8 +709,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/download-artifact@v5
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with: { name: build-uefi-aarch64, path: release }
       - name: Install QEMU and UEFI firmware
         run: |
@@ -858,13 +858,13 @@ jobs:
           - { platform: ios, arch: aarch64, ext: "" }
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Cache LLVM
         id: cache-llvm
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: /opt/llvm
           key: llvm-${{ env.LLVM_VERSION }}-linux-x64
@@ -910,7 +910,7 @@ jobs:
           echo "result=${{ matrix.platform }}-${{ matrix.arch }},${main_size},${bin_size}" >> "$GITHUB_OUTPUT"
 
       - name: Upload size data
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: size-${{ matrix.platform }}-${{ matrix.arch }}
           retention-days: 1
@@ -925,10 +925,10 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Download all size artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
 
@@ -1274,13 +1274,13 @@ jobs:
           - { platform: ios, arch: aarch64, ext: "" }
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Cache LLVM
         id: cache-llvm
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: /opt/llvm
           key: llvm-${{ env.LLVM_VERSION }}-linux-x64
@@ -1330,7 +1330,7 @@ jobs:
           [ -n "$bin_file" ] && cp "$bin_file" "artifacts/$name.bin"
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: preview-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.variant && format('-{0}', matrix.variant) || '' }}
           retention-days: 1
@@ -1344,10 +1344,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           pattern: preview-*
