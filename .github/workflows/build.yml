@@ -81,6 +81,11 @@ jobs:
         if: steps.cache-llvm.outputs.cache-hit != 'true'
         run: |
           set -e
+          if [ -x /opt/llvm/bin/clang ]; then
+            echo "LLVM already present at /opt/llvm — skipping download"
+            /opt/llvm/bin/clang --version
+            exit 0
+          fi
           TARBALL="LLVM-${{ env.LLVM_VERSION }}-Linux-X64.tar.xz"
           URL="https://github.com/llvm/llvm-project/releases/download/llvmorg-${{ env.LLVM_VERSION }}/${TARBALL}"
           wget -q "$URL"
@@ -90,6 +95,10 @@ jobs:
 
       - name: Install build tools
         run: |
+          if command -v cmake >/dev/null && command -v ninja >/dev/null; then
+            echo "cmake + ninja already present — skipping apt-get"
+            exit 0
+          fi
           sudo apt-get update
           sudo apt-get install -y ninja-build cmake
 
@@ -97,16 +106,37 @@ jobs:
         run: echo "/opt/llvm/bin" >> $GITHUB_PATH
 
       - name: Build all optimization levels
+        env:
+          DEPLOY_OPTS: ${{ env.DEPLOY_OPTS }}
+          RELAY_URL: ${{ env.RELAY_URL }}
+          BUILD_NUMBER: ${{ env.BUILD_NUMBER }}
+          COMMIT_HASH: ${{ env.COMMIT_HASH }}
         run: |
           OPTS="${{ matrix.opts }}"
+          if [ -n "${DEPLOY_OPTS:-}" ]; then
+            OPTS="$DEPLOY_OPTS"
+          fi
           : "${OPTS:=O0 O1 O2 O3 Os Oz Og}"
+          RELAY_CMAKE=()
+          if [ -n "${RELAY_URL:-}" ]; then
+            RELAY_CMAKE=(-DRELAY_URL="${RELAY_URL}")
+          fi
+          BUILD_NUMBER="${BUILD_NUMBER:-$(git rev-list --count HEAD)}"
+          COMMIT_HASH="${COMMIT_HASH:-$(git rev-parse --short=8 HEAD)}"
+          META_CMAKE=(-DBUILD_NUMBER="${BUILD_NUMBER}" -DCOMMIT_HASH="${COMMIT_HASH}")
+          echo "Build metadata: BUILD_NUMBER=${BUILD_NUMBER} COMMIT_HASH=${COMMIT_HASH}"
           for opt in ${OPTS}; do
-            preset="test-${{ matrix.target }}-release"
+            # Deploy (RELAY_URL set) must bake the beacon, not the unit-test runner.
+            if [ -n "${RELAY_URL:-}" ]; then
+              preset="${{ matrix.target }}-release"
+            else
+              preset="test-${{ matrix.target }}-release"
+            fi
             build_dir="build/release"
             out_dir="release/${opt}"
             echo "=== Building -${opt} (${preset}) ${{ matrix.cmake_extra }} ==="
             rm -rf build
-            cmake --preset "${preset}" -DOPTIMIZATION_LEVEL=${opt} ${{ matrix.cmake_extra }}
+            cmake --preset "${preset}" -DOPTIMIZATION_LEVEL=${opt} "${RELAY_CMAKE[@]}" "${META_CMAKE[@]}" ${{ matrix.cmake_extra }}
             cmake --build --preset "${preset}"
             mkdir -p "${out_dir}"
             find "${build_dir}" -type f -not -path "*/cmake/*" -exec cp {} "${out_dir}/" \;
