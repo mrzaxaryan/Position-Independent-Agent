@@ -4,6 +4,12 @@
 
 include_guard(GLOBAL)
 
+# Big-endian MIPS32 o32: target mips-unknown-linux-gnu (e.g. Qualcomm Atheros
+# QCA953x / TP-Link ath79 big-endian routers) instead of the default
+# little-endian mipsel. The o32 ABI/syscall tables are identical for both byte
+# orders; only the endianness of emitted code/data differs (driven by the triple).
+option(PIR_MIPS_BIGENDIAN "Build big-endian MIPS32 o32 (mips-unknown-linux-gnu) instead of little-endian (mipsel-unknown-linux-gnu)" OFF)
+
 # =============================================================================
 # Target Triples
 # =============================================================================
@@ -25,6 +31,7 @@ set(_triple_solaris_aarch64 "aarch64-pc-solaris2.11")
 set(_triple_linux_riscv32    "riscv32-unknown-linux-gnu")
 set(_triple_linux_riscv64    "riscv64-unknown-linux-gnu")
 set(_triple_linux_mips64    "mips64el-unknown-linux-gnuabi64")
+set(_triple_linux_mips      "mipsel-unknown-linux-gnu")
 set(_triple_freebsd_i386    "i386-unknown-freebsd14.0")
 set(_triple_freebsd_x86_64  "x86_64-unknown-freebsd14.0")
 set(_triple_freebsd_aarch64 "aarch64-unknown-freebsd14.0")
@@ -53,6 +60,10 @@ set(_ext_ios "")
 # =============================================================================
 macro(pir_get_target_info)
     set(PIR_TRIPLE "${_triple_${PIR_PLATFORM}_${PIR_ARCH}}")
+    if(PIR_ARCH STREQUAL "mips" AND PIR_MIPS_BIGENDIAN)
+        string(REPLACE "mipsel-" "mips-" PIR_TRIPLE "${PIR_TRIPLE}")
+        pir_log_verbose("MIPS big-endian override: ${PIR_TRIPLE}")
+    endif()
     set(PIR_EXT "${_ext_${PIR_PLATFORM}}")
     if(NOT PIR_TRIPLE)
         message(FATAL_ERROR "[pir] ${PIR_PLATFORM}/${PIR_ARCH} is not a valid combination")

@@ -15,7 +15,7 @@ set(CMAKE_DEPENDS_USE_COMPILER TRUE)
 # =============================================================================
 # Build Options
 # =============================================================================
-set(ARCHITECTURE "x86_64" CACHE STRING "Target: i386, x86_64, armv7a, aarch64")
+set(ARCHITECTURE "x86_64" CACHE STRING "Target: i386, x86_64, armv7a, aarch64, riscv32, riscv64, mips64, mips")
 set(PLATFORM "windows" CACHE STRING "Target: windows, linux, uefi")
 set(BUILD_TYPE "release" CACHE STRING "Build type: debug, release")
 set(OPTIMIZATION_LEVEL "" CACHE STRING "Override optimization level (e.g., O2, Os)")
@@ -29,7 +29,7 @@ string(TOLOWER "${PLATFORM}" PIR_PLATFORM)
 string(TOLOWER "${BUILD_TYPE}" PIR_BUILD_TYPE)
 
 # Validate inputs
-set(_valid_archs i386 x86_64 armv7a aarch64 riscv32 riscv64 mips64)
+set(_valid_archs i386 x86_64 armv7a aarch64 riscv32 riscv64 mips64 mips)
 set(_valid_platforms windows linux macos uefi solaris freebsd android ios)
 
 if(NOT PIR_ARCH IN_LIST _valid_archs)
