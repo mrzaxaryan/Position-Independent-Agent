@@ -90,6 +90,9 @@ constexpr USIZE SYS_EXECVE     = 59;
 constexpr USIZE SYS_PGRPSYS    = 39;   // Multiplexed: subcode 3 = setsid
 constexpr USIZE SYS_KILL       = 37;
 constexpr USIZE SYS_PIPE       = 42;
+
+// User identity
+constexpr USIZE SYS_GETUID     = 24;
 constexpr USIZE SYS_WAITID     = 107;
 
 // Forksys subcodes

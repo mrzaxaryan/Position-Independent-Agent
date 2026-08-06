@@ -20,6 +20,7 @@ public:
 		RunTest(allPassed, &TestGetAgentPlatformKnownValue, "GetAgentPlatform returns known platform");
 		RunTest(allPassed, &TestGetOSVersion, "GetOSVersion returns non-empty string");
 		RunTest(allPassed, &TestGetHostname, "GetHostname returns non-empty string");
+		RunTest(allPassed, &TestGetUsername, "GetUsername returns non-empty string");
 		RunTest(allPassed, &TestGetArchitecture, "GetArchitecture returns known architecture");
 		RunTest(allPassed, &TestGetMachineUUID, "GetMachineUUID returns valid UUID");
 		RunTest(allPassed, &TestSystemInfoPopulated, "SystemInfo fields are populated");
@@ -142,6 +143,29 @@ private:
 		return true;
 	}
 
+	static BOOL TestGetUsername()
+	{
+		CHAR buffer[256];
+		Memory::Zero(buffer, sizeof(buffer));
+
+		auto result = Environment::GetUsername(Span<CHAR>(buffer, 255));
+
+		if (!result)
+		{
+#if defined(PLATFORM_UEFI)
+			// UEFI has no user concept; all other platforms resolve via env or getuid()+/etc/passwd
+			LOG_INFO("  GetUsername not available on this platform (expected)");
+			return true;
+#else
+			LOG_ERROR("GetUsername failed");
+			return false;
+#endif
+		}
+
+		LOG_INFO("  Username: %s (len=%llu)", buffer, (UINT64)result.Value());
+		return true;
+	}
+
 	static BOOL TestGetMachineUUID()
 	{
 		auto result = GetMachineUUID();
@@ -226,6 +250,17 @@ private:
 #endif
 		}
 
+		// Username may not be available on UEFI
+		if (info.Username[0] == '\0')
+		{
+#if defined(PLATFORM_UEFI)
+			LOG_INFO("  SystemInfo.Username empty (expected on this platform)");
+#else
+			LOG_ERROR("SystemInfo.Username is empty");
+			return false;
+#endif
+		}
+
 		if (info.Architecture[0] == '\0')
 		{
 			LOG_ERROR("SystemInfo.Architecture is empty");
@@ -244,8 +279,8 @@ private:
 			return false;
 		}
 
-		LOG_INFO("  SystemInfo: host=%s, arch=%s, agent_platform=%s, os_version=%s",
-				 info.Hostname, info.Architecture, info.AgentPlatform, info.OSVersion);
+		LOG_INFO("  SystemInfo: host=%s, user=%s, arch=%s, agent_platform=%s, os_version=%s",
+				 info.Hostname, info.Username, info.Architecture, info.AgentPlatform, info.OSVersion);
 
 		return true;
 	}

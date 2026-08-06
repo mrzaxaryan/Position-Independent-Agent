@@ -74,6 +74,9 @@ constexpr USIZE SYS_WAIT4      = SYSCALL_CLASS_UNIX | 7;
 constexpr USIZE SYS_KILL       = SYSCALL_CLASS_UNIX | 37;
 constexpr USIZE SYS_PIPE       = SYSCALL_CLASS_UNIX | 42;
 
+// User identity
+constexpr USIZE SYS_GETUID     = SYSCALL_CLASS_UNIX | 24;
+
 // =============================================================================
 // POSIX/BSD Constants
 // =============================================================================

@@ -18,6 +18,10 @@ VOID GetSystemInfo(SystemInfo *info)
 	if (!hostnameResult)
 		LOG_ERROR("Failed to retrieve hostname");
 
+	auto usernameResult = Environment::GetUsername(Span<CHAR>(info->Username, 255));
+	if (!usernameResult)
+		LOG_ERROR("Failed to retrieve username");
+
 	Environment::GetArchitecture(Span<CHAR>(info->Architecture, 31));
 	Environment::GetAgentPlatform(Span<CHAR>(info->AgentPlatform, 31));
 

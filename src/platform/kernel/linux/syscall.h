@@ -168,6 +168,9 @@ constexpr INT32 WNOHANG = 1;
 // Invalid file descriptor
 constexpr SSIZE INVALID_FD = -1;
 
+// *at syscall constants
+constexpr SSIZE AT_FDCWD = -100;
+
 // =============================================================================
 // Linux Structures
 // =============================================================================

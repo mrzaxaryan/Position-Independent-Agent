@@ -12,8 +12,7 @@
 
 #include "core/types/primitives.h"
 
-// riscv64 uses *at syscalls - AT_FDCWD (-100) means use current working dir
-constexpr SSIZE AT_FDCWD = -100;
+// riscv64 uses *at syscalls; AT_FDCWD (-100) is defined in the common linux/syscall.h
 constexpr INT32 AT_REMOVEDIR = 0x200;
 
 // File I/O

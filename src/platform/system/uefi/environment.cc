@@ -38,6 +38,14 @@ Result<USIZE, Error> Environment::GetHostname(Span<CHAR> buffer) noexcept
 	return Result<USIZE, Error>::Err(Error(Error::None));
 }
 
+Result<USIZE, Error> Environment::GetUsername(Span<CHAR> buffer) noexcept
+{
+	// UEFI has no OS user concept.
+	if (buffer.Size() > 0)
+		buffer[0] = '\0';
+	return Result<USIZE, Error>::Err(Error(Error::None));
+}
+
 USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept
 {
 #if defined(ARCHITECTURE_X86_64)
