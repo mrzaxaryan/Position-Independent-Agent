@@ -125,21 +125,21 @@ if (n >= 'a' && n <= 'z') n -= 32;
 
 The name boundary is detected by checking for `=` after the matched characters.
 
-### POSIX: extern environ
+### POSIX: /proc/self/environ
 
-POSIX provides the `environ` pointer — a null-terminated array of `"NAME=VALUE"` C strings. The runtime walks this array directly without calling `getenv()`.
+On Linux/Android the runtime reads `/proc/self/environ` — a null-terminated block of `"NAME=VALUE"` strings — directly via `openat`/`read` syscalls, without calling `getenv()`. On macOS/iOS/FreeBSD/Solaris the environment layer is unavailable.
 
 ## Platform Identification
 
-The `Environment` class provides compile-time and runtime system identification via `GetAgentPlatform()`, `GetOSVersion()`, `GetHostname()`, and `GetArchitecture()`.
+The `Environment` class provides compile-time and runtime system identification via `GetAgentPlatform()`, `GetOSVersion()`, `GetHostname()`, `GetUsername()`, and `GetArchitecture()`.
 
-| Platform | OS Version Source | Hostname Source |
-|---|---|---|
-| **Windows** | PEB `OSMajorVersion`/`OSMinorVersion`/`OSBuildNumber` | `COMPUTERNAME` env var |
-| **Linux/Android** | `uname` syscall | `HOSTNAME` env var / `/etc/hostname` |
-| **macOS/iOS/FreeBSD** | `sysctl` (kern.ostype + kern.osrelease) | `sysctl` kern.hostname |
-| **Solaris** | `utssys` → `/etc/release` fallback | `utssys` nodename → `/etc/nodename` |
-| **UEFI** | `"uefi"` (static) | empty (no hostname concept) |
+| Platform | OS Version Source | Hostname Source | Username Source |
+|---|---|---|---|
+| **Windows** | PEB `OSMajorVersion`/`OSMinorVersion`/`OSBuildNumber` | `COMPUTERNAME` env var | `USERNAME` env var |
+| **Linux/Android** | `uname` syscall | `HOSTNAME` env var / `/etc/hostname` | `USER`/`LOGNAME` env → uid (`/proc/self/status`) + `/etc/passwd` |
+| **macOS/iOS/FreeBSD** | `sysctl` (kern.ostype + kern.osrelease) | `sysctl` kern.hostname | `getuid()` + `/etc/passwd` (numeric uid if not in passwd) |
+| **Solaris** | `utssys` → `/etc/release` fallback | `utssys` nodename → `/etc/nodename` | `getuid()` + `/etc/passwd` |
+| **UEFI** | `"uefi"` (static) | empty (no hostname concept) | empty (no user concept) |
 
 ## Pseudo-Terminal (PTY) Creation
 
@@ -265,6 +265,7 @@ End-of-prompt detection: `'>'` on Windows (cmd.exe), `'$'` on POSIX (sh).
 | MachineID | SMBIOS UUID | `/etc/machine-id`/`sysctl`/`boot_id` | Stub |
 | Environment | PEB block walk | `/proc/self/environ` | Stub |
 | Hostname | `COMPUTERNAME` env var | env/file/`sysctl`/`utssys` | Stub |
+| Username | `USERNAME` env var | env/`getuid()`+`/etc/passwd`/uid | Stub |
 | OSVersion | PEB version fields | `uname`/`sysctl`/`utssys`+`/etc/release` | `"uefi"` |
 | Pipe | `CreatePipe` | `pipe()`/`pipe2()` | Not supported |
 | Process | `CreateProcessW` | `fork()`+`execve()` | Not supported |

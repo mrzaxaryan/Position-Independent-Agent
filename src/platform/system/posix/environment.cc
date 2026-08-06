@@ -354,7 +354,7 @@ Result<USIZE, Error> Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 // lives in Directory Service rather than /etc/passwd, and Android has no passwd
 // file, so those fall through to the numeric uid. Platform-independent: uses
 // only file I/O syscalls + UIntToStr.
-static Result<USIZE, Error> LookupUsernameByUid(UINT32 uid, Span<CHAR> buffer)
+static Result<USIZE, Error> LookupUsernameByUid(UINT32 uid, Span<CHAR> buffer) noexcept
 {
 	if (buffer.Size() == 0)
 		return Result<USIZE, Error>::Err(Error(Error::None));
@@ -443,9 +443,8 @@ static Result<USIZE, Error> LookupUsernameByUid(UINT32 uid, Span<CHAR> buffer)
 
 #if defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)
 // Read the real uid from /proc/self/status (the "Uid:" line). Avoids needing a
-// getuid syscall number per Linux architecture (including MIPS). Returns the uid
-// or (UINT32)-1 on failure.
-static UINT32 ReadUidFromProcStatus() noexcept
+// getuid syscall number per Linux architecture (including MIPS).
+static Result<UINT32, Error> ReadUidFromProcStatus() noexcept
 {
 	const CHAR *path = "/proc/self/status";
 #if defined(ARCHITECTURE_AARCH64) || defined(ARCHITECTURE_RISCV64) || defined(ARCHITECTURE_RISCV32)
@@ -456,13 +455,13 @@ static UINT32 ReadUidFromProcStatus() noexcept
 		fd = System::Call(SYS_OPENAT, (USIZE)-100, (USIZE)path, 0, 0);
 #endif
 	if (fd < 0)
-		return (UINT32)-1;
+		return Result<UINT32, Error>::Err(Error(Error::None));
 
 	CHAR status[4096];
 	SSIZE n = System::Call(SYS_READ, (USIZE)fd, (USIZE)status, sizeof(status) - 1);
 	System::Call(SYS_CLOSE, (USIZE)fd);
 	if (n <= 0)
-		return (UINT32)-1;
+		return Result<UINT32, Error>::Err(Error(Error::None));
 	status[n] = '\0';
 
 	// Find the line starting with "Uid:" and parse the first (real) uid.
@@ -483,14 +482,16 @@ static UINT32 ReadUidFromProcStatus() noexcept
 				uid = uid * 10 + (UINT32)(*q - '0');
 				q++;
 			}
-			return haveDigit ? uid : (UINT32)-1;
+			if (!haveDigit)
+				return Result<UINT32, Error>::Err(Error(Error::None));
+			return Result<UINT32, Error>::Ok(uid);
 		}
 		while (p < end && *p != '\n')
 			p++;
 		if (p < end)
 			p++;
 	}
-	return (UINT32)-1;
+	return Result<UINT32, Error>::Err(Error(Error::None));
 }
 #endif
 
@@ -507,9 +508,10 @@ Result<USIZE, Error> Environment::GetUsername(Span<CHAR> buffer) noexcept
 	// 2. Resolve by uid: /etc/passwd lookup, falling back to the uid as a string.
 #if defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)
 	// Read the uid from /proc (no getuid syscall needed; works on every arch).
-	UINT32 uid = ReadUidFromProcStatus();
-	if (uid == (UINT32)-1)
+	auto uidResult = ReadUidFromProcStatus();
+	if (!uidResult)
 		return Result<USIZE, Error>::Err(Error(Error::None));
+	UINT32 uid = uidResult.Value();
 #else
 	// macOS/iOS/FreeBSD/Solaris: getuid() (no /proc; env layer is stubbed here).
 	UINT32 uid = (UINT32)System::Call(SYS_GETUID);
