@@ -388,6 +388,28 @@ VOID Handle_ResetShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] U
     *(PUINT32)*response = StatusCode::StatusSuccess;
 }
 
+// Exit - gracefully terminate the agent.
+//
+// Acknowledges the operator, then signals the main loop to tear down. The main
+// loop sends this ACK, exits both of its while (!context.shouldExit) loops, and
+// returns from start(); WebSocketClient is released when it goes out of scope, and
+// Context::~Context frees any shell/screen-capture state before entry_point() calls
+// ExitProcess(). No platform-specific code lives here: termination flows through
+// the existing ExitProcess() abstraction, so this command is uniform across all
+// targets (on UEFI, ExitProcess() maps to EfiResetShutdown and powers off).
+VOID Handle_ExitCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
+{
+    LOG_INFO("Handling ExitCommand: operator requested agent termination.");
+
+    // Acknowledge so the operator knows the exit was received and will be honored.
+    *responseLength = sizeof(UINT32);
+    *response = new CHAR[*responseLength];
+    *(PUINT32)*response = StatusCode::StatusSuccess;
+
+    // Signal the main loop to stop after sending this response.
+    context->shouldExit = true;
+}
+
 // Gets the list of display devices and their information
 VOID Handle_GetDisplaysCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
