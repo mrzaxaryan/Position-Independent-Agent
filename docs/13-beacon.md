@@ -39,13 +39,15 @@ commandHandlers[CommandType::Command_ReadShell] = Handle_ReadShellCommand;
 commandHandlers[CommandType::Command_GetDisplays] = Handle_GetDisplaysCommand;
 commandHandlers[CommandType::Command_GetScreenshot] = Handle_GetScreenshotCommand;
 commandHandlers[CommandType::Command_ResetShell] = Handle_ResetShellCommand;
+commandHandlers[CommandType::Command_Exit] = Handle_ExitCommand;
 ```
 
 This array lives on the stack. That matters -- see section 2.
 
 **Step 2 -- Connect (lines 50-62):**
 
-The outer `while (1)` loop runs forever. Each iteration attempts a WebSocket
+The outer `while (!context.shouldExit)` loop runs until the operator sends an
+`Exit` command (otherwise it reconnects forever). Each iteration attempts a WebSocket
 connection to the relay:
 
 ```cpp
@@ -60,7 +62,9 @@ sessions, no leftover context from the previous attempt.
 
 **Step 3 -- Message loop (lines 65-113):**
 
-The inner `while (1)` reads binary WebSocket frames. Each frame is a command:
+The inner `while (!context.shouldExit)` reads binary WebSocket frames. Each frame
+is a command (it also exits when an `Exit` command sets the flag, after sending
+its acknowledgment):
 
 ```cpp
 auto readResult = wsClient.Read();

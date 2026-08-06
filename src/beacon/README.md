@@ -28,7 +28,8 @@ Top-level application layer — connects to a relay server over WebSocket (TLS 1
 │  ├─ WriteShell          → ShellProcess::Write           │   │
 │  ├─ ReadShell           → ShellProcess::Read            │   │
 │  ├─ GetDisplays         → Screen::GetDevices            │   │
-│  └─ GetScreenshot       → Screen::Capture + JPEG encode │   │
+│  ├─ GetScreenshot       → Screen::Capture + JPEG encode │   │
+│  └─ Exit                → graceful ExitProcess          │   │
 │                                                             │
 └──────────────────────┬──────────────────────────────────────┘
                        │
