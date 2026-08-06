@@ -354,6 +354,10 @@ Result<USIZE, Error> Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 // file-open/read pattern used for /etc/hostname in GetHostname below.
 static Result<USIZE, Error> ResolveUsernameFromPasswd(Span<CHAR> buffer)
 {
+	if (buffer.Size() == 0)
+		return Result<USIZE, Error>::Err(Error(Error::None));
+	buffer.Data()[0] = '\0';
+
 	UINT32 uid = (UINT32)System::Call(SYS_GETUID);
 
 	const CHAR *path = "/etc/passwd";
