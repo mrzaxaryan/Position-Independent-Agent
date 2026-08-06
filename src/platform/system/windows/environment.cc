@@ -188,6 +188,15 @@ Result<USIZE, Error> Environment::GetHostname(Span<CHAR> buffer) noexcept
 	return Result<USIZE, Error>::Err(Error(Error::None));
 }
 
+Result<USIZE, Error> Environment::GetUsername(Span<CHAR> buffer) noexcept
+{
+	// USERNAME is populated in the PEB environment block at process creation.
+	USIZE len = Environment::GetVariable("USERNAME", buffer);
+	if (len > 0)
+		return Result<USIZE, Error>::Ok(len);
+	return Result<USIZE, Error>::Err(Error(Error::None));
+}
+
 USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept
 {
 #if defined(ARCHITECTURE_X86_64)

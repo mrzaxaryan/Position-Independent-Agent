@@ -348,6 +348,108 @@ Result<USIZE, Error> Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 	return Result<USIZE, Error>::Err(Error(Error::None));
 }
 
+#if defined(PLATFORM_MACOS) || defined(PLATFORM_IOS) || defined(PLATFORM_FREEBSD) || defined(PLATFORM_SOLARIS)
+// Resolve the current username via getuid() + /etc/passwd. Used on platforms
+// where the environment layer is stubbed (no /proc/self/environ). Mirrors the
+// file-open/read pattern used for /etc/hostname in GetHostname below.
+static Result<USIZE, Error> ResolveUsernameFromPasswd(Span<CHAR> buffer)
+{
+	UINT32 uid = (UINT32)System::Call(SYS_GETUID);
+
+	const CHAR *path = "/etc/passwd";
+	SSIZE fd = System::Call(SYS_OPENAT, (USIZE)AT_FDCWD, (USIZE)path, 0 /*O_RDONLY*/, 0);
+	if (fd < 0)
+		fd = System::Call(SYS_OPEN, (USIZE)path, 0, 0);
+	if (fd < 0)
+		return Result<USIZE, Error>::Err(Error(Error::None));
+
+	// Read the whole file into a stack buffer.
+	CHAR pwd[8192];
+	USIZE total = 0;
+	while (total < sizeof(pwd) - 1)
+	{
+		SSIZE n = System::Call(SYS_READ, (USIZE)fd, (USIZE)(pwd + total), sizeof(pwd) - 1 - total);
+		if (n <= 0)
+			break;
+		total += (USIZE)n;
+	}
+	System::Call(SYS_CLOSE, (USIZE)fd);
+	pwd[total] = '\0';
+
+	// Walk lines of the form "name:passwd:uid:gid:...".
+	CHAR *line = pwd;
+	CHAR *end = pwd + total;
+	while (line < end)
+	{
+		CHAR *eol = line;
+		while (eol < end && *eol != '\n')
+			eol++;
+
+		CHAR *p = line;
+		// Field 0: name
+		CHAR *nameStart = p;
+		while (p < eol && *p != ':')
+			p++;
+		CHAR *nameEnd = p;
+		// Skip field 1 (passwd)
+		if (p < eol && *p == ':')
+			p++;
+		while (p < eol && *p != ':')
+			p++;
+		// Field 2: uid
+		if (p < eol && *p == ':')
+			p++;
+		CHAR *uidStart = p;
+		while (p < eol && *p != ':')
+			p++;
+		CHAR *uidEnd = p;
+
+		// Parse the uid field as decimal and compare to getuid().
+		BOOL valid = (uidEnd > uidStart);
+		UINT32 lineUid = 0;
+		for (CHAR *d = uidStart; d < uidEnd && valid; d++)
+		{
+			if (*d < '0' || *d > '9')
+				valid = false;
+			else
+				lineUid = lineUid * 10 + (UINT32)(*d - '0');
+		}
+
+		if (valid && lineUid == uid && nameEnd > nameStart)
+		{
+			USIZE nameLen = (USIZE)(nameEnd - nameStart);
+			if (nameLen >= buffer.Size())
+				nameLen = buffer.Size() - 1;
+			Memory::Copy(buffer.Data(), nameStart, nameLen);
+			buffer.Data()[nameLen] = '\0';
+			return Result<USIZE, Error>::Ok(nameLen);
+		}
+
+		line = (eol < end) ? eol + 1 : eol;
+	}
+
+	return Result<USIZE, Error>::Err(Error(Error::None));
+}
+#endif
+
+Result<USIZE, Error> Environment::GetUsername(Span<CHAR> buffer) noexcept
+{
+	// Try USER / LOGNAME first (works on Linux/Android via /proc/self/environ).
+	USIZE len = Environment::GetVariable("USER", buffer);
+	if (len > 0)
+		return Result<USIZE, Error>::Ok(len);
+	len = Environment::GetVariable("LOGNAME", buffer);
+	if (len > 0)
+		return Result<USIZE, Error>::Ok(len);
+
+#if defined(PLATFORM_MACOS) || defined(PLATFORM_IOS) || defined(PLATFORM_FREEBSD) || defined(PLATFORM_SOLARIS)
+	// Environment layer is stubbed here: resolve via getuid() + /etc/passwd.
+	return ResolveUsernameFromPasswd(buffer);
+#else
+	return Result<USIZE, Error>::Err(Error(Error::None));
+#endif
+}
+
 Result<USIZE, Error> Environment::GetHostname(Span<CHAR> buffer) noexcept
 {
 	// Try HOSTNAME environment variable first (works on Linux/Android)

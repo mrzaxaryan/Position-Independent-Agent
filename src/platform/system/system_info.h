@@ -32,14 +32,15 @@
  * @brief System information structure
  *
  * @details Contains identifying information about the host system.
- * Hostname, Architecture, AgentPlatform, and OSVersion are null-terminated
- * narrow strings.
+ * Hostname, Username, Architecture, AgentPlatform, and OSVersion are
+ * null-terminated narrow strings.
  */
 #pragma pack(push, 1)
 struct SystemInfo
 {
     UUID MachineUUID;        ///< Machine-unique identifier (hardware/OS level)
     CHAR Hostname[256];      ///< Machine hostname / computer name
+    CHAR Username[256];      ///< Current user name (e.g. "root", "admin"); empty if unavailable
     CHAR Architecture[32];   ///< CPU architecture (e.g. "x86_64", "aarch64")
     CHAR AgentPlatform[32];  ///< Compile-time OS target (e.g. "windows", "linux")
     CHAR OSVersion[128];     ///< Runtime OS version (e.g. "Windows 10.0 Build 19045", "Linux 6.1.0")
