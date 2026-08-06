@@ -11,8 +11,7 @@
 
 #include "core/types/primitives.h"
 
-// aarch64 uses *at syscalls - AT_FDCWD (-100) means use current working dir
-constexpr SSIZE AT_FDCWD = -100;
+// aarch64 uses *at syscalls; AT_FDCWD (-100) is defined in the common linux/syscall.h
 constexpr INT32 AT_REMOVEDIR = 0x200;
 
 // File I/O
@@ -21,9 +20,6 @@ constexpr USIZE SYS_WRITE = 64;
 constexpr USIZE SYS_OPENAT = 56;
 constexpr USIZE SYS_CLOSE = 57;
 constexpr USIZE SYS_LSEEK = 62;
-
-// User identity
-constexpr USIZE SYS_GETUID = 174;
 
 // Device I/O
 constexpr USIZE SYS_IOCTL = 29;

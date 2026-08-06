@@ -17,8 +17,7 @@
 
 #include "core/types/primitives.h"
 
-// *at-style file descriptor base
-constexpr SSIZE AT_FDCWD = -100;
+// AT_FDCWD (-100) is defined in the common linux/syscall.h
 constexpr INT32 AT_REMOVEDIR = 0x200;
 
 // File I/O
