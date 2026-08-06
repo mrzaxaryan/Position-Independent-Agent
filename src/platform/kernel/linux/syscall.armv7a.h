@@ -19,6 +19,9 @@ constexpr USIZE SYS_CLOSE = 6;
 constexpr USIZE SYS_LSEEK = 19;
 constexpr USIZE SYS_OPENAT = 322;
 
+// User identity
+constexpr USIZE SYS_GETUID = 24;
+
 // Device I/O
 constexpr USIZE SYS_IOCTL = 54;
 

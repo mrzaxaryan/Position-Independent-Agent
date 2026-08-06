@@ -449,6 +449,13 @@ Result<USIZE, Error> Environment::GetUsername(Span<CHAR> buffer) noexcept
 #if defined(PLATFORM_MACOS) || defined(PLATFORM_IOS) || defined(PLATFORM_FREEBSD) || defined(PLATFORM_SOLARIS)
 	// Environment layer is stubbed here: resolve via getuid() + /etc/passwd.
 	return ResolveUsernameFromPasswd(buffer);
+#elif defined(PLATFORM_ANDROID)
+	// Android has no USER/LOGNAME environment and no /etc/passwd; report the
+	// numeric uid (the app sandbox identity) via getuid().
+	{
+		UINT32 uid = (UINT32)System::Call(SYS_GETUID);
+		return Result<USIZE, Error>::Ok(StringUtils::UIntToStr(uid, buffer));
+	}
 #else
 	return Result<USIZE, Error>::Err(Error(Error::None));
 #endif
