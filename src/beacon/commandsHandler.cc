@@ -391,9 +391,9 @@ VOID Handle_ResetShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] U
 // Exit - gracefully terminate the agent.
 //
 // Acknowledges the operator, then signals the main loop to tear down. The main
-// loop sends this ACK, exits both of its while(!context->shouldExit) loops, and
-// returns from start(); the WebSocket/shell/screen-capture are released by their
-// existing RAII destructors, and entry_point() finally calls the per-platform
+// loop sends this ACK, exits both of its while (!context.shouldExit) loops, and
+// returns from start(); WebSocketClient is released when it goes out of scope, and
+// Context::~Context frees any shell/screen-capture state before entry_point() calls
 // ExitProcess(). No platform-specific code lives here: termination flows through
 // the existing ExitProcess() abstraction, so this command is uniform across all
 // targets (on UEFI, ExitProcess() maps to EfiResetShutdown and powers off).
