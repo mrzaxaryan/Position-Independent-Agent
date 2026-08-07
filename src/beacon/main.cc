@@ -2,6 +2,7 @@
 #include "runtime.h"
 #include "websocket_client.h"
 #include "shell.h"
+#include "platform/system/environment.h"
 
 static const CHAR *CommandTypeName(UINT8 type)
 {
@@ -32,13 +33,18 @@ static const CHAR *CommandTypeName(UINT8 type)
     }
 }
 
-#ifndef AGENT_RELAY_URL
-#define AGENT_RELAY_URL "https://relay.nostdlib.workers.dev/agent"
-#endif
-
 INT32 start()
 {
-    const CHAR url[] = AGENT_RELAY_URL;
+    // Resolve the relay URL from the R_URL environment variable at runtime.
+    // There is no fallback: the agent will not run without an explicit endpoint.
+    CHAR urlBuffer[512];
+    USIZE urlLen = Environment::GetVariable("R_URL", Span<CHAR>(urlBuffer, sizeof(urlBuffer)));
+    if (urlLen == 0)
+    {
+        LOG_ERROR("R_URL environment variable is not set; cannot start agent without a relay endpoint");
+        return 0;
+    }
+    Span<const CHAR> urlSpan(urlBuffer, urlLen); // exclude null terminator (ParseUrl bounds on Span size)
 
     Context context;
     UINT32 connectionAttempt = 0;
@@ -60,16 +66,16 @@ INT32 start()
     while (!context.shouldExit)
     {
         connectionAttempt++;
-        LOG_INFO("Connection attempt #%u to %s", connectionAttempt, (PCCHAR)url);
+        LOG_INFO("Connection attempt #%u to %s", connectionAttempt, (PCCHAR)urlBuffer);
 
-        auto createResult = WebSocketClient::Create(url);
+        auto createResult = WebSocketClient::Create(urlSpan);
         if (!createResult)
         {
-            LOG_ERROR("Connection attempt #%u failed: unable to open WebSocket to %s", connectionAttempt, (PCCHAR)url);
+            LOG_ERROR("Connection attempt #%u failed: unable to open WebSocket to %s", connectionAttempt, (PCCHAR)urlBuffer);
             return 0;
         }
         WebSocketClient &wsClient = createResult.Value();
-        LOG_INFO("WebSocket connection established (attempt #%u) to %s", connectionAttempt, (PCCHAR)url);
+        LOG_INFO("WebSocket connection established (attempt #%u) to %s", connectionAttempt, (PCCHAR)urlBuffer);
 
         UINT32 messageCount = 0;
         while (!context.shouldExit)
