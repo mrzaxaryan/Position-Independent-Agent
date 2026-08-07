@@ -162,6 +162,7 @@ struct AgentBuildInfo
 {
     UINT32 BuildNumber;
     CHAR CommitHash[9]; // 8 hex chars + null
+    UINT32 ApiVersion;
 };
 #pragma pack(pop)
 ```

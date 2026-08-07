@@ -396,6 +396,7 @@ Returns system identification info for the target host.
 |----------------|-------------|--------------------------------------------------|
 | `BuildNumber`  | `UINT32`    | Auto-incrementing build number (git commit count) |
 | `CommitHash`   | `CHAR[9]`   | Short git commit hash (8 hex chars + null)        |
+| `ApiVersion`   | `UINT32`    | Agent API version (starts at 1, bump on breaking protocol change) |
 
 ### `GetDirectoryContent` (0x01)
 

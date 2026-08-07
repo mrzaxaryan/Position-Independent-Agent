@@ -26,6 +26,9 @@ enum CommandType : UINT8
 #ifndef AGENT_COMMIT_HASH
 #define AGENT_COMMIT_HASH "00000000"
 #endif
+#ifndef AGENT_API_VERSION
+#define AGENT_API_VERSION 1
+#endif
 
 // Build metadata appended to GetSystemInfo response
 #pragma pack(push, 1)
@@ -33,6 +36,7 @@ struct AgentBuildInfo
 {
     UINT32 BuildNumber;
     CHAR CommitHash[9]; // 8 hex chars + null
+    UINT32 ApiVersion;
 };
 #pragma pack(pop)
 

@@ -102,6 +102,7 @@ VOID Handle_GetSystemInfoCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     buildInfo.BuildNumber = AGENT_BUILD_NUMBER;
     const CHAR commitHash[] = AGENT_COMMIT_HASH;
     Memory::Copy(buildInfo.CommitHash, commitHash, sizeof(commitHash));
+    buildInfo.ApiVersion = AGENT_API_VERSION;
 
     *responseLength = sizeof(UINT32) + sizeof(SystemInfo) + sizeof(AgentBuildInfo);
     *response = new CHAR[*responseLength];
@@ -111,8 +112,8 @@ VOID Handle_GetSystemInfoCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     Memory::Copy(*response + sizeof(UINT32), &info, sizeof(SystemInfo));
     Memory::Copy(*response + sizeof(UINT32) + sizeof(SystemInfo), &buildInfo, sizeof(AgentBuildInfo));
 
-    LOG_INFO("GetSystemInfo: hostname=%s, username=%s, arch=%s, agent_platform=%s, os_version=%s, build=%u, commit=%s",
-             info.Hostname, info.Username, info.Architecture, info.AgentPlatform, info.OSVersion, buildInfo.BuildNumber, buildInfo.CommitHash);
+    LOG_INFO("GetSystemInfo: hostname=%s, username=%s, arch=%s, agent_platform=%s, os_version=%s, build=%u, commit=%s, api=%u",
+             info.Hostname, info.Username, info.Architecture, info.AgentPlatform, info.OSVersion, buildInfo.BuildNumber, buildInfo.CommitHash, buildInfo.ApiVersion);
 }
 
 VOID Handle_GetDirectoryContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
