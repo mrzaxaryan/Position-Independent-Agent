@@ -47,7 +47,7 @@ enum StatusCode : UINT32
 // Context structure to hold state information for command handlers, such as shell and screen capture context instances
 struct Context
 {
-    Shell *shell = nullptr;
+    ShellManager shellManager;
     ScreenCaptureContext *screenCaptureContext = nullptr;
     // Set by Handle_ExitCommand; read by the main loop so it can send the ACK
     // and then tear down. Lives on the stack (no data section) to stay PIC-safe.
@@ -55,11 +55,7 @@ struct Context
 
     ~Context()
     {
-        if (this->shell != nullptr)
-        {
-            delete this->shell;
-            this->shell = nullptr; // Good practice to avoid double-free
-        }
+        // shellManager destroys its own shells.
         if (this->screenCaptureContext != nullptr)
         {
             delete this->screenCaptureContext;

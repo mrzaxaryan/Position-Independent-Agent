@@ -283,78 +283,78 @@ VOID Handle_GetFileChunkHashCommand([[maybe_unused]] PCHAR command, [[maybe_unus
     LOG_INFO("GetFileChunkHash: hashed %llu bytes", (UINT64)totalRead);
 }
 
-// Writes a command to the shell
-VOID Handle_WriteShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
+// Writes a command to a shell. Payload: [streamId:1][UTF-8 input + '\0']
+VOID Handle_WriteShellCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
     LOG_INFO("Handling WriteShellCommand.");
-    
-    // Verify that shell instance exists in the context, if not create it and validate the result
-    if (context->shell == nullptr)
-    {
-        auto shellResult = Shell::Create();
-        if (!shellResult)
-        {
-            LOG_ERROR("Failed to create shell instance");
-            WriteErrorResponse(response, responseLength, StatusCode::StatusError);
-            return;
-        }
-        context->shell = new Shell(static_cast<Shell &&>(shellResult.Value()));
-    }
 
-    // Trim for null terminator 
-    while (commandLength > 0 && command[commandLength - 1] == '\0')
-        commandLength--;
-
-    // Write the command to the shell and validate the result
-    auto writeResult = context->shell->Write(command, commandLength);
-    if (!writeResult)
+    if (commandLength < 1)
     {
-        LOG_ERROR("Failed to write command to shell");
+        LOG_ERROR("WriteShell: missing stream id");
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
-
-        // Reset the process
-        delete context->shell;
-        context->shell = nullptr;
-
         return;
     }
-    LOG_INFO("Command written to shell successfully, bytes written: %llu", writeResult.Value());
+
+    UINT8 streamId = (UINT8)command[0];
+    PCHAR input = command + 1;
+    USIZE inputLength = commandLength - 1;
+
+    Shell *shell = context->shellManager.GetOrCreate(streamId);
+    if (shell == nullptr)
+    {
+        LOG_ERROR("Failed to get/create shell instance for stream %u", (UINT32)streamId);
+        WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        return;
+    }
+
+    // Trim for null terminator
+    while (inputLength > 0 && input[inputLength - 1] == '\0')
+        inputLength--;
+
+    auto writeResult = shell->Write(input, inputLength);
+    if (!writeResult)
+    {
+        LOG_ERROR("Failed to write command to shell (stream %u)", (UINT32)streamId);
+        WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        context->shellManager.Reset(streamId);
+        return;
+    }
+    LOG_INFO("Command written to shell (stream %u), bytes written: %llu", (UINT32)streamId, writeResult.Value());
 
     // Prepare the response buffer - writing status code
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = StatusCode::StatusSuccess;
 }
 
-// Reads a chunk of data from the shell's stdout
-VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
+// Reads a chunk of data from a shell's stdout. Payload: [streamId:1]
+VOID Handle_ReadShellCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
     LOG_INFO("Handling ReadShellCommand.");
 
-    // Verify that shell instance exists in the context, if not create it and validate the result
-    if (context->shell == nullptr)
+    if (commandLength < 1)
     {
-        auto shellResult = Shell::Create();
-        if (!shellResult)
-        {
-            LOG_ERROR("Failed to create shell instance");
-            WriteErrorResponse(response, responseLength, StatusCode::StatusError);
-            return;
-        }
-        context->shell = new Shell(static_cast<Shell &&>(shellResult.Value()));
-        LOG_INFO("Shell instance created successfully");
+        LOG_ERROR("ReadShell: missing stream id");
+        WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        return;
+    }
+
+    UINT8 streamId = (UINT8)command[0];
+    Shell *shell = context->shellManager.GetOrCreate(streamId);
+    if (shell == nullptr)
+    {
+        LOG_ERROR("Failed to get/create shell instance for stream %u", (UINT32)streamId);
+        WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        return;
     }
 
     // Buffer to hold the data read from the shell
     CHAR buffer[4096];
-    auto readResult = context->shell->Read(buffer, sizeof(buffer));
+    auto readResult = shell->Read(buffer, sizeof(buffer));
     if (!readResult)
     {
-        LOG_ERROR("Failed to read from shell");
+        LOG_ERROR("Failed to read from shell (stream %u)", (UINT32)streamId);
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
-        // Reset the process
-        delete context->shell;
-        context->shell = nullptr;
-
+        context->shellManager.Reset(streamId);
         return;
     }
 
@@ -366,22 +366,21 @@ VOID Handle_ReadShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
     StringUtils::Copy(Span<CHAR>(*response + sizeof(UINT32), bytesRead), Span<const CHAR>(buffer, bytesRead));
 }
 
-// Reset Shell instance
-VOID Handle_ResetShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
+// Reset a shell instance. Payload: [streamId:1]. Idempotent.
+VOID Handle_ResetShellCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
     LOG_INFO("Handling ResetShellCommand.");
 
-    if(context->shell != nullptr){
-        // Delete the existing shell instance
-        delete context->shell;
-        context->shell = nullptr;
-        LOG_INFO("Shell instance reset successfully");
-    }
-    else {
-        LOG_INFO("No shell instance to reset");
+    if (commandLength < 1)
+    {
+        LOG_ERROR("ResetShell: missing stream id");
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
+
+    UINT8 streamId = (UINT8)command[0];
+    context->shellManager.Reset(streamId);
+    LOG_INFO("Shell instance reset for stream %u", (UINT32)streamId);
 
     *responseLength = sizeof(UINT32);
     *response = new CHAR[*responseLength];
