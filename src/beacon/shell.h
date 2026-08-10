@@ -27,9 +27,10 @@ public:
  *
  * @details Gives each consumer an isolated shell: stream 0 is the operator's
  * interactive shell; stream 1+ are used by scripted consumers (e.g. the C2
- * File Manager driving PowerShell). Each shell is lazily created on first use
- * and destroyed in the destructor. Encapsulates the per-stream shells so Context
- * holds a single member rather than a raw array.
+ * File Manager driving PowerShell). A shell must be explicitly opened with
+ * Open() before it can be read/written, and is destroyed with Close() or in
+ * the destructor. Encapsulates the per-stream shells so Context holds a single
+ * member rather than a raw array.
  */
 class ShellManager
 {
@@ -55,24 +56,33 @@ public:
     ShellManager(const ShellManager &) = delete;
     ShellManager &operator=(const ShellManager &) = delete;
 
-    /// Get the shell for a stream, lazily creating it on first use.
-    /// @return The shell, or nullptr if streamId is invalid or creation failed.
-    Shell *GetOrCreate(UINT8 streamId)
+    /// Look up an already-open shell. Never spawns.
+    /// @return The shell, or nullptr if streamId is invalid or no shell is open.
+    Shell *Get(UINT8 streamId)
     {
         if (streamId >= MAX_STREAMS)
             return nullptr;
-        if (shells[streamId] == nullptr)
-        {
-            auto shellResult = Shell::Create();
-            if (!shellResult)
-                return nullptr;
-            shells[streamId] = new Shell(static_cast<Shell &&>(shellResult.Value()));
-        }
         return shells[streamId];
     }
 
-    /// Destroy a stream's shell (idempotent — safe if it was never created).
-    VOID Reset(UINT8 streamId)
+    /// Explicitly open (spawn) a shell for a stream. Strict: if a shell is
+    /// already open for the stream, returns nullptr (caller must Close first).
+    /// @return The new shell, or nullptr if streamId is invalid, already open, or spawn failed.
+    Shell *Open(UINT8 streamId)
+    {
+        if (streamId >= MAX_STREAMS)
+            return nullptr;
+        if (shells[streamId] != nullptr)
+            return nullptr; // strict: refuse if already open
+        auto shellResult = Shell::Create();
+        if (!shellResult)
+            return nullptr;
+        shells[streamId] = new Shell(static_cast<Shell &&>(shellResult.Value()));
+        return shells[streamId];
+    }
+
+    /// Destroy a stream's shell (idempotent — safe if it was never opened).
+    VOID Close(UINT8 streamId)
     {
         if (streamId >= MAX_STREAMS)
             return;
