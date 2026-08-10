@@ -101,7 +101,8 @@ VOID Handle_GetSystemInfoCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     AgentBuildInfo buildInfo;
     buildInfo.BuildNumber = AGENT_BUILD_NUMBER;
     const CHAR commitHash[] = AGENT_COMMIT_HASH;
-    Memory::Copy(buildInfo.CommitHash, commitHash, sizeof(commitHash));
+    Memory::Zero(buildInfo.CommitHash, sizeof(buildInfo.CommitHash));
+    Memory::Copy(buildInfo.CommitHash, commitHash, sizeof(buildInfo.CommitHash) - 1);
     buildInfo.ApiVersion = AGENT_API_VERSION;
 
     *responseLength = sizeof(UINT32) + sizeof(SystemInfo) + sizeof(AgentBuildInfo);
