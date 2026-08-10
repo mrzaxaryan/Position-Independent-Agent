@@ -90,9 +90,9 @@ static BOOL IsDotEntry(const DirectoryEntry &entry)
 // Command handlers
 // =============================================================================
 
-VOID Handle_GetSystemInfoCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
+VOID Handle_HelloCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
-    LOG_INFO("Handling GetSystemInfoCommand.");
+    LOG_INFO("Handling HelloCommand.");
     // Retrieve system information
     SystemInfo info;
     GetSystemInfo(&info);
@@ -105,15 +105,19 @@ VOID Handle_GetSystemInfoCommand([[maybe_unused]] PCHAR command, [[maybe_unused]
     Memory::Copy(buildInfo.CommitHash, commitHash, sizeof(buildInfo.CommitHash) - 1);
     buildInfo.ApiVersion = AGENT_API_VERSION;
 
-    *responseLength = sizeof(UINT32) + sizeof(SystemInfo) + sizeof(AgentBuildInfo);
+    // 256-bit capability mask: bit i set iff command code i is supported.
+    CapabilityMask capabilities = BuildCapabilityMask();
+
+    *responseLength = sizeof(UINT32) + sizeof(SystemInfo) + sizeof(AgentBuildInfo) + sizeof(CapabilityMask);
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = StatusCode::StatusSuccess;
 
-    // Append system info and build info to the response buffer
+    // Append system info, build info, and capability mask to the response buffer
     Memory::Copy(*response + sizeof(UINT32), &info, sizeof(SystemInfo));
     Memory::Copy(*response + sizeof(UINT32) + sizeof(SystemInfo), &buildInfo, sizeof(AgentBuildInfo));
+    Memory::Copy(*response + sizeof(UINT32) + sizeof(SystemInfo) + sizeof(AgentBuildInfo), &capabilities, sizeof(CapabilityMask));
 
-    LOG_INFO("GetSystemInfo: hostname=%s, username=%s, arch=%s, agent_platform=%s, os_version=%s, build=%u, commit=%s, api=%u",
+    LOG_INFO("Hello: hostname=%s, username=%s, arch=%s, agent_platform=%s, os_version=%s, build=%u, commit=%s, api=%u",
              info.Hostname, info.Username, info.Architecture, info.AgentPlatform, info.OSVersion, buildInfo.BuildNumber, buildInfo.CommitHash, buildInfo.ApiVersion);
 }
 

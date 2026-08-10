@@ -49,7 +49,7 @@ This project solves that: a full C++23 codebase that compiles to position-indepe
 - **Cross-Platform** - 8 platforms (Windows, Linux, macOS, FreeBSD, Solaris, UEFI, Android, iOS) across 7 architectures (i386, x86_64, armv7a, aarch64, riscv32, riscv64, mips64) via direct syscalls
 - **TLS 1.3 + WebSocket** - Encrypted command-and-control over `wss://` using ChaCha20-Poly1305 AEAD (RFC 8446, RFC 6455)
 - **Binary Command Protocol** - 9 command types over WebSocket:
-  - `GetSystemInfo` - Machine UUID, hostname, username, CPU architecture, agent platform, OS version
+  - `Hello` - handshake: `SystemInfo` (machine UUID, hostname, username, CPU architecture, agent platform, OS version) + `AgentBuildInfo` + 256-bit `CapabilityMask`
   - `GetDirectoryContent` - Directory listing with metadata
   - `GetFileContent` - File read at offset
   - `GetFileChunkHash` - SHA-256 hash of file chunk
@@ -372,12 +372,13 @@ All OS interaction is through **direct system calls or native kernel APIs** — 
 
 All commands use a binary protocol over WebSocket. Each message starts with a `UINT8` command type byte followed by command-specific payload. Every response begins with a `UINT32` status code (`0` = success, non-zero = error).
 
-### `GetSystemInfo` (0x00)
+### `Hello` (0x00)
 
-Returns system identification info for the target host.
+Handshake: returns system identification, build metadata, and a 256-bit
+capability mask so the C2 can determine which commands this beacon supports.
 
 - **Request**: No payload (command type byte only)
-- **Response**: `UINT32 status` + `SystemInfo` + `AgentBuildInfo`
+- **Response**: `UINT32 status` + `SystemInfo` + `AgentBuildInfo` + `CapabilityMask` (32 bytes)
 
 `SystemInfo` layout (packed):
 
@@ -397,6 +398,14 @@ Returns system identification info for the target host.
 | `BuildNumber`  | `UINT32`    | Auto-incrementing build number (git commit count) |
 | `CommitHash`   | `CHAR[9]`   | Short git commit hash (8 hex chars + null)        |
 | `ApiVersion`   | `UINT32`    | Agent API version (starts at 1, bump on breaking protocol change) |
+
+`CapabilityMask` layout (packed, 32 bytes = 256 bits):
+
+| Field  | Type        | Description                                                                                                                       |
+|--------|-------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `Bits` | `UINT8[32]` | Bit `i` set ⟺ command code `i` is supported. Read bit `i` as `(Bits[i/8] >> (i%8)) & 1`. Bits `CommandTypeCount`–255 are reserved (0). |
+
+Which commands are supported is fixed at **compile time** by the `AGENT_SUPPORT_<COMMAND>` macros (default `1`; override to `0` per build/platform to compile a command out — it is then neither registered in the dispatch table nor advertised in this mask).
 
 ### `GetDirectoryContent` (0x01)
 

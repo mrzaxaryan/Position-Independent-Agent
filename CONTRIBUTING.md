@@ -255,8 +255,8 @@ Key conventions:
 | Kind | Convention | Examples |
 |------|-----------|----------|
 | Enum names | `PascalCase` | `CommandType`, `StatusCode` |
-| Enum values (unscoped) | `PascalCase_Underscore` | `Command_GetSystemInfo`, `StatusSuccess` |
-| Functions | `PascalCase` with `Handle_` prefix for commands | `Handle_GetSystemInfoCommand` |
+| Enum values (unscoped) | `PascalCase_Underscore` | `Command_Hello`, `StatusSuccess` |
+| Functions | `PascalCase` with `Handle_` prefix for commands | `Handle_HelloCommand` |
 | Local variables | `camelCase` | `commandType`, `responseLength` |
 | Struct fields (public) | `PascalCase` | `WireDirectoryEntry::Name`, `SystemInfo::Hostname` |
 | Header files | `snake_case.h` | `commands.h` |
