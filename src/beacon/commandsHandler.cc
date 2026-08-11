@@ -105,7 +105,7 @@ VOID Handle_HelloCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE 
     Memory::Copy(buildInfo.CommitHash, commitHash, sizeof(buildInfo.CommitHash) - 1);
     buildInfo.ApiVersion = AGENT_API_VERSION;
 
-    // 256-bit capability mask: bit i set iff command code i is supported.
+    // 64-bit capability mask: bit i set iff category i (CapabilityBit) is supported.
     CapabilityMask capabilities = BuildCapabilityMask();
 
     *responseLength = sizeof(UINT32) + sizeof(SystemInfo) + sizeof(AgentBuildInfo) + sizeof(CapabilityMask);
