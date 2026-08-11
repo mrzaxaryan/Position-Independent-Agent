@@ -53,8 +53,3 @@ Result<USIZE, Error> Shell::Read(char *buffer, USIZE capacity) noexcept
 
     return Result<USIZE, Error>::Ok(totalRead);
 }
-
-Result<USIZE, Error> Shell::ReadError(char *buffer, USIZE capacity) noexcept
-{
-    return shellProcess.ReadError(buffer, capacity);
-}

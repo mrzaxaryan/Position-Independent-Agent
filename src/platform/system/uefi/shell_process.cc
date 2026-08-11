@@ -28,11 +28,6 @@ Result<USIZE, Error> ShellProcess::Read([[maybe_unused]] CHAR *buffer, [[maybe_u
 	return Result<USIZE, Error>::Err(Error::ShellProcess_NotSupported);
 }
 
-Result<USIZE, Error> ShellProcess::ReadError([[maybe_unused]] CHAR *buffer, [[maybe_unused]] USIZE capacity) noexcept
-{
-	return Result<USIZE, Error>::Err(Error::ShellProcess_NotSupported);
-}
-
 SSIZE ShellProcess::Poll([[maybe_unused]] SSIZE timeoutMs) noexcept
 {
 	return -1;

@@ -15,7 +15,7 @@ typedefs used everywhere).
 - `src/beacon/main.cc` -- the main loop (118 lines)
 - `src/beacon/commands.h` -- `CommandType` enum, `Context` struct, handler typedefs
 - `src/beacon/commandsHandler.cc` -- all command handler implementations
-- `src/beacon/shell.h` -- interactive shell wrapper
+- `src/lib/shell/shell.h` -- interactive shell wrapper
 - `src/beacon/screen_capture.h` -- screenshot pipeline types
 
 ---
@@ -38,8 +38,9 @@ commandHandlers[CommandType::Command_WriteShell] = Handle_WriteShellCommand;
 commandHandlers[CommandType::Command_ReadShell] = Handle_ReadShellCommand;
 commandHandlers[CommandType::Command_GetDisplays] = Handle_GetDisplaysCommand;
 commandHandlers[CommandType::Command_GetScreenshot] = Handle_GetScreenshotCommand;
-commandHandlers[CommandType::Command_ResetShell] = Handle_ResetShellCommand;
+commandHandlers[CommandType::Command_CloseShell] = Handle_CloseShellCommand;
 commandHandlers[CommandType::Command_Exit] = Handle_ExitCommand;
+commandHandlers[CommandType::Command_OpenShell] = Handle_OpenShellCommand;
 ```
 
 This array lives on the stack. That matters -- see section 2.
@@ -220,16 +221,13 @@ But two subsystems need persistent state:
 ```cpp
 struct Context
 {
-    Shell *shell = nullptr;
+    ShellManager shellManager;                        // 256-slot shell pool (section 8)
     ScreenCaptureContext *screenCaptureContext = nullptr;
+    BOOL shouldExit = false;                          // set by Exit; read by the main loop
 
     ~Context()
     {
-        if (this->shell != nullptr)
-        {
-            delete this->shell;
-            this->shell = nullptr;
-        }
+        // shellManager destroys its own shells.
         if (this->screenCaptureContext != nullptr)
         {
             delete this->screenCaptureContext;
@@ -239,9 +237,12 @@ struct Context
 };
 ```
 
-The `Shell` pointer keeps the interactive shell process alive between
-`WriteShell` and `ReadShell` calls. The `ScreenCaptureContext` holds the
-previous frame buffer for dirty-rectangle comparison (section 7).
+The `ShellManager` owns a pool of 256 shell slots and keeps spawned shell
+processes alive across `WriteShell`/`ReadShell` calls. The beacon assigns slot
+ids itself rather than trusting the client (section 8). The
+`ScreenCaptureContext` holds the previous frame buffer for dirty-rectangle
+comparison (section 7). `shouldExit` is set by the `Exit` handler so the main
+loop can send its ACK and then tear down.
 
 Context is allocated once per connection. The main loop declares it as a local
 variable before the outer `while (1)`, so it survives across reconnections in
@@ -412,7 +413,7 @@ re-encoded and sent.
 
 ## 8. Shell Flow
 
-The `Shell` class in `src/beacon/shell.h` wraps a platform-specific shell
+The `Shell` class in `src/lib/shell/shell.h` wraps a platform-specific shell
 process:
 
 ```cpp
@@ -426,19 +427,26 @@ public:
     static Result<Shell, Error> Create() noexcept;
     Result<USIZE, Error> Write(const char *data, USIZE length) noexcept;
     Result<USIZE, Error> Read(char *buffer, USIZE capacity) noexcept;
-    Result<USIZE, Error> ReadError(char *buffer, USIZE capacity) noexcept;
     ~Shell() noexcept;
 };
 ```
 
 On POSIX, `ShellProcess` spawns `/bin/sh` over a PTY. On Windows, it launches
-`cmd.exe` with three pipes (stdin, stdout, stderr). The `Shell` class itself
+`cmd.exe` with two pipes (stdin, stdout) and stderr merged into stdout (so a
+single read drains both, matching the PTY). The `Shell` class itself
 is platform-agnostic -- it delegates everything to `ShellProcess`.
 
-The operator interacts through two commands:
+The operator interacts through four commands:
 
-- **WriteShell:** sends input text to the shell's stdin.
-- **ReadShell:** pulls output from stdout/stderr.
+- **OpenShell:** asks the beacon to spawn a new shell. The beacon owns slot
+  assignment — it picks the first free slot in a 256-slot pool and returns the
+  assigned id. The id is a 64-bit value (`ShellId`) sized to match pointer
+  width, so a future revision could ship an opaque handle instead of a slot
+  index without changing the wire format.
+- **WriteShell:** sends input text to a shell's stdin, addressing it by the id
+  returned from `OpenShell`.
+- **ReadShell:** pulls output from stdout/stderr of a shell, by id.
+- **CloseShell:** destroys a shell by id, freeing its slot for reuse.
 
 The read side uses a polling strategy: first poll with a 5-second timeout to
 wait for output to begin, then subsequent polls at 100ms to catch rapid bursts
