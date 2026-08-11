@@ -48,8 +48,8 @@ This project solves that: a full C++23 codebase that compiles to position-indepe
 - **Position-Independent** - A custom LLVM pass ([pic-transform](tools/pic-transform/)) eliminates `.data`/`.rodata`/`.bss` sections at compile time, producing binaries with only a `.text` section — fully relocatable as raw shellcode, executable in RX-only memory with no writable pages required
 - **Cross-Platform** - 8 platforms (Windows, Linux, macOS, FreeBSD, Solaris, UEFI, Android, iOS) across 7 architectures (i386, x86_64, armv7a, aarch64, riscv32, riscv64, mips64) via direct syscalls
 - **TLS 1.3 + WebSocket** - Encrypted command-and-control over `wss://` using ChaCha20-Poly1305 AEAD (RFC 8446, RFC 6455)
-- **Binary Command Protocol** - 9 command types over WebSocket:
-  - `GetSystemInfo` - Machine UUID, hostname, username, CPU architecture, agent platform, OS version
+- **Binary Command Protocol** - 11 command types over WebSocket:
+  - `Hello` - handshake: `SystemInfo` (machine UUID, hostname, username, CPU architecture, agent platform, OS version) + `AgentBuildInfo` + 64-bit `CapabilityMask`
   - `GetDirectoryContent` - Directory listing with metadata
   - `GetFileContent` - File read at offset
   - `GetFileChunkHash` - SHA-256 hash of file chunk
@@ -372,12 +372,13 @@ All OS interaction is through **direct system calls or native kernel APIs** — 
 
 All commands use a binary protocol over WebSocket. Each message starts with a `UINT8` command type byte followed by command-specific payload. Every response begins with a `UINT32` status code (`0` = success, non-zero = error).
 
-### `GetSystemInfo` (0x00)
+### `Hello` (0x00)
 
-Returns system identification info for the target host.
+Handshake: returns system identification, build metadata, and a 64-bit
+capability mask so the C2 can determine which feature categories this beacon supports.
 
 - **Request**: No payload (command type byte only)
-- **Response**: `UINT32 status` + `SystemInfo` + `AgentBuildInfo`
+- **Response**: `UINT32 status` + `SystemInfo` + `AgentBuildInfo` + `CapabilityMask` (8 bytes)
 
 `SystemInfo` layout (packed):
 
@@ -396,6 +397,26 @@ Returns system identification info for the target host.
 |----------------|-------------|--------------------------------------------------|
 | `BuildNumber`  | `UINT32`    | Auto-incrementing build number (git commit count) |
 | `CommitHash`   | `CHAR[9]`   | Short git commit hash (8 hex chars + null)        |
+| `ApiVersion`   | `UINT32`    | Agent API version (starts at 1, bump on breaking protocol change) |
+| `Is64Bit`      | `BOOL`      | `true` iff this agent binary is 64-bit (`sizeof(void*) == 8`); agent pointer width, not OS |
+
+`CapabilityMask` layout (packed, 8 bytes = 64 bits, LSB-first per byte):
+
+| Field  | Type        | Description                                                                                                                       |
+|--------|-------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| `Bits` | `UINT8[8]` | Bit `i` set ⟺ feature category `i` is supported. Read bit `i` as `(Bits[i/8] >> (i%8)) & 1`. Bits `CapabilityBitCount`–63 are reserved (0). |
+
+Category bit assignments:
+
+| Bit   | Category   | Commands owned                                                  |
+|-------|------------|-----------------------------------------------------------------|
+| 0     | FileSystem | `GetDirectoryContent`, `GetFileContent`, `GetFileChunkHash`     |
+| 1     | Shell      | `OpenShell`, `CloseShell`, `ReadShell`, `WriteShell`            |
+| 2     | Display    | `GetDisplays`, `GetScreenshot`                                  |
+| —     | (core)     | `Hello`, `Exit` — mandatory, always available, not advertised   |
+| 3–63  | reserved   | 0                                                               |
+
+Which feature categories are supported is fixed at **compile time** by the `SUPPORT_<CATEGORY>` macros (default `1`; override to `0` per build/platform to compile a whole category out — its commands are then neither registered in the dispatch table nor advertised in this mask).
 
 ### `GetDirectoryContent` (0x01)
 

@@ -8,8 +8,8 @@ static const CHAR *CommandTypeName(UINT8 type)
 {
     switch (type)
     {
-    case CommandType::Command_GetSystemInfo:
-        return "GetSystemInfo";
+    case CommandType::Command_Hello:
+        return "Hello";
     case CommandType::Command_GetDirectoryContent:
         return "GetDirectoryContent";
     case CommandType::Command_GetFileContent:
@@ -24,10 +24,12 @@ static const CHAR *CommandTypeName(UINT8 type)
         return "GetDisplays";
     case CommandType::Command_GetScreenshot:
         return "GetScreenshot";
-    case CommandType::Command_ResetShell:
-        return "ResetShell";
+    case CommandType::Command_CloseShell:
+        return "CloseShell";
     case CommandType::Command_Exit:
         return "Exit";
+    case CommandType::Command_OpenShell:
+        return "OpenShell";
     default:
         return "Unknown";
     }
@@ -50,16 +52,24 @@ INT32 start()
     UINT32 connectionAttempt = 0;
 
     CommandHandler commandHandlers[CommandType::CommandTypeCount] = {nullptr};
-    commandHandlers[CommandType::Command_GetSystemInfo] = Handle_GetSystemInfoCommand;
-    commandHandlers[CommandType::Command_GetDirectoryContent] = Handle_GetDirectoryContentCommand;
-    commandHandlers[CommandType::Command_GetFileContent] = Handle_GetFileContentCommand;
-    commandHandlers[CommandType::Command_GetFileChunkHash] = Handle_GetFileChunkHashCommand;
-    commandHandlers[CommandType::Command_WriteShell] = Handle_WriteShellCommand;
-    commandHandlers[CommandType::Command_ReadShell] = Handle_ReadShellCommand;
-    commandHandlers[CommandType::Command_GetDisplays] = Handle_GetDisplaysCommand;
-    commandHandlers[CommandType::Command_GetScreenshot] = Handle_GetScreenshotCommand;
-    commandHandlers[CommandType::Command_ResetShell] = Handle_ResetShellCommand;
+    // Core (mandatory, always registered)
+    commandHandlers[CommandType::Command_Hello] = Handle_HelloCommand;
     commandHandlers[CommandType::Command_Exit] = Handle_ExitCommand;
+#if SUPPORT_FILESYSTEM
+    commandHandlers[CommandType::Command_GetDirectoryContent] = Handle_GetDirectoryContentCommand;
+    commandHandlers[CommandType::Command_GetFileContent]      = Handle_GetFileContentCommand;
+    commandHandlers[CommandType::Command_GetFileChunkHash]    = Handle_GetFileChunkHashCommand;
+#endif
+#if SUPPORT_SHELL
+    commandHandlers[CommandType::Command_OpenShell]  = Handle_OpenShellCommand;
+    commandHandlers[CommandType::Command_CloseShell] = Handle_CloseShellCommand;
+    commandHandlers[CommandType::Command_ReadShell]  = Handle_ReadShellCommand;
+    commandHandlers[CommandType::Command_WriteShell] = Handle_WriteShellCommand;
+#endif
+#if SUPPORT_DISPLAY
+    commandHandlers[CommandType::Command_GetDisplays]   = Handle_GetDisplaysCommand;
+    commandHandlers[CommandType::Command_GetScreenshot] = Handle_GetScreenshotCommand;
+#endif
 
     LOG_INFO("Agent starting, registered %d command handlers", (INT32)CommandType::CommandTypeCount);
 

@@ -30,7 +30,7 @@ full flow, annotated against the source.
 
 ```cpp
 CommandHandler commandHandlers[CommandType::CommandTypeCount] = {nullptr};
-commandHandlers[CommandType::Command_GetSystemInfo] = Handle_GetSystemInfoCommand;
+commandHandlers[CommandType::Command_Hello] = Handle_HelloCommand;
 commandHandlers[CommandType::Command_GetDirectoryContent] = Handle_GetDirectoryContentCommand;
 commandHandlers[CommandType::Command_GetFileContent] = Handle_GetFileContentCommand;
 commandHandlers[CommandType::Command_GetFileChunkHash] = Handle_GetFileChunkHashCommand;
@@ -162,6 +162,8 @@ struct AgentBuildInfo
 {
     UINT32 BuildNumber;
     CHAR CommitHash[9]; // 8 hex chars + null
+    UINT32 ApiVersion;
+    BOOL Is64Bit; // true iff this agent binary is 64-bit (sizeof(void*) == 8)
 };
 #pragma pack(pop)
 ```
@@ -209,7 +211,7 @@ response = new CHAR[responseLength];
 
 ## 5. The Context Struct
 
-Most commands are stateless. `GetSystemInfo` gathers information, writes it,
+Most commands are stateless. `Hello` gathers information, writes it,
 and is done. `GetFileContent` reads a file and returns it. No state persists
 between calls.
 
