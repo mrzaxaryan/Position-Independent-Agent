@@ -325,7 +325,8 @@ VOID Handle_WriteShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
         return;
     }
 
-    ShellId shellId = *(PUINT64)command;
+ShellId shellId = 0;
+Memory::Copy(&shellId, command, sizeof(shellId));
     PCHAR input = command + sizeof(ShellId);
     USIZE inputLength = commandLength - sizeof(ShellId);
 
