@@ -22,7 +22,7 @@ Top-level application layer — connects to a relay server over WebSocket (TLS 1
 │       │                                                     │
 │  ┌────┴─────────────────────────────────────────────────┐   │
 │  │              Command Handlers                        │   │
-│  ├─ GetSystemInfo      → SystemInfo struct              │   │
+│  ├─ Hello               → SystemInfo struct             │   │
 │  ├─ GetDirectoryContent → DirectoryIterator             │   │
 │  ├─ GetFileContent      → File::Open + Read             │   │
 │  ├─ WriteShell          → ShellProcess::Write           │   │
@@ -72,7 +72,7 @@ Commands are dispatched via a function pointer array indexed by command type:
 ```c
 typedef Result<void, Error> (*CommandHandler)(WebSocketClient&, Span<UINT8> payload);
 CommandHandler handlers[] = {
-    HandleGetSystemInfo,        // 0
+    HandleHello,                // 0
     HandleGetDirectoryContent,  // 1
     HandleGetFileContent,       // 2
     HandleWriteShell,           // 3

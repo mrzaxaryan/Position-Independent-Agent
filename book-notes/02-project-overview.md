@@ -82,7 +82,7 @@ details are what make it interesting.
 
 The README lists these but doesn't say much about what each one actually does:
 
-- **GetSystemInfo** — hostname, OS version, machine ID, etc.
+- **Hello** — hostname, OS version, machine ID, etc.
 - **GetDirectoryContent** — lists files and folders (like `ls` or `dir`)
 - **GetFileContent** — downloads a file from the target
 - **WriteShell** — sends keyboard input to an interactive shell

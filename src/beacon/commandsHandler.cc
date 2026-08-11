@@ -104,6 +104,7 @@ VOID Handle_HelloCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE 
     Memory::Zero(buildInfo.CommitHash, sizeof(buildInfo.CommitHash));
     Memory::Copy(buildInfo.CommitHash, commitHash, sizeof(buildInfo.CommitHash) - 1);
     buildInfo.ApiVersion = AGENT_API_VERSION;
+    buildInfo.Is64Bit = (sizeof(void*) == 8);
 
     // 64-bit capability mask: bit i set iff category i (CapabilityBit) is supported.
     CapabilityMask capabilities = BuildCapabilityMask();

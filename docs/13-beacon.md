@@ -163,6 +163,7 @@ struct AgentBuildInfo
     UINT32 BuildNumber;
     CHAR CommitHash[9]; // 8 hex chars + null
     UINT32 ApiVersion;
+    BOOL Is64Bit; // true iff this agent binary is 64-bit (sizeof(void*) == 8)
 };
 #pragma pack(pop)
 ```

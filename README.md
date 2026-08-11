@@ -398,6 +398,7 @@ capability mask so the C2 can determine which feature categories this beacon sup
 | `BuildNumber`  | `UINT32`    | Auto-incrementing build number (git commit count) |
 | `CommitHash`   | `CHAR[9]`   | Short git commit hash (8 hex chars + null)        |
 | `ApiVersion`   | `UINT32`    | Agent API version (starts at 1, bump on breaking protocol change) |
+| `Is64Bit`      | `BOOL`      | `true` iff this agent binary is 64-bit (`sizeof(void*) == 8`); agent pointer width, not OS |
 
 `CapabilityMask` layout (packed, 8 bytes = 64 bits, LSB-first per byte):
 

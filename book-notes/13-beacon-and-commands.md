@@ -133,7 +133,7 @@ The read side uses a polling loop: first poll with a 5-second timeout to wait fo
 **Type:** QUESTION
 **Priority:** MEDIUM
 
-Most commands are stateless (GetSystemInfo, GetFileContent — run and done). But some need to persist state between calls. The shell process stays open between WriteShell/ReadShell commands. Screenshots need the previous frame for dirty-rect comparison.
+Most commands are stateless (Hello, GetFileContent — run and done). But some need to persist state between calls. The shell process stays open between WriteShell/ReadShell commands. Screenshots need the previous frame for dirty-rect comparison.
 
 Context holds pointers to these persistent objects. It gets allocated once and lives for the entire session, then gets reset on reconnection — each new WebSocket connection starts with a fresh Context.
 
