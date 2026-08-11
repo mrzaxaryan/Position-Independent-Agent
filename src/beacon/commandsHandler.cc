@@ -310,7 +310,7 @@ VOID Handle_OpenShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
     *responseLength = sizeof(UINT32) + sizeof(ShellId);
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = StatusCode::StatusSuccess;
-    *(PUINT64)(*response + sizeof(UINT32)) = shellId;
+Memory::Copy(*response + sizeof(UINT32), &shellId, sizeof(shellId));
 }
 
 // Writes a command to a shell. Payload: [shellId:8][UTF-8 input + '\0']
