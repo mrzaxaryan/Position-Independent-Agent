@@ -39,10 +39,10 @@ enum CommandType : UINT8
 //   DISPLAY     GetDisplays, GetScreenshot
 // =============================================================================
 #ifndef SUPPORT_FILESYSTEM
-#define SUPPORT_FILESYSTEM 0
+#define SUPPORT_FILESYSTEM 1
 #endif
 #ifndef SUPPORT_SHELL
-#define SUPPORT_SHELL 0
+#define SUPPORT_SHELL 1
 #endif
 #ifndef SUPPORT_DISPLAY
 #define SUPPORT_DISPLAY 1
