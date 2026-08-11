@@ -65,39 +65,52 @@ struct AgentBuildInfo
     UINT32 BuildNumber;
     CHAR CommitHash[9]; // 8 hex chars + null
     UINT32 ApiVersion;
-    BOOL Is64Bit; // true iff this agent binary is 64-bit (sizeof(void*) == 8)
+    BOOL Is64Bit; ///< true iff this agent binary is 64-bit (sizeof(void*) == 8)
 };
 #pragma pack(pop)
 
-// Capability categories advertised in the Hello response. The bit position of
-// each category equals its CapabilityBit value. Hello and Exit are mandatory
-// core commands and are intentionally NOT represented here (always available).
+/**
+ * @brief Feature categories advertised in the Hello capability mask.
+ *
+ * @details Each category's bit position in CapabilityMask equals its value
+ *          here. Hello and Exit are mandatory core commands and are
+ *          intentionally NOT represented (always available, never gated).
+ */
 enum CapabilityBit : UINT8
 {
-    Capability_FileSystem = 0,
-    Capability_Shell = 1,
-    Capability_Display = 2,
+    Capability_FileSystem = 0, ///< File system access (dir listing, file read, chunk hash)
+    Capability_Shell = 1,      ///< Interactive shell (open/close/read/write)
+    Capability_Display = 2,    ///< Display enumeration + screenshot
     CapabilityBitCount
 };
 
-// 64-bit capability mask appended to the Hello response. Bit i (byte i/8,
-// bit i%8, LSB-first) is set iff feature category i is supported by this beacon.
-// Bits [CapabilityBitCount .. 63] are reserved (0). The C2 reads a bit with
-// (Bits[i/8] >> (i%8)) & 1 to decide whether category i is available.
-static constexpr USIZE CAPABILITY_MASK_BYTES = 8; // 64 bits
+/**
+ * @brief 64-bit feature-category capability mask appended to the Hello response.
+ *
+ * @details Bit i (byte i/8, bit i%8, LSB-first) is set iff feature category i
+ *          is supported. Bits [CapabilityBitCount .. 63] are reserved (0).
+ *          Read bit i as (Bits[i/8] >> (i%8)) & 1.
+ */
+static constexpr USIZE CAPABILITY_MASK_BYTES = 8; ///< CapabilityMask size in bytes (64 bits)
 
 #pragma pack(push, 1)
 struct CapabilityMask
 {
-    UINT8 Bits[CAPABILITY_MASK_BYTES];
+    UINT8 Bits[CAPABILITY_MASK_BYTES]; ///< Raw category bitmask, LSB-first per byte
 };
 #pragma pack(pop)
 
 static_assert(CapabilityBitCount <= CAPABILITY_MASK_BYTES * 8, "CapabilityMask too small for categories");
 static_assert(sizeof(CapabilityMask) == 8, "CapabilityMask must stay 8 bytes on the wire");
 
-// Build the capability mask at compile time from the SUPPORT_* category macros.
-// The bit position of each category equals its CapabilityBit value.
+/**
+ * @brief Builds the capability mask at compile time from the SUPPORT_* macros.
+ *
+ * @details Each category bit mirrors its SUPPORT_<CATEGORY> macro; the bit
+ *          position equals the CapabilityBit value.
+ *
+ * @return Compile-time-constant CapabilityMask to append to the Hello response.
+ */
 inline constexpr CapabilityMask BuildCapabilityMask() noexcept
 {
     CapabilityMask mask = {};
