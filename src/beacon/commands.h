@@ -55,7 +55,7 @@ enum CommandType : UINT8
 #define AGENT_COMMIT_HASH "00000000"
 #endif
 #ifndef AGENT_API_VERSION
-#define AGENT_API_VERSION 3
+#define AGENT_API_VERSION 4
 #endif
 
 // Build metadata appended to the Hello response

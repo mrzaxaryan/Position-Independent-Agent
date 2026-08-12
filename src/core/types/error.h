@@ -247,6 +247,7 @@ struct Error
 		ShellProcess_CreateFailed = 135, // shell process creation failed
 		ShellProcess_NotSupported = 136, // shell not supported on this platform
 		ShellProcess_ReadFailed = 137,	  // shell read failed
+		Shell_NoFreeSlot = 138,          // all shell slots in use
 	};
 
 	/**

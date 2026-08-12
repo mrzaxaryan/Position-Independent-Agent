@@ -97,6 +97,12 @@ INT32 start()
                 LOG_ERROR("WebSocket read failed after %u messages processed, reconnecting...", messageCount);
                 break;
             }
+            if (readResult.Value().Length < sizeof(UINT8))
+            {
+                LOG_ERROR("WebSocket received empty/undersized message (%u bytes), reconnecting...",
+                          (UINT32)readResult.Value().Length);
+                break;
+            }
 
             messageCount++;
             PCHAR command = (PCHAR)(readResult.Value().Data);

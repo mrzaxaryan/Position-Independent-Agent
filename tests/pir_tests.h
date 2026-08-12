@@ -21,6 +21,7 @@
  *   PrngTests              - Pseudorandom number generator tests
  *   ProcessTests           - Process creation, wait, terminate tests
  *   RandomTests            - Random number generation tests
+ *   ShellManagerTests      - ShellManager slot assignment / reuse tests
  *   ResultTests            - Result<T,E> type tests
  *   ScreenTests            - Screen/display device tests
  *   ShaTests               - SHA-2 hash function tests (SHA-224/256/384/512 and HMAC)
@@ -83,6 +84,7 @@
 #include "vector_tests.h"
 #include "websocket_tests.h"
 #include "shell_platform_test.h"
+#include "shell_manager_tests.h"
 #include "environment_tests.h"
 
 static BOOL RunPIRTests()
@@ -120,6 +122,7 @@ static BOOL RunPIRTests()
 #if !defined(ARCHITECTURE_MIPS)
 	// MIPS32: qemu-mipsel can't translate the MIPS PTY-grant ioctls (errno 130). Passes on hardware.
 	RunTestSuite<ShellProcessTests>(allPassed);
+	RunTestSuite<ShellManagerTests>(allPassed);
 #endif
 	RunTestSuite<RandomTests>(allPassed);
 	RunTestSuite<ScreenTests>(allPassed);

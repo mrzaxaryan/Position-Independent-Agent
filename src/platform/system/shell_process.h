@@ -3,13 +3,13 @@
  * @brief Cross-platform interactive shell process abstraction
  * @details Unified interface for spawning an interactive shell with I/O.
  * On POSIX platforms, uses PTY for merged stdout/stderr with terminal semantics.
- * On Windows, uses anonymous pipes with separate stdout/stderr streams.
+ * On Windows, uses anonymous pipes with stderr merged into stdout (2 pipes).
  * Position-independent with no data section dependencies.
  * Part of the PLATFORM layer of the Position-Independent Runtime (PIR).
  *
  * Platform implementations:
  * - POSIX: PTY + Process (/bin/sh)
- * - Windows: 3x Pipe + Process (cmd.exe)
+ * - Windows: 2x Pipe + Process (cmd.exe), stderr merged into stdout
  * - UEFI: Not supported (Create returns failure)
  */
 
@@ -41,7 +41,8 @@ public:
 	 * Create - Spawn an interactive shell process
 	 *
 	 * @details On POSIX, spawns /bin/sh via PTY. On Windows, spawns cmd.exe
-	 * with stdin/stdout/stderr redirected through anonymous pipes.
+	 * with stdin/stdout redirected through anonymous pipes and stderr merged
+	 * into the stdout pipe (a single read drains both, matching the PTY).
 	 *
 	 * @return ShellProcess on success, Error on failure
 	 */
@@ -64,15 +65,6 @@ public:
 	 * @return Number of bytes read on success, Error on failure
 	 */
 	[[nodiscard]] Result<USIZE, Error> Read(CHAR *buffer, USIZE capacity) noexcept;
-
-	/**
-	 * ReadError - Read from the shell's stderr (POSIX: returns 0, Windows: reads stderr pipe)
-	 *
-	 * @param buffer Buffer to read into
-	 * @param capacity Buffer size in bytes
-	 * @return Number of bytes read on success, Error on failure
-	 */
-	[[nodiscard]] Result<USIZE, Error> ReadError(CHAR *buffer, USIZE capacity) noexcept;
 
 	/**
 	 * Poll - Check if data is available for reading
@@ -98,13 +90,11 @@ private:
 #if defined(PLATFORM_WINDOWS) || defined(PLATFORM_UEFI)
 	Pipe stdinPipe;
 	Pipe stdoutPipe;
-	Pipe stderrPipe;
 
-	ShellProcess(Process &&proc, Pipe &&inP, Pipe &&outP, Pipe &&errP) noexcept
+	ShellProcess(Process &&proc, Pipe &&inP, Pipe &&outP) noexcept
 		: process(static_cast<Process &&>(proc)),
 		  stdinPipe(static_cast<Pipe &&>(inP)),
-		  stdoutPipe(static_cast<Pipe &&>(outP)),
-		  stderrPipe(static_cast<Pipe &&>(errP)) {}
+		  stdoutPipe(static_cast<Pipe &&>(outP)) {}
 #else
 	Pty pty;
 

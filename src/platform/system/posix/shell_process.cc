@@ -67,16 +67,6 @@ Result<USIZE, Error> ShellProcess::Read(CHAR *buffer, USIZE capacity) noexcept
 }
 
 // ============================================================================
-// ShellProcess::ReadError
-// ============================================================================
-
-Result<USIZE, Error> ShellProcess::ReadError([[maybe_unused]] CHAR *buffer, [[maybe_unused]] USIZE capacity) noexcept
-{
-	// PTY merges stdout and stderr — nothing separate to read
-	return Result<USIZE, Error>::Ok(0);
-}
-
-// ============================================================================
 // ShellProcess::Poll
 // ============================================================================
 

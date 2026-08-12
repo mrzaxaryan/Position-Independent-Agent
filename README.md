@@ -131,9 +131,9 @@ The project is built on a clean layered abstraction that separates concerns and 
 
 **PLATFORM** handles OS and hardware specifics: Windows PEB walking, PE parsing, NTAPI-based operations; Linux/Android direct syscall interface without libc; macOS/iOS BSD syscall interface without libc (shared XNU kernel); FreeBSD BSD syscall interface; Solaris direct syscalls; UEFI boot/runtime services. Covers console I/O, file system, networking, memory allocation, screen capture, and process management.
 
-**LIB** provides high-level libraries: cryptography (SHA-256/384/512, HMAC, ChaCha20-Poly1305, ECC P-256), TLS 1.3, HTTP client, DNS resolution, WebSocket, and JPEG encoder.
+**LIB** provides high-level libraries: cryptography (SHA-256/384/512, HMAC, ChaCha20-Poly1305, ECC P-256), TLS 1.3, HTTP client, DNS resolution, WebSocket, JPEG encoder, and the interactive shell wrapper.
 
-**BEACON** is the agent layer: command dispatcher, 9 command handlers, interactive shell (PTY on POSIX, `cmd.exe` on Windows), and screen capture context.
+**BEACON** is the agent layer: command dispatcher, 9 command handlers, and screen capture context. (The interactive shell itself lives in `lib/shell/`; the beacon wires it into the Open/Read/Write/Close shell commands.)
 
 Upper layers depend on lower layers, never the reverse.
 
@@ -141,8 +141,8 @@ Upper layers depend on lower layers, never the reverse.
 src/
 ├── core/        Layer 1 — Primitive types, Result<T,E>, Span<T>, strings, memory ops, math, base64, binary I/O
 ├── platform/    Layer 2 — OS abstraction: syscalls, allocator, console, file system, sockets, screen capture, processes
-├── lib/         Layer 3 — Crypto (SHA-256, ChaCha20-Poly1305, ECC P-256), TLS 1.3, HTTP, DNS, WebSocket, JPEG encoder
-└── beacon/      Layer 4 — Agent: command dispatcher, 9 command handlers, interactive shell, screen capture context
+├── lib/         Layer 3 — Crypto (SHA-256, ChaCha20-Poly1305, ECC P-256), TLS 1.3, HTTP, DNS, WebSocket, JPEG encoder, interactive shell
+└── beacon/      Layer 4 — Agent: command dispatcher, 9 command handlers, screen capture context
 ```
 
 All system interaction is through direct syscalls (NT Native API on Windows, inline assembly on POSIX, Boot Services on UEFI). A custom LLVM pass ([pic-transform](tools/pic-transform/)) eliminates data sections at compile time, ensuring only a `.text` section in the final binary.
@@ -158,8 +158,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full project structure and source
 ├── src/
 │   ├── core/               # Platform-independent primitives
 │   ├── platform/            # OS abstraction: syscalls, allocator, console, file system, sockets, screen, processes
-│   ├── lib/                 # Crypto (SHA-2, ChaCha20, ECC), TLS 1.3, HTTP, DNS, WebSocket, JPEG encoder
-│   ├── beacon/              # Agent: command dispatcher, shell, screen capture
+│   ├── lib/                 # Crypto (SHA-2, ChaCha20, ECC), TLS 1.3, HTTP, DNS, WebSocket, JPEG encoder, interactive shell
+│   ├── beacon/              # Agent: command dispatcher, screen capture
 │   └── entry_point.cc       # Platform entry point
 ├── tests/                   # Test suite (31 test suites across all layers)
 ├── tools/
@@ -441,16 +441,16 @@ Computes a SHA-256 hash of a file chunk.
 
 ### `WriteShell` (0x04)
 
-Sends input to the interactive shell session. Creates the shell process on first use. On POSIX platforms, the shell runs in a PTY (pseudo-terminal) for interactive behavior.
+Sends input to an interactive shell session. The shell must be opened first with `OpenShell`. On POSIX platforms, the shell runs in a PTY (pseudo-terminal) for interactive behavior.
 
-- **Request**: `UINT8[] input` (raw UTF-8 bytes, trailing null bytes are stripped)
+- **Request**: `UINT64 shellId` + `UINT8[] input` (raw UTF-8 bytes, trailing null bytes are stripped)
 - **Response**: `UINT32 status`
 
 ### `ReadShell` (0x05)
 
-Reads available output from the interactive shell session. On POSIX platforms, stdout and stderr are merged through the PTY.
+Reads available output from an interactive shell session. On POSIX platforms, stdout and stderr are merged through the PTY.
 
-- **Request**: No payload (command type byte only)
+- **Request**: `UINT64 shellId`
 - **Response**: `UINT32 status` + `UINT8[] data` (null-terminated shell output)
 
 ### `GetDisplays` (0x06)
@@ -485,12 +485,19 @@ Captures a JPEG-encoded screenshot of a specified display.
 | `imageAsJpeg` | `CHAR[sizeOfData]` | Image                              |
 
 
-### `ResetShell` (0x08)
+### `CloseShell` (0x08)
 
-Resets the shell instance, nullifying the pointer and freeing resources.
+Closes a shell session, freeing its slot for reuse. Idempotent — safe to call on an id that was never opened or already closed.
+
+- **Request**: `UINT64 shellId`
+- **Response**: `UINT32 status`
+
+### `OpenShell` (0x0a)
+
+Opens a new interactive shell session. The beacon owns slot assignment: it picks the first free slot in a 256-slot pool, spawns the shell there, and returns the assigned `shellId`. The client must reuse this id for `WriteShell`/`ReadShell`/`CloseShell` rather than choosing its own. The id is a 64-bit value to match pointer width, leaving room for a future revision to ship an opaque handle instead of a slot index.
 
 - **Request**: No payload (command type byte only)
-- **Response**: `UINT32 status`
+- **Response**: `UINT32 status` + `UINT64 shellId`
 
 ## Configuration
 
