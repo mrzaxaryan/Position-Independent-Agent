@@ -310,7 +310,7 @@ VOID Handle_OpenShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
     *responseLength = sizeof(UINT32) + sizeof(ShellId);
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = StatusCode::StatusSuccess;
-Memory::Copy(*response + sizeof(UINT32), &shellId, sizeof(shellId));
+    Memory::Copy(*response + sizeof(UINT32), &shellId, sizeof(shellId));
 }
 
 // Writes a command to a shell. Payload: [shellId:8][UTF-8 input + '\0']
@@ -325,8 +325,8 @@ VOID Handle_WriteShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
         return;
     }
 
-ShellId shellId = 0;
-Memory::Copy(&shellId, command, sizeof(shellId));
+    ShellId shellId = 0;
+    Memory::Copy(&shellId, command, sizeof(shellId));
     PCHAR input = command + sizeof(ShellId);
     USIZE inputLength = commandLength - sizeof(ShellId);
 
@@ -368,7 +368,8 @@ VOID Handle_ReadShellCommand(PCHAR command, USIZE commandLength, PPCHAR response
         return;
     }
 
-    ShellId shellId = *(PUINT64)command;
+    ShellId shellId = 0;
+    Memory::Copy(&shellId, command, sizeof(shellId));
     Shell *shell = context->shellManager.Get(shellId);
     if (shell == nullptr)
     {
@@ -407,7 +408,8 @@ VOID Handle_CloseShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
         return;
     }
 
-    ShellId shellId = *(PUINT64)command;
+    ShellId shellId = 0;
+    Memory::Copy(&shellId, command, sizeof(shellId));
     context->shellManager.Close(shellId);
     LOG_INFO("Shell instance closed for id %llu", shellId);
 
