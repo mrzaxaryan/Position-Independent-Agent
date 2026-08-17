@@ -22,7 +22,7 @@ The target audience for the book is complete beginners with zero systems program
 | [12-networking.md](12-networking.md) | Network Stack | Questions about DNS, HTTP, TLS, WebSocket |
 | [13-beacon-and-commands.md](13-beacon-and-commands.md) | Beacon Layer | Questions about the command loop, handlers, screen capture |
 | [14-pic-transform.md](14-pic-transform.md) | PIC Transform LLVM Pass | Questions about how string literals become stack immediates |
-| [15-loaders.md](15-loaders.md) | Python and PowerShell Loaders | Questions about how the shellcode gets loaded and executed |
+| [15-loaders.md](15-loaders.md) | Python Loader | Questions about how the shellcode gets loaded and executed |
 | [16-suggested-edits.md](16-suggested-edits.md) | Suggested Edits | Spots where existing docs/comments could be clearer |
 
 ## How to Use These Notes

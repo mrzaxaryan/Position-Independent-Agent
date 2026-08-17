@@ -59,7 +59,7 @@ handles all of them.
 ---
 
 ### What is the "relay" mentioned in the architecture?
-**File:** `README.md` **Line(s):** 95-127
+**File:** `docs/02-project-overview.md` **Line(s):** 72-93
 **Type:** QUESTION
 **Priority:** MEDIUM
 
@@ -75,8 +75,8 @@ details are what make it interesting.
 
 ---
 
-### What are the 10 command types?
-**File:** `README.md` **Line(s):** 42-50
+### What are the 11 command types?
+**File:** `README.md` **Line(s):** 51-61
 **Type:** QUESTION
 **Priority:** MEDIUM
 
@@ -85,13 +85,14 @@ The README lists these but doesn't say much about what each one actually does:
 - **Hello** — hostname, OS version, machine ID, etc.
 - **GetDirectoryContent** — lists files and folders (like `ls` or `dir`)
 - **GetFileContent** — downloads a file from the target
+- **GetFileChunkHash** — SHA-256 hash of a file chunk (integrity checking)
 - **WriteShell** — sends keyboard input to an interactive shell
 - **ReadShell** — reads output from that shell
 - **GetDisplays** — enumerates connected monitors
 - **GetScreenshot** — captures what's on screen, with incremental dirty-rect compression
 - **CloseShell** — destroys a shell by id, freeing its slot for reuse
 - **Exit** — gracefully terminate the agent
-- **OpenShell** — opens a new interactive shell session
+- **OpenShell** — opens a new interactive shell session, assigning its id
 
 These are the fundamental operations an operator needs during an engagement.
 Nothing flashy — just solid building blocks.
@@ -118,7 +119,7 @@ precise about it.
 ---
 
 ### What is the "Common Problems and Solutions" section really about?
-**File:** `README.md` **Line(s):** 216-284
+**File:** `README.md` **Line(s):** 229-305
 **Type:** COMMENT
 **Priority:** HIGH
 

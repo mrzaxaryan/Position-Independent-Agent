@@ -1,4 +1,4 @@
-# 15 - Loaders (Python and PowerShell)
+# 15 - Loaders (Python)
 
 How shellcode gets loaded into memory and executed. The agent binary is just raw bytes — it needs something to put it in executable memory and jump to it.
 
@@ -11,7 +11,7 @@ How shellcode gets loaded into memory and executed. The agent binary is just raw
 
 The agent compiles to a .bin file — raw machine code, no headers, no metadata. Those bytes can't just run on their own. They need to land in executable memory and get jumped to. That's what a loader does: allocate memory with execute permission, copy the shellcode in, and jump to byte zero (which is the entry point).
 
-The loader itself is a normal program. It doesn't need to be position-independent. Different loaders exist for different scenarios — Python for cross-platform quick testing, PowerShell for Windows enterprise environments, and in real engagements you'd write custom loaders, use process injection, whatever fits the situation.
+The loader itself is a normal program. It doesn't need to be position-independent. The Python loader handles cross-platform quick testing (POSIX in-process, Windows process injection), and in real engagements you'd write custom loaders, use process injection, whatever fits the situation.
 
 ---
 
