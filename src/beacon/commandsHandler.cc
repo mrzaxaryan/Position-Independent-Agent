@@ -122,7 +122,7 @@ VOID Handle_HelloCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE 
              info.Hostname, info.Username, info.Architecture, info.AgentPlatform, info.OSVersion, buildInfo.BuildNumber, buildInfo.CommitHash, buildInfo.ApiVersion);
 }
 
-VOID Handle_GetDirectoryContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
+VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
     LOG_INFO("Handling GetDirectoryContentCommand.");
     // Buffer to hold the path from command
@@ -178,7 +178,7 @@ VOID Handle_GetDirectoryContentCommand([[maybe_unused]] PCHAR command, [[maybe_u
 }
 
 // Reads a chunk of file content
-VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
+VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
     LOG_INFO("Handling GetFileContentCommand.");
     // Getting parameters from command buffer: read count, offset and file path
@@ -224,7 +224,7 @@ VOID Handle_GetFileContentCommand([[maybe_unused]] PCHAR command, [[maybe_unused
 }
 
 // Computes the SHA-256 hash of a file chunk
-VOID Handle_GetFileChunkHashCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
+VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
     LOG_INFO("Handling GetFileChunkHashCommand.");
     // Getting parameters from command buffer: chunk size, offset and file path
@@ -441,7 +441,7 @@ VOID Handle_ExitCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE c
 }
 
 // Gets the list of display devices and their information
-VOID Handle_GetDisplaysCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
+VOID Handle_GetDisplaysCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
     LOG_INFO("Handling GetDisplaysCommand.");
 
@@ -494,7 +494,7 @@ VOID JpegCallback(PVOID context, PVOID data, INT32 size)
 }
 
 // Gets a screenshot of the specified display device
-VOID Handle_GetScreenshotCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
+VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
     // Retrieve parameters from command buffer
     auto displayIndex = *(PUINT32)(command);
