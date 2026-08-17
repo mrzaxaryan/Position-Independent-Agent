@@ -235,6 +235,8 @@ si.hStdError = stderrWrite;
 CreateProcessW(path, cmdLine, ..., TRUE /*inherit*/, ..., &si, &pi)
 ```
 
+The generic `Process::Create` accepts three independent handles — the three-pipe layout above is the fully-wired case. `ShellProcess` deliberately deviates: it creates only two pipes and passes the **same** stdout write-end as the stderr handle (see the next section).
+
 ## Interactive Shell
 
 ### POSIX: Shell over PTY
@@ -252,7 +254,7 @@ Single fd for all I/O — the PTY multiplexes stdin/stdout/stderr.
 
 ### Windows: cmd.exe over Two Pipes (stderr merged)
 
-Windows lacks PTY support, so `cmd.exe` runs over two anonymous pipes (stdin, stdout) with stderr redirected into the stdout pipe — mirroring the single-stream POSIX PTY and ensuring stderr is actually drained (a separate, never-read stderr pipe would fill its buffer and stall `cmd.exe`). `PeekNamedPipe` provides non-blocking read capability for polling.
+Windows lacks PTY support, so `cmd.exe` runs over two anonymous pipes (stdin, stdout). In `ShellProcess::Create` (`src/platform/system/windows/shell_process.cc`), the stdout pipe's write-end is passed as **both** `hStdOutput` and `hStdError`, merging the streams — mirroring the single-stream POSIX PTY and ensuring stderr is actually drained (a separate, never-read stderr pipe would fill its buffer and stall `cmd.exe`). `PeekNamedPipe` provides non-blocking read capability for polling.
 
 End-of-prompt detection: `'>'` on Windows (cmd.exe), `'$'` on POSIX (sh).
 
