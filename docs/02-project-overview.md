@@ -17,24 +17,24 @@ This is standard architecture for penetration testing tools. Cobalt Strike has i
 The codebase follows a strict 4-layer design. Each layer depends only on layers below it — never sideways or upward.
 
 ```
-+---------------------------------------------------------------+
++----------------------------------------------------------------+
 |  BEACON (src/beacon/)                          4 files         |
 |  Agent command loop, handlers, screen capture                  |
-+---------------------------------------------------------------+
++----------------------------------------------------------------+
 |  LIB (src/lib/)                               32 files         |
-|  Crypto, TLS 1.3, HTTP, DNS, WebSocket, JPEG, shell, containers |
-+---------------------------------------------------------------+
+|  Crypto, TLS 1.3, HTTP, DNS, WebSocket, JPEG, shell, containers|
++----------------------------------------------------------------+
 |  PLATFORM (src/platform/)                     82 files         |
 |  Console, filesystem, sockets, screen, memory, system utils    |
 |  Implementations in: posix/, windows/, uefi/                   |
-+---------------------------------------------------------------+
++----------------------------------------------------------------+
 |  KERNEL (src/platform/kernel/)                88 files         |
 |  Raw syscall definitions and OS API wrappers                   |
 |  Per-OS: linux/, windows/, macos/, freebsd/, solaris/, uefi/   |
-+---------------------------------------------------------------+
++----------------------------------------------------------------+
 |  CORE (src/core/)                             32 files         |
 |  Types, memory ops, strings, math, algorithms, compiler RT     |
-+---------------------------------------------------------------+
++----------------------------------------------------------------+
 ```
 
 **Core** sits at the bottom. Pure C++ with no knowledge of any operating system. Types (`Result`, `Span`, `Error`), memory operations (`memset`, `memcpy`), strings, math, hashing, Base64, binary I/O. Everything here works identically on every platform.

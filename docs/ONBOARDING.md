@@ -19,24 +19,24 @@ Welcome to Position-Independent-Agent. This guide will get you up to speed on th
 The codebase follows a strict layered architecture. Each layer depends only on layers below it — never sideways or upward.
 
 ```
-+---------------------------------------------------------------+
++----------------------------------------------------------------+
 |  Beacon (4 files)                                              |
 |  Agent command loop, handlers, screen capture                  |
-+---------------------------------------------------------------+
++----------------------------------------------------------------+
 |  Lib (32 files)                                                |
-|  Crypto, TLS 1.3, HTTP, DNS, WebSocket, JPEG, shell, containers |
-+---------------------------------------------------------------+
+|  Crypto, TLS 1.3, HTTP, DNS, WebSocket, JPEG, shell, containers|
++----------------------------------------------------------------+
 |  Platform (82 files)                                           |
 |  Console, filesystem, sockets, screen, memory, system utils    |
 |  Per-platform implementations: posix/, windows/, uefi/         |
-+---------------------------------------------------------------+
++----------------------------------------------------------------+
 |  Kernel (88 files)                                             |
 |  Raw syscall definitions and OS API wrappers                   |
 |  Per-OS: linux/, windows/, macos/, freebsd/, solaris/, uefi/   |
-+---------------------------------------------------------------+
++----------------------------------------------------------------+
 |  Core (32 files)                                               |
 |  Types, memory ops, strings, math, algorithms, compiler RT     |
-+---------------------------------------------------------------+
++----------------------------------------------------------------+
 ```
 
 Supporting layers outside the main stack:
@@ -208,7 +208,7 @@ These files are the most complex in the codebase. Approach them with care (and c
 |------|-------------|
 | `src/lib/runtime.h` | Aggregate include for entire runtime |
 | `src/lib/vector.h` | Move-only dynamic array with fallible allocation |
-| `src/lib/shell/shell.h` / `shell.cc` | Interactive shell wrapper and `ShellManager` pool |
+| `src/lib/shell/shell.*` | Interactive shell wrapper and `ShellManager` pool |
 | `src/lib/crypto/chacha20.*` | ChaCha20-Poly1305 AEAD cipher (RFC 8439) |
 | `src/lib/crypto/ecc.*` | ECDH key exchange, P-256/P-384 |
 | `src/lib/crypto/sha2.*` | SHA-256/SHA-384 and HMAC |

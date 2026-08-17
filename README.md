@@ -115,13 +115,13 @@ The project is built on a clean layered abstraction that separates concerns and 
 ```
 +-------------------------------------------------------------+
 |  BEACON (Agent Layer)                                       |
-|  Command dispatcher, 11 command handlers, screen capture     |
+|  Command dispatcher, 11 command handlers, screen capture    |
 +-------------------------------------------------------------+
 |  LIB (Runtime Abstraction Layer)                            |
 |  Cryptography, TLS 1.3, HTTP, DNS, WebSocket, JPEG encoder  |
 +-------------------------------------------------------------+
 |  PLATFORM (Platform Abstraction Layer)                      |
-|  OS-specific: Windows PEB/NTAPI, Linux/macOS/BSD syscalls    |
+|  OS-specific: Windows PEB/NTAPI, Linux/macOS/BSD syscalls   |
 +-------------------------------------------------------------+
 |  CORE (Core Abstraction Layer)                              |
 |  Platform-independent: Types, Memory, Strings, Algorithms   |
