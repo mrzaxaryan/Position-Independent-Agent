@@ -75,7 +75,7 @@ details are what make it interesting.
 
 ---
 
-### What are the 9 command types?
+### What are the 10 command types?
 **File:** `README.md` **Line(s):** 42-50
 **Type:** QUESTION
 **Priority:** MEDIUM
@@ -89,6 +89,9 @@ The README lists these but doesn't say much about what each one actually does:
 - **ReadShell** — reads output from that shell
 - **GetDisplays** — enumerates connected monitors
 - **GetScreenshot** — captures what's on screen, with incremental dirty-rect compression
+- **CloseShell** — destroys a shell by id, freeing its slot for reuse
+- **Exit** — gracefully terminate the agent
+- **OpenShell** — opens a new interactive shell session
 
 These are the fundamental operations an operator needs during an engagement.
 Nothing flashy — just solid building blocks.
