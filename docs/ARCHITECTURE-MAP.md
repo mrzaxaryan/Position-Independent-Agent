@@ -8,7 +8,7 @@ Auto-generated from knowledge graph analysis of 295 source files, 543 code eleme
 
 ```
                     +-----------+
-                    |  Loaders  |  (Python, PowerShell)
+                    |  Loaders  |  (Python)
                     +-----+-----+
                           |
                           | loads .bin
@@ -22,7 +22,7 @@ Auto-generated from knowledge graph analysis of 295 source files, 543 code eleme
                           v
                     +-----------+
                     |  Beacon   |  src/beacon/
-                    |  (6 files)|  Command loop, handlers, shell, screenshots
+                    |  (4 files)|  Command loop, handlers, screenshots
                     +-----+-----+
                           |
                           | uses
@@ -191,15 +191,16 @@ High-level functionality built on Platform.
 
 ---
 
-## Layer Detail: Beacon (6 files)
+## Layer Detail: Beacon (4 files)
 
 The agent itself.
 
 - `main.cc` — `start()` function. Builds handler array, infinite reconnect loop, WebSocket receive-dispatch-respond.
-- `commands.h` — 9 command types, Context struct (holds Shell and ScreenCapture state), CommandHandler typedef.
+- `commands.h` — 11 command types, Context struct (holds ShellManager and ScreenCapture state), CommandHandler typedef.
 - `commandsHandler.cc` — Handler implementations. Wire format structs with `#pragma pack(push, 1)`. UTF-16 path decoding.
-- `shell.h/.cc` — Wraps ShellProcess. Polling read with 5s initial / 100ms subsequent timeout.
 - `screen_capture.h` — Graphics context with dual-buffer (current/previous) for dirty-rect diffing.
+
+**Shell** (`src/lib/shell/`, part of the Lib layer): `shell.h/.cc` — `ShellManager` owns a 256-slot shell pool with beacon-assigned 64-bit ids; wraps ShellProcess. Polling read with 5s initial / 100ms subsequent timeout.
 
 ---
 

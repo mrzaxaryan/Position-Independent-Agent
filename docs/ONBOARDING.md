@@ -8,7 +8,7 @@ Welcome to Position-Independent-Agent. This guide will get you up to speed on th
 
 **What is this?** A cross-platform remote agent written in C++23 that compiles to position-independent, zero-dependency shellcode. Everything — crypto, TLS 1.3, WebSocket, HTTP, DNS, JPEG encoding — is implemented from scratch. No libc, no standard library, no dynamic linking.
 
-**Languages:** C++ (dominant), CMake, linker scripts, Python, PowerShell
+**Languages:** C++ (dominant), CMake, linker scripts, Python
 **Build system:** CMake with custom LLVM compiler pass
 **Targets:** 8 platforms (Windows, Linux, macOS, FreeBSD, Solaris, UEFI, Android, iOS) across 7 architectures (i386, x86_64, armv7a, aarch64, riscv32, riscv64, mips64)
 
@@ -20,21 +20,21 @@ The codebase follows a strict layered architecture. Each layer depends only on l
 
 ```
 +---------------------------------------------------------------+
-|  Beacon (6 files)                                              |
-|  Agent command loop, handlers, shell, screen capture           |
+|  Beacon (4 files)                                              |
+|  Agent command loop, handlers, screen capture                  |
 +---------------------------------------------------------------+
-|  Lib (30 files)                                                |
-|  Crypto, TLS 1.3, HTTP, DNS, WebSocket, JPEG, containers      |
+|  Lib (32 files)                                                |
+|  Crypto, TLS 1.3, HTTP, DNS, WebSocket, JPEG, shell, containers |
 +---------------------------------------------------------------+
-|  Platform (81 files)                                           |
+|  Platform (82 files)                                           |
 |  Console, filesystem, sockets, screen, memory, system utils    |
 |  Per-platform implementations: posix/, windows/, uefi/         |
 +---------------------------------------------------------------+
-|  Kernel (81 files)                                             |
+|  Kernel (88 files)                                             |
 |  Raw syscall definitions and OS API wrappers                   |
 |  Per-OS: linux/, windows/, macos/, freebsd/, solaris/, uefi/   |
 +---------------------------------------------------------------+
-|  Core (31 files)                                               |
+|  Core (32 files)                                               |
 |  Types, memory ops, strings, math, algorithms, compiler RT     |
 +---------------------------------------------------------------+
 ```
@@ -46,7 +46,7 @@ Supporting layers outside the main stack:
 | Build System | 27 | CMake modules, linker scripts, platform configs, post-build verification |
 | Tests | 33 | Test suites for every major subsystem |
 | Tools | 3 | The pic-transform LLVM pass (the core innovation) |
-| Loaders | 2 | Python and PowerShell shellcode loaders |
+| Loaders | 1 | Python shellcode loader |
 | Entry Point | 1 | `src/entry_point.cc` — the bootstrap bridge |
 
 ---
@@ -103,12 +103,12 @@ DNS uses DNS-over-HTTPS (queries via TLS to Cloudflare/Google). `HttpClient` han
 ### 10. The Beacon: Command Loop
 **Read:** `src/beacon/main.cc`, `src/beacon/commands.h`, `src/beacon/commandsHandler.cc`
 
-The beacon is the top-level agent logic. `start()` registers command handlers as a function pointer array, connects via WebSocket to the relay server, and enters a receive-dispatch-respond loop with automatic reconnection. 9 command types: system info, directory listing, file read, file hash, shell I/O (write/read/reset), display enumeration, screenshot. Each handler allocates a response buffer and returns ownership to the caller.
+The beacon is the top-level agent logic. `start()` registers command handlers as a function pointer array, connects via WebSocket to the relay server, and enters a receive-dispatch-respond loop with automatic reconnection. 11 command types: handshake (Hello), directory listing, file read, file hash, shell lifecycle (open/close) and shell I/O (write/read), display enumeration, screenshot, and graceful termination (Exit). Each handler allocates a response buffer and returns ownership to the caller.
 
 ### 11. Shell and Screen Capture
 **Read:** `src/lib/shell/shell.h`, `src/beacon/screen_capture.h`, `src/lib/image/jpeg_encoder.h`
 
-Shell wraps platform `ShellProcess` (PTY on POSIX, cmd.exe pipes on Windows) for interactive remote access. Screen capture uses platform-specific framebuffer reading, binary image differencing for dirty-rectangle detection, and a from-scratch baseline JPEG encoder. Float constants in the DCT are encoded as `UINT32` immediates to stay PIC-compliant.
+Shell wraps platform `ShellProcess` (PTY on POSIX, cmd.exe pipes on Windows) for interactive remote access, managed by `ShellManager` — a 256-slot pool where the beacon assigns each new shell a 64-bit `shellId` (returned by `OpenShell` and reused by `WriteShell`/`ReadShell`/`CloseShell`). Screen capture uses platform-specific framebuffer reading, binary image differencing for dirty-rectangle detection, and a from-scratch baseline JPEG encoder. Float constants in the DCT are encoded as `UINT32` immediates to stay PIC-compliant.
 
 ### 12. The PIC Transform
 **Read:** `tools/pic-transform/PICTransformPass.h`, `tools/pic-transform/PICTransformPass.cpp`
@@ -121,9 +121,9 @@ The key innovation. This custom LLVM pass rewrites compiler IR to eliminate `.da
 The CMake pipeline: freestanding toolchain setup, platform-specific flags and linker scripts that merge all sections into `.text`, PIC transform integration, then post-build steps that extract the `.text` section into a raw binary and verify position-independence by scanning the linker map for forbidden sections. If `.rodata` or `.data` exists, the build fails.
 
 ### 14. Loaders
-**Read:** `loaders/python/loader.py`, `loaders/windows/powershell/loader.ps1`
+**Read:** `loaders/python/loader.py`
 
-The compiled `.bin` is raw machine code. The Python loader auto-detects OS/architecture, downloads the correct binary, and executes via mmap+mprotect on POSIX or process injection (VirtualAllocEx + CreateRemoteThread) on Windows. The PowerShell loader does the same for Windows-only environments. Memory is never simultaneously writable and executable (W^X compliance).
+The compiled `.bin` is raw machine code. The Python loader auto-detects OS/architecture, downloads the correct binary, and executes via mmap+mprotect on POSIX or process injection (VirtualAllocEx + CreateRemoteThread) on Windows. Memory is never simultaneously writable and executable (W^X compliance).
 
 ---
 
@@ -195,20 +195,20 @@ These files are the most complex in the codebase. Approach them with care (and c
 | `src/core/binary/binary_reader.h` | Sequential byte reading with big-endian support |
 | `src/core/binary/binary_writer.h` | Sequential byte writing with big-endian support |
 
-### Beacon (6 files)
+### Beacon (4 files)
 | File | What it does |
 |------|-------------|
 | `src/beacon/main.cc` | WebSocket connect, receive-dispatch-respond loop |
 | `src/beacon/commands.h` | CommandType enum, Context struct, handler typedef |
-| `src/beacon/commandsHandler.cc` | All 9 command handlers |
-| `src/lib/shell/shell.h` / `shell.cc` | Interactive shell wrapper |
+| `src/beacon/commandsHandler.cc` | All 11 command handlers |
 | `src/beacon/screen_capture.h` | Screen capture data structures and dirty-rect state |
 
-### Lib (30 files)
+### Lib (32 files)
 | File | What it does |
 |------|-------------|
 | `src/lib/runtime.h` | Aggregate include for entire runtime |
 | `src/lib/vector.h` | Move-only dynamic array with fallible allocation |
+| `src/lib/shell/shell.h` / `shell.cc` | Interactive shell wrapper and `ShellManager` pool |
 | `src/lib/crypto/chacha20.*` | ChaCha20-Poly1305 AEAD cipher (RFC 8439) |
 | `src/lib/crypto/ecc.*` | ECDH key exchange, P-256/P-384 |
 | `src/lib/crypto/sha2.*` | SHA-256/SHA-384 and HMAC |

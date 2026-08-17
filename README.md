@@ -53,10 +53,11 @@ This project solves that: a full C++23 codebase that compiles to position-indepe
   - `GetDirectoryContent` - Directory listing with metadata
   - `GetFileContent` - File read at offset
   - `GetFileChunkHash` - SHA-256 hash of file chunk
-  - `WriteShell` / `ReadShell` - Interactive shell (PTY on POSIX, `cmd.exe` on Windows)
+  - `OpenShell` / `CloseShell` - Interactive shell session lifecycle (PTY on POSIX, `cmd.exe` on Windows)
+  - `WriteShell` / `ReadShell` - Shell input/output by server-assigned `shellId`
   - `GetDisplays` - Display enumeration with geometry
   - `GetScreenshot` - JPEG-encoded screenshot capture with dirty-rectangle diffing
-  - `ResetShell` - Resets Shell instance and nullify context
+  - `Exit` - Graceful termination
 
 ### Tested Features
 
@@ -114,7 +115,7 @@ The project is built on a clean layered abstraction that separates concerns and 
 ```
 +-------------------------------------------------------------+
 |  BEACON (Agent Layer)                                       |
-|  Command dispatcher, 9 command handlers, interactive shell   |
+|  Command dispatcher, 11 command handlers, screen capture     |
 +-------------------------------------------------------------+
 |  LIB (Runtime Abstraction Layer)                            |
 |  Cryptography, TLS 1.3, HTTP, DNS, WebSocket, JPEG encoder  |
@@ -133,7 +134,7 @@ The project is built on a clean layered abstraction that separates concerns and 
 
 **LIB** provides high-level libraries: cryptography (SHA-256/384/512, HMAC, ChaCha20-Poly1305, ECC P-256), TLS 1.3, HTTP client, DNS resolution, WebSocket, JPEG encoder, and the interactive shell wrapper.
 
-**BEACON** is the agent layer: command dispatcher, 9 command handlers, and screen capture context. (The interactive shell itself lives in `lib/shell/`; the beacon wires it into the Open/Read/Write/Close shell commands.)
+**BEACON** is the agent layer: command dispatcher, 11 command handlers, and screen capture context. (The interactive shell itself lives in `lib/shell/`; the beacon wires it into the Open/Read/Write/Close shell commands.)
 
 Upper layers depend on lower layers, never the reverse.
 
@@ -142,7 +143,7 @@ src/
 ├── core/        Layer 1 — Primitive types, Result<T,E>, Span<T>, strings, memory ops, math, base64, binary I/O
 ├── platform/    Layer 2 — OS abstraction: syscalls, allocator, console, file system, sockets, screen capture, processes
 ├── lib/         Layer 3 — Crypto (SHA-256, ChaCha20-Poly1305, ECC P-256), TLS 1.3, HTTP, DNS, WebSocket, JPEG encoder, interactive shell
-└── beacon/      Layer 4 — Agent: command dispatcher, 9 command handlers, screen capture context
+└── beacon/      Layer 4 — Agent: command dispatcher, 11 command handlers, screen capture context
 ```
 
 All system interaction is through direct syscalls (NT Native API on Windows, inline assembly on POSIX, Boot Services on UEFI). A custom LLVM pass ([pic-transform](tools/pic-transform/)) eliminates data sections at compile time, ensuring only a `.text` section in the final binary.
@@ -161,13 +162,11 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the full project structure and source
 │   ├── lib/                 # Crypto (SHA-2, ChaCha20, ECC), TLS 1.3, HTTP, DNS, WebSocket, JPEG encoder, interactive shell
 │   ├── beacon/              # Agent: command dispatcher, screen capture
 │   └── entry_point.cc       # Platform entry point
-├── tests/                   # Test suite (31 test suites across all layers)
+├── tests/                   # Test suite (30 test suites across all layers)
 ├── tools/
 │   └── pic-transform/       # Custom LLVM pass for PIC enforcement
 └── loaders/
-    ├── python/              # Cross-platform shellcode loader (Python)
-    └── windows/
-        └── powershell/      # Windows shellcode loader (PowerShell)
+    └── python/              # Cross-platform shellcode loader (Python)
 ```
 
 ---
@@ -191,7 +190,7 @@ OS abstraction layer with [full platform support matrix](src/platform/README.md)
 - **[Memory Allocation](src/platform/memory/README.md)** — The size-header trick (prepending `USIZE` to `mmap` allocations so `munmap` works without caller-supplied size); `mmap2` page-shift on 32-bit Linux; FreeBSD i386 inline assembly hack for 64-bit `off_t` stack parameter
 - **[Screen Capture](src/platform/screen/README.md)** — Linux three-tier fallback chain (X11 protocol → DRM dumb buffers → fbdev); GPU-composited scanout detection via all-black buffer check; macOS `fork()`-based crash isolation for CoreGraphics on headless systems; Retina display scaling; Solaris `/dev/fb` framebuffer
 - **[TCP Sockets](src/platform/socket/README.md)** — Windows AFD driver networking (bypassing Winsock via `\\Device\\Afd\\Endpoint` with IOCTL encoding `(DeviceType << 12) | (FunctionCode << 2) | Method`); Linux i386 `socketcall` multiplexer packing arguments into arrays; UEFI busy-poll pseudo-async with `Stall(1ms)` loops; BSD `sin_len` sockaddr divergence; per-platform `AF_INET6` values (10/23/26/28/30)
-- **[System Utilities](src/platform/system/README.md)** — Five different PTY creation flows across POSIX platforms (Linux `TIOCSPTLCK`/`TIOCGPTN`, macOS `TIOCPTYGRANT`/`TIOCPTYGNAME`, FreeBSD `FIODGNAME`, Solaris STREAMS `I_STR` ioctls with device minor extraction); Windows PEB environment block walking with manual case-insensitive comparison; SMBIOS Type 1 UUID extraction via `NtQuerySystemInformation`
+- **[System Utilities](src/platform/system/README.md)** — Four different PTY creation flows across POSIX platforms (Linux `TIOCSPTLCK`/`TIOCGPTN`, macOS `TIOCPTYGRANT`/`TIOCPTYGNAME`, FreeBSD `FIODGNAME`, Solaris STREAMS `I_STR` ioctls with device minor extraction); Windows PEB environment block walking with manual case-insensitive comparison; SMBIOS Type 1 UUID extraction via `NtQuerySystemInformation`
 
 ### Kernel Interfaces (Layer 2) — [src/platform/kernel/](src/platform/README.md)
 
@@ -224,7 +223,6 @@ The [beacon documentation](src/beacon/README.md) covers the full connection pipe
 
 - **[PIC Transform](tools/pic-transform/README.md)** — Custom LLVM Module pass that converts string literals into stack `alloca` + word-packed immediate stores with register barriers (`asm("": "+r"(val))`) to defeat optimizer re-coalescing; floating-point constants into integer bitcasts; function pointers into PC-relative assembly
 - **[Python Loader](loaders/python/README.md)** — Cross-platform shellcode loader for testing
-- **[PowerShell Loader](loaders/windows/powershell/README.md)** — Windows in-process shellcode loader via function pointer
 
 ---
 
@@ -397,7 +395,7 @@ capability mask so the C2 can determine which feature categories this beacon sup
 |----------------|-------------|--------------------------------------------------|
 | `BuildNumber`  | `UINT32`    | Auto-incrementing build number (git commit count) |
 | `CommitHash`   | `CHAR[9]`   | Short git commit hash (8 hex chars + null)        |
-| `ApiVersion`   | `UINT32`    | Agent API version (starts at 1, bump on breaking protocol change) |
+| `ApiVersion`   | `UINT32`    | Agent API version (currently `4`; bumped on breaking protocol changes) |
 | `Is64Bit`      | `BOOL`      | `true` iff this agent binary is 64-bit (`sizeof(void*) == 8`); agent pointer width, not OS |
 
 `CapabilityMask` layout (packed, 8 bytes = 64 bits, LSB-first per byte):
@@ -492,6 +490,13 @@ Closes a shell session, freeing its slot for reuse. Idempotent — safe to call 
 - **Request**: `UINT64 shellId`
 - **Response**: `UINT32 status`
 
+### `Exit` (0x09)
+
+Gracefully terminates the agent. The handler sets `Context::shouldExit`; the main loop sends the ACK, exits its loops, and tears down through the platform `ExitProcess()` abstraction (on UEFI this maps to `EfiResetShutdown`).
+
+- **Request**: No payload (command type byte only)
+- **Response**: `UINT32 status`
+
 ### `OpenShell` (0x0a)
 
 Opens a new interactive shell session. The beacon owns slot assignment: it picks the first free slot in a 256-slot pool, spawns the shell there, and returns the assigned `shellId`. The client must reuse this id for `WriteShell`/`ReadShell`/`CloseShell` rather than choosing its own. The id is a 64-bit value to match pointer width, leaving room for a future revision to ship an opaque handle instead of a slot index.
@@ -501,7 +506,7 @@ Opens a new interactive shell session. The beacon owns slot assignment: it picks
 
 ## Configuration
 
-- **Server URL**: Defined in `src/beacon/main.cc` (WebSocket endpoint)
+- **Server URL**: Read at startup from the `R_URL` environment variable (`wss://` WebSocket relay endpoint). There is no fallback — the agent exits if `R_URL` is unset.
 
 ---
 

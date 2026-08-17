@@ -18,21 +18,21 @@ The codebase follows a strict 4-layer design. Each layer depends only on layers 
 
 ```
 +---------------------------------------------------------------+
-|  BEACON (src/beacon/)                          6 files         |
-|  Agent command loop, handlers, shell, screen capture           |
+|  BEACON (src/beacon/)                          4 files         |
+|  Agent command loop, handlers, screen capture                  |
 +---------------------------------------------------------------+
-|  LIB (src/lib/)                               30 files         |
-|  Crypto, TLS 1.3, HTTP, DNS, WebSocket, JPEG, containers      |
+|  LIB (src/lib/)                               32 files         |
+|  Crypto, TLS 1.3, HTTP, DNS, WebSocket, JPEG, shell, containers |
 +---------------------------------------------------------------+
-|  PLATFORM (src/platform/)                     81 files         |
+|  PLATFORM (src/platform/)                     82 files         |
 |  Console, filesystem, sockets, screen, memory, system utils    |
 |  Implementations in: posix/, windows/, uefi/                   |
 +---------------------------------------------------------------+
-|  KERNEL (src/platform/kernel/)                81 files         |
+|  KERNEL (src/platform/kernel/)                88 files         |
 |  Raw syscall definitions and OS API wrappers                   |
 |  Per-OS: linux/, windows/, macos/, freebsd/, solaris/, uefi/   |
 +---------------------------------------------------------------+
-|  CORE (src/core/)                             31 files         |
+|  CORE (src/core/)                             32 files         |
 |  Types, memory ops, strings, math, algorithms, compiler RT     |
 +---------------------------------------------------------------+
 ```
@@ -45,7 +45,7 @@ The codebase follows a strict 4-layer design. Each layer depends only on layers 
 
 **Lib** contains higher-level functionality built on Platform. The full crypto suite (ChaCha20-Poly1305, SHA-256/384, ECC), TLS 1.3 client, HTTP/1.1 client, DNS-over-HTTPS resolver, WebSocket client, JPEG encoder, and a dynamic array container. This layer has zero platform-specific code — it uses the Platform API exclusively.
 
-**Beacon** is the top layer. The actual agent logic: connect to the relay via WebSocket, receive commands, dispatch to handlers, send responses, reconnect on failure. Six files total.
+**Beacon** is the top layer. The actual agent logic: connect to the relay via WebSocket, receive commands, dispatch to handlers, send responses, reconnect on failure. Four files total.
 
 Why strict layering? Because you can swap the Platform layer to port to a new OS without touching Lib or Beacon. That's how 8 platforms are supported without 8 copies of the networking code.
 
@@ -94,21 +94,23 @@ See `docs/12-networking.md` for the full breakdown of each layer.
 
 ---
 
-## The 9 Command Types
+## The 11 Command Types
 
-The agent supports 9 commands, dispatched via a function pointer array (see `docs/13-beacon.md`):
+The agent supports 11 commands, dispatched via a function pointer array (see `docs/13-beacon.md`):
 
 | Command | What It Does |
 |---------|-------------|
-| `Hello` | Handshake: collects hostname, username, OS version, machine UUID, CPU architecture + reports a 256-bit capability mask |
+| `Hello` | Handshake: collects hostname, username, OS version, machine UUID, CPU architecture + reports a 64-bit capability mask |
 | `GetDirectoryContent` | Lists files and folders in a directory (like `ls` or `dir`) |
 | `GetFileContent` | Reads a file at a specified offset |
 | `GetFileChunkHash` | SHA-256 hash of a file chunk (for integrity checking) |
-| `WriteShell` | Sends keyboard input to an interactive shell process |
-| `ReadShell` | Reads output from the shell process |
+| `OpenShell` | Opens a new shell session; the beacon assigns and returns the `shellId` |
+| `WriteShell` | Sends keyboard input to an open shell session by `shellId` |
+| `ReadShell` | Reads output from an open shell session by `shellId` |
+| `CloseShell` | Closes a shell session by `shellId`, freeing its slot for reuse |
 | `GetDisplays` | Enumerates connected monitors with geometry info |
 | `GetScreenshot` | Captures the screen as JPEG with incremental dirty-rectangle compression |
-| `ResetShell` | Resets the shell instance, nullifying the pointer and freeing resources. |
+| `Exit` | Gracefully terminates the agent |
 
 These are the fundamental building blocks an operator needs during an engagement. Nothing flashy — just solid primitives that compose well.
 

@@ -246,9 +246,14 @@ somewhere." The linker finds it later. The definition lives in
 ```cpp
 INT32 start()
 {
-    const CHAR url[] = "https://relay.nostdlib.workers.dev/agent";
+    // Resolve the relay URL from the R_URL environment variable at runtime.
+    // There is no fallback: the agent will not run without an explicit endpoint.
+    CHAR urlBuffer[512];
+    USIZE urlLen = Environment::GetVariable("R_URL", Span<CHAR>(urlBuffer, sizeof(urlBuffer)));
+    if (urlLen == 0)
+        return 0;
     // ... registers command handlers ...
-    while (1)
+    while (!context.shouldExit)
     {
         // connect to relay, read commands, dispatch to handlers, reconnect on failure
     }

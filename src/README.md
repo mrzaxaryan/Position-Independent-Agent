@@ -39,7 +39,7 @@ Build-unique DJB2 seeding via FNV-1a, lookup-table-free Base64, UTF-8/UTF-16 sur
 - [Memory](platform/memory/README.md) — Size-header trick for `munmap`, `mmap2` page-shift, FreeBSD i386 inline asm
 - [Screen](platform/screen/README.md) — Linux three-tier capture (X11→DRM→fbdev), macOS fork-based crash isolation
 - [Socket](platform/socket/README.md) — Windows AFD driver, UEFI busy-poll async, i386 socketcall multiplexer
-- [System](platform/system/README.md) — 5 PTY creation variants, PEB environment walking, SMBIOS UUID
+- [System](platform/system/README.md) — 4 PTY creation variants, PEB environment walking, SMBIOS UUID
 
 ### Layer 2: Kernel Interfaces
 

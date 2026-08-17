@@ -12,7 +12,7 @@ called), [06 - Memory and Strings](06-memory-and-strings.md) (manual allocation)
 typedefs used everywhere).
 
 **Primary source files:**
-- `src/beacon/main.cc` -- the main loop (118 lines)
+- `src/beacon/main.cc` -- the main loop (150 lines)
 - `src/beacon/commands.h` -- `CommandType` enum, `Context` struct, handler typedefs
 - `src/beacon/commandsHandler.cc` -- all command handler implementations
 - `src/lib/shell/shell.h` -- interactive shell wrapper
@@ -26,26 +26,38 @@ Open `src/beacon/main.cc`. The `start()` function is the entire agent. It does
 three things: build the dispatch table, connect, and process commands. Here is the
 full flow, annotated against the source.
 
-**Step 1 -- Build the dispatch table (lines 38-46):**
+**Step 1 -- Build the dispatch table (lines 54-72):**
 
 ```cpp
 CommandHandler commandHandlers[CommandType::CommandTypeCount] = {nullptr};
+// Core (mandatory, always registered)
 commandHandlers[CommandType::Command_Hello] = Handle_HelloCommand;
-commandHandlers[CommandType::Command_GetDirectoryContent] = Handle_GetDirectoryContentCommand;
-commandHandlers[CommandType::Command_GetFileContent] = Handle_GetFileContentCommand;
-commandHandlers[CommandType::Command_GetFileChunkHash] = Handle_GetFileChunkHashCommand;
-commandHandlers[CommandType::Command_WriteShell] = Handle_WriteShellCommand;
-commandHandlers[CommandType::Command_ReadShell] = Handle_ReadShellCommand;
-commandHandlers[CommandType::Command_GetDisplays] = Handle_GetDisplaysCommand;
-commandHandlers[CommandType::Command_GetScreenshot] = Handle_GetScreenshotCommand;
-commandHandlers[CommandType::Command_CloseShell] = Handle_CloseShellCommand;
 commandHandlers[CommandType::Command_Exit] = Handle_ExitCommand;
-commandHandlers[CommandType::Command_OpenShell] = Handle_OpenShellCommand;
+#if SUPPORT_FILESYSTEM
+commandHandlers[CommandType::Command_GetDirectoryContent] = Handle_GetDirectoryContentCommand;
+commandHandlers[CommandType::Command_GetFileContent]      = Handle_GetFileContentCommand;
+commandHandlers[CommandType::Command_GetFileChunkHash]    = Handle_GetFileChunkHashCommand;
+#endif
+#if SUPPORT_SHELL
+commandHandlers[CommandType::Command_OpenShell]  = Handle_OpenShellCommand;
+commandHandlers[CommandType::Command_CloseShell] = Handle_CloseShellCommand;
+commandHandlers[CommandType::Command_ReadShell]  = Handle_ReadShellCommand;
+commandHandlers[CommandType::Command_WriteShell] = Handle_WriteShellCommand;
+#endif
+#if SUPPORT_DISPLAY
+commandHandlers[CommandType::Command_GetDisplays]   = Handle_GetDisplaysCommand;
+commandHandlers[CommandType::Command_GetScreenshot] = Handle_GetScreenshotCommand;
+#endif
 ```
+
+`Hello` and `Exit` are mandatory core commands and are always registered. The
+other three groups are guarded by the `SUPPORT_<CATEGORY>` macros (default `1`);
+when a category is compiled out, its slots stay `nullptr` and the dispatcher
+answers those command ids with `StatusUnknownCommand`.
 
 This array lives on the stack. That matters -- see section 2.
 
-**Step 2 -- Connect (lines 50-62):**
+**Step 2 -- Connect (lines 76-88):**
 
 The outer `while (!context.shouldExit)` loop runs until the operator sends an
 `Exit` command (otherwise it reconnects forever). Each iteration attempts a WebSocket
@@ -61,7 +73,7 @@ logs the failure and loops back. There is no backoff in the current code -- it
 retries immediately. Each connection attempt is completely stateless. No cached
 sessions, no leftover context from the previous attempt.
 
-**Step 3 -- Message loop (lines 65-113):**
+**Step 3 -- Message loop (lines 91-145):**
 
 The inner `while (!context.shouldExit)` reads binary WebSocket frames. Each frame
 is a command (it also exits when an `Exit` command sets the flag, after sending
@@ -110,7 +122,7 @@ in `.rodata` breaks position independence.
 A function pointer array allocated on the stack avoids this entirely. The
 pointers themselves resolve to PC-relative addresses at link time (the PIC
 transform handles this -- see [14 - PIC Transform](14-pic-transform.md)). The
-array is just eight stack slots. No data sections needed.
+array is just eleven stack slots. No data sections needed.
 
 A `switch/case` would also work, but the array approach is both faster (O(1)
 index vs. a jump table the compiler may or may not generate) and easier to

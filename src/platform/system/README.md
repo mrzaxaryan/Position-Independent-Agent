@@ -143,7 +143,7 @@ The `Environment` class provides compile-time and runtime system identification 
 
 ## Pseudo-Terminal (PTY) Creation
 
-PTY creation is the most platform-divergent operation in the runtime, with **five different flows** across POSIX platforms:
+PTY creation is the most platform-divergent operation in the runtime, with **four different flows** across POSIX platforms:
 
 ### Linux/Android
 
@@ -250,9 +250,9 @@ fork()
 
 Single fd for all I/O — the PTY multiplexes stdin/stdout/stderr.
 
-### Windows: cmd.exe over Three Pipes
+### Windows: cmd.exe over Two Pipes (stderr merged)
 
-Windows lacks PTY support, so three separate anonymous pipes handle stdin, stdout, and stderr independently. `PeekNamedPipe` provides non-blocking read capability for polling.
+Windows lacks PTY support, so `cmd.exe` runs over two anonymous pipes (stdin, stdout) with stderr redirected into the stdout pipe — mirroring the single-stream POSIX PTY and ensuring stderr is actually drained (a separate, never-read stderr pipe would fill its buffer and stall `cmd.exe`). `PeekNamedPipe` provides non-blocking read capability for polling.
 
 End-of-prompt detection: `'>'` on Windows (cmd.exe), `'$'` on POSIX (sh).
 
@@ -269,5 +269,5 @@ End-of-prompt detection: `'>'` on Windows (cmd.exe), `'$'` on POSIX (sh).
 | OSVersion | PEB version fields | `uname`/`sysctl`/`utssys`+`/etc/release` | `"uefi"` |
 | Pipe | `CreatePipe` | `pipe()`/`pipe2()` | Not supported |
 | Process | `CreateProcessW` | `fork()`+`execve()` | Not supported |
-| PTY | Not supported | `/dev/ptmx` (5 variants) | Not supported |
-| Shell | `cmd.exe` + 3 pipes | `/bin/sh` + PTY | Not supported |
+| PTY | Not supported | `/dev/ptmx` (4 variants) | Not supported |
+| Shell | `cmd.exe` + 2 pipes (stderr merged) | `/bin/sh` + PTY | Not supported |

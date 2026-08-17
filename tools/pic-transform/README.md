@@ -37,7 +37,7 @@ clang++ -fpass-plugin=./PICTransform.so -O2 input.cpp -o output
 
 ### Requirements
 
-- LLVM 20+ development headers and libraries
+- LLVM 22+ development headers and libraries
 - CMake 3.20+
 - Ninja or Make
 
