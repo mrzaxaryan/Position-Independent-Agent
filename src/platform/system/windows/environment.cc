@@ -10,6 +10,7 @@
 #include "platform/kernel/windows/peb.h"
 #include "core/memory/memory.h"
 #include "core/string/string.h"
+#include "platform/kernel/windows/windows_types.h"
 
 // Extended RTL_USER_PROCESS_PARAMETERS with Environment field
 // The standard definition in peb.h doesn't include all fields

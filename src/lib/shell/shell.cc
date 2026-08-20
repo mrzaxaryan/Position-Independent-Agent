@@ -21,7 +21,7 @@ Result<USIZE, Error> Shell::Write(const char *data, USIZE length) noexcept
     return shellProcess.Write(data, length);
 }
 
-Result<USIZE, Error> Shell::Read(char *buffer, USIZE capacity) noexcept
+Result<USIZE, Error> Shell::Read(PCHAR buffer, USIZE capacity) noexcept
 {
     USIZE totalRead = 0;
 
