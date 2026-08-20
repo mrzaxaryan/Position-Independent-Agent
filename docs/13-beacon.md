@@ -438,7 +438,7 @@ private:
 public:
     static Result<Shell, Error> Create() noexcept;
     Result<USIZE, Error> Write(const char *data, USIZE length) noexcept;
-    Result<USIZE, Error> Read(char *buffer, USIZE capacity) noexcept;
+    Result<USIZE, Error> Read(PCHAR buffer, USIZE capacity) noexcept;
     ~Shell() noexcept;
 };
 ```
