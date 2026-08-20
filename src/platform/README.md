@@ -34,7 +34,7 @@ Cross-platform abstraction providing OS-independent interfaces for I/O, networki
 - [Memory](memory/README.md) — Size-header trick for `munmap`, `mmap2` page-shift, FreeBSD i386 inline asm for 64-bit `off_t`
 - [Screen](screen/README.md) — Linux three-tier capture (X11→DRM→fbdev), macOS fork-based CoreGraphics probing, UEFI GOP
 - [Socket](socket/README.md) — Windows AFD driver networking, i386 `socketcall` multiplexer, UEFI busy-poll TCP, BSD `sin_len`
-- [System](system/README.md) — 5 PTY creation variants, PEB environment walking, SMBIOS UUID, `fork`+`execve` process model
+- [System](system/README.md) — 4 PTY creation variants, PEB environment walking, SMBIOS UUID, `fork`+`execve` process model
 
 ## Kernel Interfaces
 

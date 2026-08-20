@@ -22,14 +22,17 @@ Top-level application layer — connects to a relay server over WebSocket (TLS 1
 │       │                                                     │
 │  ┌────┴─────────────────────────────────────────────────┐   │
 │  │              Command Handlers                        │   │
-│  ├─ Hello               → SystemInfo struct             │   │
+│  ├─ Hello               → SystemInfo, build info + mask │   │
 │  ├─ GetDirectoryContent → DirectoryIterator             │   │
 │  ├─ GetFileContent      → File::Open + Read             │   │
-│  ├─ WriteShell          → ShellProcess::Write           │   │
-│  ├─ ReadShell           → ShellProcess::Read            │   │
+│  ├─ GetFileChunkHash    → File read + SHA-256           │   │
+│  ├─ OpenShell           → ShellManager::Open            │   │
+│  ├─ WriteShell          → Shell::Write                  │   │
+│  ├─ ReadShell           → Shell::Read                   │   │
+│  ├─ CloseShell          → ShellManager::Close           │   │
 │  ├─ GetDisplays         → Screen::GetDevices            │   │
 │  ├─ GetScreenshot       → Screen::Capture + JPEG encode │   │
-│  └─ Exit                → graceful ExitProcess          │   │
+│  └─ Exit                → shouldExit, ACK + teardown    │   │
 │                                                             │
 └──────────────────────┬──────────────────────────────────────┘
                        │
@@ -40,6 +43,8 @@ Top-level application layer — connects to a relay server over WebSocket (TLS 1
 ```
 
 ## Connection Pipeline
+
+The relay URL is read at startup from the `R_URL` environment variable; there is no fallback — the agent exits if `R_URL` is unset.
 
 Full protocol stack, all implemented in-process:
 
@@ -67,20 +72,35 @@ Every layer implemented from scratch in `src/lib/` — no OpenSSL, no libcurl, n
 
 ## Command Dispatch
 
-Commands are dispatched via a function pointer array indexed by command type:
+Commands are dispatched via a function pointer array indexed by command type. Each handler receives the raw payload, returns a heap-allocated response buffer, and shares state through a stack-allocated `Context` (PIC-safe — no globals):
 
-```c
-typedef Result<void, Error> (*CommandHandler)(WebSocketClient&, Span<UINT8> payload);
-CommandHandler handlers[] = {
-    HandleHello,                // 0
-    HandleGetDirectoryContent,  // 1
-    HandleGetFileContent,       // 2
-    HandleWriteShell,           // 3
-    HandleReadShell,            // 4
-    HandleGetDisplays,          // 5
-    HandleGetScreenshot,        // 6
-};
+```cpp
+using CommandHandler = VOID (*)(PCHAR command, USIZE commandLength,
+                                PPCHAR response, PUSIZE responseLength,
+                                Context *context);
+
+CommandHandler commandHandlers[CommandType::CommandTypeCount] = {nullptr};
+// Core (mandatory, always registered)
+commandHandlers[CommandType::Command_Hello] = Handle_HelloCommand;
+commandHandlers[CommandType::Command_Exit]  = Handle_ExitCommand;
+#if SUPPORT_FILESYSTEM
+commandHandlers[CommandType::Command_GetDirectoryContent] = Handle_GetDirectoryContentCommand;
+commandHandlers[CommandType::Command_GetFileContent]      = Handle_GetFileContentCommand;
+commandHandlers[CommandType::Command_GetFileChunkHash]    = Handle_GetFileChunkHashCommand;
+#endif
+#if SUPPORT_SHELL
+commandHandlers[CommandType::Command_OpenShell]  = Handle_OpenShellCommand;
+commandHandlers[CommandType::Command_CloseShell] = Handle_CloseShellCommand;
+commandHandlers[CommandType::Command_ReadShell]  = Handle_ReadShellCommand;
+commandHandlers[CommandType::Command_WriteShell] = Handle_WriteShellCommand;
+#endif
+#if SUPPORT_DISPLAY
+commandHandlers[CommandType::Command_GetDisplays]   = Handle_GetDisplaysCommand;
+commandHandlers[CommandType::Command_GetScreenshot] = Handle_GetScreenshotCommand;
+#endif
 ```
+
+`Hello` and `Exit` are mandatory core commands. Each other group is compiled in only when its `SUPPORT_<CATEGORY>` macro is set (default `1`); compiled-out commands answer with `StatusUnknownCommand`.
 
 ### Command: GetScreenshot
 
@@ -100,14 +120,16 @@ Screen::Capture(device, rgbBuffer)     → raw RGB pixels
 
 The JPEG encoder streams output via callback — no intermediate buffer for the full compressed image.
 
-### Command: Shell (Write/Read)
+### Command: Shell (Open/Write/Read/Close)
 
-Interactive shell access using the platform's `ShellProcess`:
+Interactive shell sessions managed by `ShellManager` (`src/lib/shell/shell.h`). The beacon owns a 256-slot shell pool; `OpenShell` spawns a shell in the first free slot and returns the assigned 64-bit `shellId`, which the client must reuse for `WriteShell`/`ReadShell`/`CloseShell` (errors: `Shell_NoFreeSlot` when the pool is full, `ShellProcess_CreateFailed` when spawning fails). `CloseShell` is idempotent and frees the slot for reuse; read/write errors never auto-close the session.
 
-- **POSIX**: `/bin/sh` running in a PTY (single fd for stdin+stdout)
-- **Windows**: `cmd.exe` with three anonymous pipes (stdin, stdout, stderr)
+The underlying `ShellProcess` per platform:
 
-`WriteShell` sends operator input to the shell's stdin. `ReadShell` polls for output and returns whatever is available (non-blocking via `Poll`).
+- **POSIX**: `/bin/sh` on a PTY, which multiplexes stdin/stdout/stderr on a single fd
+- **Windows**: `cmd.exe` over two anonymous pipes (stdin, stdout) with stderr redirected into the stdout pipe — mirroring the single-stream POSIX PTY and ensuring stderr is actually drained (a separate, never-read stderr pipe would fill its buffer and stall `cmd.exe`)
+
+`WriteShell` sends operator input to the shell's stdin. `ReadShell` polls for output (5000 ms initial timeout, then 100 ms) and returns whatever is available, stopping early at the shell prompt character.
 
 ## Entry Point
 

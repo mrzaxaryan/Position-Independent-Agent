@@ -5,35 +5,39 @@ The main agent loop and its command handlers. This is where everything comes tog
 ---
 
 ### How does the main agent loop work?
-**File:** `src/beacon/main.cc` **Line(s):** 31-118
+**File:** `src/beacon/main.cc` **Line(s):** 38-150
 **Type:** QUESTION
 **Priority:** HIGH
 
 The `start()` function is the heart of the agent. The whole flow looks like this:
 ```
 start():
-  1. Build command handler function pointer array (lines 38-46)
-  2. Infinite retry loop:
+  1. Read relay URL from the R_URL environment variable (no fallback)
+  2. Build command handler function pointer array (lines 54-72)
+  3. Infinite retry loop:
      a. Connect: DNS -> TCP -> TLS -> HTTP -> WebSocket
-     b. If connect fails, sleep and retry (line 65-116)
+     b. If connect fails, sleep and retry (lines 91-145)
      c. Message loop:
         - Read a WebSocket message (binary frame)
         - Parse command type from first byte
         - Dispatch to handler[commandType](payload, &response)
         - Send response back over WebSocket
         - If read/write fails, break inner loop and reconnect
-  3. On disconnect, loop back to step 2
+        - If Exit command arrives, ACK then tear down
+  4. On disconnect, loop back to step 3
 ```
-Two things to stress here: the agent never voluntarily exits. It reconnects forever. And each reconnection is completely stateless — no cached sessions, no leftover context. Clean slate every time.
+Two things to stress here: the agent never voluntarily exits on its own — it reconnects forever until an `Exit` command. And each connection attempt is stateless — no cached sessions. Note that `Context` itself is declared before the retry loop, so shell and screen-capture state survives reconnection.
 
 ---
 
 ### What is the function pointer dispatch table?
-**File:** `src/beacon/main.cc` **Line(s):** 38-46
+**File:** `src/beacon/main.cc` **Line(s):** 54-72
 **Type:** QUESTION
 **Priority:** HIGH
 
-An array of function pointers maps command type (integer) to handler function. So `CommandHandler handlers[] = { Handle_Info, Handle_Dir, Handle_File, ... }` means when a command arrives with type=2, the code just calls `handlers[2](payload, &response)`. Faster than a switch/case and trivial to extend — adding a new command means writing a handler function and sticking it in the array at the right index.
+An array of function pointers maps command type (integer) to handler function. So `commandHandlers[Command_GetFileContent] = Handle_GetFileContentCommand` means when a command arrives with type=2, the code just calls `commandHandlers[2](payload, length, &response, &responseLength, &context)`. Faster than a switch/case and trivial to extend — adding a new command means writing a handler function and sticking it in the array at the right index.
+
+Hello and Exit are mandatory core commands, always registered. The other groups (FileSystem, Shell, Display) are guarded by `SUPPORT_<CATEGORY>` macros — compile a category out and its slots stay null, so those command ids answer with `StatusUnknownCommand`.
 
 Worth calling out that virtual methods aren't an option here. Virtual dispatch needs vtables in .rodata, which violates the single-section constraint. Function pointer arrays live on the stack.
 
@@ -60,7 +64,8 @@ Packed structs match the binary protocol exactly, so the receiver can cast raw b
 
 Every handler follows the same pattern — allocate a response buffer and hand ownership to the caller:
 ```
-void Handle_GetInfo(Span<UINT8> payload, PCHAR* response) {
+VOID Handle_HelloCommand(PCHAR command, USIZE commandLength,
+                         PPCHAR response, PUSIZE responseLength, Context *context) {
     // 1. Parse payload (if any)
     // 2. Gather data
     // 3. Allocate response buffer: *response = new CHAR[needed_size]
@@ -68,12 +73,12 @@ void Handle_GetInfo(Span<UINT8> payload, PCHAR* response) {
     // 5. Return (caller responsible for delete[])
 }
 ```
-The double-pointer `PCHAR* response` is an out-parameter: the function writes through the pointer so the caller gets the allocated buffer back. The main loop must `delete[]` the response after sending. No RAII wrappers here — it's all explicit manual management.
+The double-pointer `PPCHAR response` is an out-parameter: the function writes through the pointer so the caller gets the allocated buffer back. The main loop must `delete[]` the response after sending. No RAII wrappers here — it's all explicit manual management.
 
 ---
 
 ### How does the screenshot command work?
-**File:** `src/beacon/commandsHandler.cc` **Line(s):** 385-533
+**File:** `src/beacon/commandsHandler.cc` **Line(s):** 497-646
 **Type:** QUESTION
 **Priority:** HIGH
 
@@ -109,7 +114,7 @@ The first screenshot always sends the entire screen since everything counts as "
 ---
 
 ### What is the JPEG compression threshold and why 24?
-**File:** `src/beacon/commandsHandler.cc` **Line(s):** 457-462
+**File:** `src/beacon/commandsHandler.cc` **Line(s):** 569-574
 **Type:** QUESTION
 **Priority:** LOW
 
@@ -118,24 +123,24 @@ The diff comparison doesn't use exact equality — it uses a threshold of 24. He
 ---
 
 ### How does the shell command work?
-**File:** `src/beacon/shell.h` **Line(s):** 1-40
+**File:** `src/lib/shell/shell.h` **Line(s):** 1-105
 **Type:** QUESTION
 **Priority:** MEDIUM
 
-Shell commands give the operator interactive command-line access. WriteShell sends input to the shell process stdin; ReadShell pulls output from stdout/stderr. Under the hood, the Shell class wraps a ShellProcess from the platform layer — on POSIX that's `/bin/sh` over a PTY, on Windows it's `cmd.exe` with three pipes.
+Shell commands give the operator interactive command-line access. The beacon owns a 256-slot shell pool (`ShellManager`): OpenShell spawns a shell in the first free slot and returns the assigned 64-bit `shellId`; WriteShell/ReadShell/CloseShell all address the session by that id rather than the client choosing one. WriteShell sends input to the shell process stdin; ReadShell pulls merged stdout+stderr. Under the hood, the Shell class wraps a ShellProcess from the platform layer — on POSIX that's `/bin/sh` over a PTY (single stream), on Windows it's `cmd.exe` over two pipes with stderr redirected into the stdout pipe (a separate, never-read stderr pipe would stall cmd.exe).
 
-The read side uses a polling loop: first poll with a 5-second timeout to wait for output to start, then subsequent polls at 100ms to catch rapid bursts. Stops when the timeout expires or the buffer fills. The full path looks like: operator types in web UI -> relay -> agent -> shell process -> output flows back through agent -> relay -> UI.
+The read side uses a polling loop: first poll with a 5-second timeout to wait for output to start, then subsequent polls at 100ms to catch rapid bursts. Stops when the timeout expires, the shell prompt character appears, or the buffer fills. The full path looks like: operator types in web UI -> relay -> agent -> shell process -> output flows back through agent -> relay -> UI.
 
 ---
 
 ### What is the Context struct?
-**File:** `src/beacon/commands.h` **Line(s):** 46-63
+**File:** `src/beacon/commands.h` **Line(s):** 140-157
 **Type:** QUESTION
 **Priority:** MEDIUM
 
-Most commands are stateless (Hello, GetFileContent — run and done). But some need to persist state between calls. The shell process stays open between WriteShell/ReadShell commands. Screenshots need the previous frame for dirty-rect comparison.
+Most commands are stateless (Hello, GetFileContent — run and done). But some need to persist state between calls. The shell pool keeps sessions open between OpenShell/WriteShell/ReadShell commands. Screenshots need the previous frame for dirty-rect comparison.
 
-Context holds pointers to these persistent objects. It gets allocated once and lives for the entire session, then gets reset on reconnection — each new WebSocket connection starts with a fresh Context.
+Context holds a `ShellManager` by value plus the screen-capture pointer. It's declared before the outer reconnect loop, so it lives for the entire agent lifetime — shell sessions and the screenshot diff state survive reconnection. The destructor tears everything down when the agent exits.
 
 ---
 

