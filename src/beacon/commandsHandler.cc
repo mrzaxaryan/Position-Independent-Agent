@@ -105,7 +105,7 @@ VOID Handle_HelloCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE 
     Memory::Zero(buildInfo.CommitHash, sizeof(buildInfo.CommitHash));
     Memory::Copy(buildInfo.CommitHash, commitHash, sizeof(buildInfo.CommitHash) - 1);
     buildInfo.ApiVersion = AGENT_API_VERSION;
-    buildInfo.Is64Bit = (sizeof(void*) == 8);
+    buildInfo.Is64Bit = (sizeof(void *) == 8);
 
     // 64-bit capability mask: bit i set iff category i (CapabilityBit) is supported.
     CapabilityMask capabilities = BuildCapabilityMask();
@@ -208,7 +208,8 @@ VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR res
 
     auto setOffsetResult = file.SetOffset((USIZE)offset);
 
-    if(!setOffsetResult){
+    if (!setOffsetResult)
+    {
         LOG_ERROR("Failed to set file offset: %llu, error: %e", offset, setOffsetResult.Error());
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
@@ -422,7 +423,7 @@ VOID Handle_CloseShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
 // Exit - gracefully terminate the agent.
 //
 // Acknowledges the operator, then signals the main loop to tear down. The main
-// loop sends this ACK, exits both of its while (!context.shouldExit) loops, and
+// loop sends this ACK, exits the message loop and then the reconnect loop, and
 // returns from start(); WebSocketClient is released when it goes out of scope, and
 // Context::~Context frees any shell/screen-capture state before entry_point() calls
 // ExitProcess(). No platform-specific code lives here: termination flows through

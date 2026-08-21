@@ -57,11 +57,11 @@ answers those command ids with `StatusUnknownCommand`.
 
 This array lives on the stack. That matters -- see section 2.
 
-**Step 2 -- Connect (lines 76-88):**
+**Step 2 -- Connect (lines 78-95):**
 
-The outer `while (!context.shouldExit)` loop runs until the operator sends an
-`Exit` command (otherwise it reconnects forever). Each iteration attempts a WebSocket
-connection to the relay:
+The outer `while (!shouldExit)` loop runs until the operator sends an `Exit`
+command (otherwise it reconnects forever). Each iteration creates a fresh
+`Context` (see section 5), then attempts a WebSocket connection to the relay:
 
 ```cpp
 auto createResult = WebSocketClient::Create(url);
@@ -73,7 +73,7 @@ logs the failure and loops back. There is no backoff in the current code -- it
 retries immediately. Each connection attempt is completely stateless. No cached
 sessions, no leftover context from the previous attempt.
 
-**Step 3 -- Message loop (lines 91-145):**
+**Step 3 -- Message loop (lines 98-152):**
 
 The inner `while (!context.shouldExit)` reads binary WebSocket frames. Each frame
 is a command (it also exits when an `Exit` command sets the flag, after sending
@@ -257,8 +257,9 @@ comparison (section 7). `shouldExit` is set by the `Exit` handler so the main
 loop can send its ACK and then tear down.
 
 Context is allocated once per connection. The main loop declares it as a local
-variable before the outer `while (1)`, so it survives across reconnections in
-the current code. The destructor runs `delete` on both pointers, with
+variable inside the outer reconnect loop, so its destructor runs on every
+disconnect and the next connection starts from a clean slate (shells killed,
+previous-frame buffer freed). The destructor runs `delete` on both pointers, with
 null-checks to avoid double-free. Setting the pointer to `nullptr` after
 deletion is defensive -- if the destructor somehow ran twice, the second pass
 would be a no-op.

