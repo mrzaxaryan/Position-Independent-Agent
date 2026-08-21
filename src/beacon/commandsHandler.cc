@@ -9,6 +9,7 @@
 #include "sha2.h"
 #include "vector.h"
 #include "system_info.h"
+#include "shell.h"
 
 // =============================================================================
 // Wire helpers

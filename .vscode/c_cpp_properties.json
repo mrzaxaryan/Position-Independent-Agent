@@ -39,7 +39,7 @@
             "cStandard": "c17",
             "cppStandard": "c++23",
             "defines": ["ARCHITECTURE_I386", "PLATFORM_WINDOWS", "PLATFORM_WINDOWS_I386", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/windows", "${workspaceFolder}/src/platform/console/windows", "${workspaceFolder}/src/platform/fs/windows", "${workspaceFolder}/src/platform/memory/windows", "${workspaceFolder}/src/platform/screen/windows", "${workspaceFolder}/src/platform/socket/windows", "${workspaceFolder}/src/platform/system/windows"]
+            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/windows", "${workspaceFolder}/src/platform/console/windows", "${workspaceFolder}/src/platform/fs/windows", "${workspaceFolder}/src/platform/memory/windows", "${workspaceFolder}/src/platform/screen/windows", "${workspaceFolder}/src/platform/socket/windows", "${workspaceFolder}/src/platform/system/windows", "${workspaceFolder}/src/lib/shell"]
         },
         {
             "name": "windows-x86_64",
@@ -48,7 +48,7 @@
             "cStandard": "c17",
             "cppStandard": "c++23",
             "defines": ["ARCHITECTURE_X86_64", "PLATFORM_WINDOWS", "PLATFORM_WINDOWS_X86_64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/windows", "${workspaceFolder}/src/platform/console/windows", "${workspaceFolder}/src/platform/fs/windows", "${workspaceFolder}/src/platform/memory/windows", "${workspaceFolder}/src/platform/screen/windows", "${workspaceFolder}/src/platform/socket/windows", "${workspaceFolder}/src/platform/system/windows"]
+            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/windows", "${workspaceFolder}/src/platform/console/windows", "${workspaceFolder}/src/platform/fs/windows", "${workspaceFolder}/src/platform/memory/windows", "${workspaceFolder}/src/platform/screen/windows", "${workspaceFolder}/src/platform/socket/windows", "${workspaceFolder}/src/platform/system/windows", "${workspaceFolder}/src/lib/shell"]
         },
         {
             "name": "windows-aarch64",
@@ -57,7 +57,7 @@
             "cStandard": "c17",
             "cppStandard": "c++23",
             "defines": ["ARCHITECTURE_AARCH64", "PLATFORM_WINDOWS", "PLATFORM_WINDOWS_AARCH64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/windows", "${workspaceFolder}/src/platform/console/windows", "${workspaceFolder}/src/platform/fs/windows", "${workspaceFolder}/src/platform/memory/windows", "${workspaceFolder}/src/platform/screen/windows", "${workspaceFolder}/src/platform/socket/windows", "${workspaceFolder}/src/platform/system/windows"]
+            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/windows", "${workspaceFolder}/src/platform/console/windows", "${workspaceFolder}/src/platform/fs/windows", "${workspaceFolder}/src/platform/memory/windows", "${workspaceFolder}/src/platform/screen/windows", "${workspaceFolder}/src/platform/socket/windows", "${workspaceFolder}/src/platform/system/windows", "${workspaceFolder}/src/lib/shell"]
         },
         {
             "name": "windows-armv7a",
@@ -66,7 +66,7 @@
             "cStandard": "c17",
             "cppStandard": "c++23",
             "defines": ["ARCHITECTURE_ARMV7A", "PLATFORM_WINDOWS", "PLATFORM_WINDOWS_ARMV7A", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/windows", "${workspaceFolder}/src/platform/console/windows", "${workspaceFolder}/src/platform/fs/windows", "${workspaceFolder}/src/platform/memory/windows", "${workspaceFolder}/src/platform/screen/windows", "${workspaceFolder}/src/platform/socket/windows", "${workspaceFolder}/src/platform/system/windows"]
+            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/windows", "${workspaceFolder}/src/platform/console/windows", "${workspaceFolder}/src/platform/fs/windows", "${workspaceFolder}/src/platform/memory/windows", "${workspaceFolder}/src/platform/screen/windows", "${workspaceFolder}/src/platform/socket/windows", "${workspaceFolder}/src/platform/system/windows", "${workspaceFolder}/src/lib/shell"]
         },
         {
             "name": "linux-i386",
