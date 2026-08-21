@@ -28,6 +28,7 @@
             "${workspaceFolder}/src/lib/network/http",
             "${workspaceFolder}/src/lib/network/tls",
             "${workspaceFolder}/src/lib/network/websocket",
+            "${workspaceFolder}/src/lib/shell",
             "${workspaceFolder}/src/beacon"
         ]
     },
@@ -38,8 +39,21 @@
             "intelliSenseMode": "windows-clang-x86",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_I386", "PLATFORM_WINDOWS", "PLATFORM_WINDOWS_I386", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/windows", "${workspaceFolder}/src/platform/console/windows", "${workspaceFolder}/src/platform/fs/windows", "${workspaceFolder}/src/platform/memory/windows", "${workspaceFolder}/src/platform/screen/windows", "${workspaceFolder}/src/platform/socket/windows", "${workspaceFolder}/src/platform/system/windows", "${workspaceFolder}/src/lib/shell"]
+            "defines": [
+                "ARCHITECTURE_I386",
+                "PLATFORM_WINDOWS",
+                "PLATFORM_WINDOWS_I386",
+                "ENABLE_LOGGING"],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/windows", 
+                "${workspaceFolder}/src/platform/console/windows", 
+                "${workspaceFolder}/src/platform/fs/windows", 
+                "${workspaceFolder}/src/platform/memory/windows", 
+                "${workspaceFolder}/src/platform/screen/windows", 
+                "${workspaceFolder}/src/platform/socket/windows", 
+                "${workspaceFolder}/src/platform/system/windows"
+            ]
         },
         {
             "name": "windows-x86_64",
@@ -47,8 +61,22 @@
             "intelliSenseMode": "windows-clang-x64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_X86_64", "PLATFORM_WINDOWS", "PLATFORM_WINDOWS_X86_64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/windows", "${workspaceFolder}/src/platform/console/windows", "${workspaceFolder}/src/platform/fs/windows", "${workspaceFolder}/src/platform/memory/windows", "${workspaceFolder}/src/platform/screen/windows", "${workspaceFolder}/src/platform/socket/windows", "${workspaceFolder}/src/platform/system/windows", "${workspaceFolder}/src/lib/shell"]
+            "defines": [
+                "ARCHITECTURE_X86_64", 
+                "PLATFORM_WINDOWS", 
+                "PLATFORM_WINDOWS_X86_64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/windows", 
+                "${workspaceFolder}/src/platform/console/windows", 
+                "${workspaceFolder}/src/platform/fs/windows", 
+                "${workspaceFolder}/src/platform/memory/windows", 
+                "${workspaceFolder}/src/platform/screen/windows", 
+                "${workspaceFolder}/src/platform/socket/windows", 
+                "${workspaceFolder}/src/platform/system/windows"
+            ]
         },
         {
             "name": "windows-aarch64",
@@ -56,8 +84,22 @@
             "intelliSenseMode": "windows-clang-arm64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_AARCH64", "PLATFORM_WINDOWS", "PLATFORM_WINDOWS_AARCH64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/windows", "${workspaceFolder}/src/platform/console/windows", "${workspaceFolder}/src/platform/fs/windows", "${workspaceFolder}/src/platform/memory/windows", "${workspaceFolder}/src/platform/screen/windows", "${workspaceFolder}/src/platform/socket/windows", "${workspaceFolder}/src/platform/system/windows", "${workspaceFolder}/src/lib/shell"]
+            "defines": [
+                "ARCHITECTURE_AARCH64", 
+                "PLATFORM_WINDOWS", 
+                "PLATFORM_WINDOWS_AARCH64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/windows", 
+                "${workspaceFolder}/src/platform/console/windows", 
+                "${workspaceFolder}/src/platform/fs/windows", 
+                "${workspaceFolder}/src/platform/memory/windows", 
+                "${workspaceFolder}/src/platform/screen/windows", 
+                "${workspaceFolder}/src/platform/socket/windows", 
+                "${workspaceFolder}/src/platform/system/windows"
+            ]
         },
         {
             "name": "windows-armv7a",
@@ -65,8 +107,22 @@
             "intelliSenseMode": "windows-clang-arm",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_ARMV7A", "PLATFORM_WINDOWS", "PLATFORM_WINDOWS_ARMV7A", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/windows", "${workspaceFolder}/src/platform/console/windows", "${workspaceFolder}/src/platform/fs/windows", "${workspaceFolder}/src/platform/memory/windows", "${workspaceFolder}/src/platform/screen/windows", "${workspaceFolder}/src/platform/socket/windows", "${workspaceFolder}/src/platform/system/windows", "${workspaceFolder}/src/lib/shell"]
+            "defines": [
+                "ARCHITECTURE_ARMV7A", 
+                "PLATFORM_WINDOWS", 
+                "PLATFORM_WINDOWS_ARMV7A", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/windows", 
+                "${workspaceFolder}/src/platform/console/windows", 
+                "${workspaceFolder}/src/platform/fs/windows", 
+                "${workspaceFolder}/src/platform/memory/windows", 
+                "${workspaceFolder}/src/platform/screen/windows", 
+                "${workspaceFolder}/src/platform/socket/windows", 
+                "${workspaceFolder}/src/platform/system/windows"
+            ]
         },
         {
             "name": "linux-i386",
@@ -74,8 +130,23 @@
             "intelliSenseMode": "linux-clang-x86",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_I386", "PLATFORM_LINUX", "PLATFORM_LINUX_I386", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/linux", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/linux", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_I386",
+                "PLATFORM_LINUX", 
+                "PLATFORM_LINUX_I386", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/linux", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/linux", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "linux-x86_64",
@@ -83,8 +154,23 @@
             "intelliSenseMode": "linux-clang-x64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_X86_64", "PLATFORM_LINUX", "PLATFORM_LINUX_X86_64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/linux", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/linux", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_X86_64", 
+                "PLATFORM_LINUX", 
+                "PLATFORM_LINUX_X86_64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/linux", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/linux", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "linux-armv7a",
@@ -92,8 +178,23 @@
             "intelliSenseMode": "linux-clang-arm",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_ARMV7A", "PLATFORM_LINUX", "PLATFORM_LINUX_ARMV7A", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/linux", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/linux", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_ARMV7A", 
+                "PLATFORM_LINUX", 
+                "PLATFORM_LINUX_ARMV7A", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/linux", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/linux", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "linux-aarch64",
@@ -101,8 +202,23 @@
             "intelliSenseMode": "linux-clang-arm64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_AARCH64", "PLATFORM_LINUX", "PLATFORM_LINUX_AARCH64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/linux", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/linux", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_AARCH64", 
+                "PLATFORM_LINUX", 
+                "PLATFORM_LINUX_AARCH64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/linux", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/linux", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "linux-riscv32",
@@ -110,8 +226,22 @@
             "intelliSenseMode": "linux-clang-x86",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_RISCV32", "PLATFORM_LINUX", "PLATFORM_LINUX_RISCV32", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/linux", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/linux", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_RISCV32", 
+                "PLATFORM_LINUX", 
+                "PLATFORM_LINUX_RISCV32", 
+                "ENABLE_LOGGING"],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/linux", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/linux", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "linux-riscv64",
@@ -119,8 +249,23 @@
             "intelliSenseMode": "linux-clang-x64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_RISCV64", "PLATFORM_LINUX", "PLATFORM_LINUX_RISCV64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/linux", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/linux", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_RISCV64",
+                "PLATFORM_LINUX", 
+                "PLATFORM_LINUX_RISCV64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/linux", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/linux", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "linux-mips64",
@@ -128,8 +273,23 @@
             "intelliSenseMode": "linux-clang-x64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_MIPS64", "PLATFORM_LINUX", "PLATFORM_LINUX_MIPS64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/linux", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/linux", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_MIPS64", 
+                "PLATFORM_LINUX", 
+                "PLATFORM_LINUX_MIPS64",
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/linux", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/linux", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "macos-x86_64",
@@ -137,8 +297,23 @@
             "intelliSenseMode": "macos-clang-x64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_X86_64", "PLATFORM_MACOS", "PLATFORM_MACOS_X86_64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/macos", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/macos", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/macos", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_X86_64", 
+                "PLATFORM_MACOS", 
+                "PLATFORM_MACOS_X86_64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/macos", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/macos", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/macos", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "macos-aarch64",
@@ -146,8 +321,23 @@
             "intelliSenseMode": "macos-clang-arm64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_AARCH64", "PLATFORM_MACOS", "PLATFORM_MACOS_AARCH64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/macos", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/macos", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/macos", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_AARCH64", 
+                "PLATFORM_MACOS", 
+                "PLATFORM_MACOS_AARCH64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/macos", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/macos", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/macos", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "uefi-x86_64",
@@ -155,8 +345,22 @@
             "intelliSenseMode": "windows-clang-x64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_X86_64", "PLATFORM_UEFI", "PLATFORM_UEFI_X86_64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/uefi", "${workspaceFolder}/src/platform/console/uefi", "${workspaceFolder}/src/platform/fs/uefi", "${workspaceFolder}/src/platform/memory/uefi", "${workspaceFolder}/src/platform/screen/uefi", "${workspaceFolder}/src/platform/socket/uefi", "${workspaceFolder}/src/platform/system/uefi"]
+            "defines": [
+                "ARCHITECTURE_X86_64", 
+                "PLATFORM_UEFI", 
+                "PLATFORM_UEFI_X86_64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/uefi", 
+                "${workspaceFolder}/src/platform/console/uefi", 
+                "${workspaceFolder}/src/platform/fs/uefi", 
+                "${workspaceFolder}/src/platform/memory/uefi", 
+                "${workspaceFolder}/src/platform/screen/uefi", 
+                "${workspaceFolder}/src/platform/socket/uefi", 
+                "${workspaceFolder}/src/platform/system/uefi"
+            ]
         },
         {
             "name": "uefi-aarch64",
@@ -164,8 +368,22 @@
             "intelliSenseMode": "windows-clang-arm64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_AARCH64", "PLATFORM_UEFI", "PLATFORM_UEFI_AARCH64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/uefi", "${workspaceFolder}/src/platform/console/uefi", "${workspaceFolder}/src/platform/fs/uefi", "${workspaceFolder}/src/platform/memory/uefi", "${workspaceFolder}/src/platform/screen/uefi", "${workspaceFolder}/src/platform/socket/uefi", "${workspaceFolder}/src/platform/system/uefi"]
+            "defines": [
+                "ARCHITECTURE_AARCH64", 
+                "PLATFORM_UEFI", 
+                "PLATFORM_UEFI_AARCH64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/uefi", 
+                "${workspaceFolder}/src/platform/console/uefi", 
+                "${workspaceFolder}/src/platform/fs/uefi", 
+                "${workspaceFolder}/src/platform/memory/uefi", 
+                "${workspaceFolder}/src/platform/screen/uefi", 
+                "${workspaceFolder}/src/platform/socket/uefi", 
+                "${workspaceFolder}/src/platform/system/uefi"
+            ]
         },
         {
             "name": "solaris-i386",
@@ -173,8 +391,23 @@
             "intelliSenseMode": "linux-clang-x86",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_I386", "PLATFORM_SOLARIS", "PLATFORM_SOLARIS_I386", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/solaris", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/solaris", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_I386", 
+                "PLATFORM_SOLARIS", 
+                "PLATFORM_SOLARIS_I386", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/solaris", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/solaris", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "solaris-x86_64",
@@ -182,8 +415,23 @@
             "intelliSenseMode": "linux-clang-x64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_X86_64", "PLATFORM_SOLARIS", "PLATFORM_SOLARIS_X86_64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/solaris", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/solaris", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_X86_64", 
+                "PLATFORM_SOLARIS", 
+                "PLATFORM_SOLARIS_X86_64",
+                "ENABLE_LOGGING"
+                ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/solaris", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/solaris", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "solaris-aarch64",
@@ -191,8 +439,23 @@
             "intelliSenseMode": "linux-clang-arm64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_AARCH64", "PLATFORM_SOLARIS", "PLATFORM_SOLARIS_AARCH64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/solaris", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/solaris", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_AARCH64", 
+                "PLATFORM_SOLARIS", 
+                "PLATFORM_SOLARIS_AARCH64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/solaris", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/solaris", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "freebsd-i386",
@@ -200,8 +463,22 @@
             "intelliSenseMode": "linux-clang-x86",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_I386", "PLATFORM_FREEBSD", "PLATFORM_FREEBSD_I386", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/freebsd", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/freebsd", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_I386", 
+                "PLATFORM_FREEBSD",
+                "PLATFORM_FREEBSD_I386", 
+                "ENABLE_LOGGING"],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/freebsd", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/freebsd", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "freebsd-x86_64",
@@ -209,8 +486,23 @@
             "intelliSenseMode": "linux-clang-x64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_X86_64", "PLATFORM_FREEBSD", "PLATFORM_FREEBSD_X86_64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/freebsd", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/freebsd", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_X86_64", 
+                "PLATFORM_FREEBSD", 
+                "PLATFORM_FREEBSD_X86_64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/freebsd", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/freebsd", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "freebsd-aarch64",
@@ -218,8 +510,23 @@
             "intelliSenseMode": "linux-clang-arm64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_AARCH64", "PLATFORM_FREEBSD", "PLATFORM_FREEBSD_AARCH64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/freebsd", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/freebsd", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_AARCH64", 
+                "PLATFORM_FREEBSD", 
+                "PLATFORM_FREEBSD_AARCH64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/freebsd", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/freebsd", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "freebsd-riscv64",
@@ -227,8 +534,23 @@
             "intelliSenseMode": "linux-clang-x64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_RISCV64", "PLATFORM_FREEBSD", "PLATFORM_FREEBSD_RISCV64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/freebsd", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/posix", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/freebsd", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_RISCV64", 
+                "PLATFORM_FREEBSD", 
+                "PLATFORM_FREEBSD_RISCV64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/freebsd", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix", 
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/posix", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/freebsd", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         },
         {
             "name": "ios-aarch64",
@@ -236,8 +558,23 @@
             "intelliSenseMode": "macos-clang-arm64",
             "cStandard": "c17",
             "cppStandard": "c++23",
-            "defines": ["ARCHITECTURE_AARCH64", "PLATFORM_IOS", "PLATFORM_IOS_AARCH64", "ENABLE_LOGGING"],
-            "includePath": ["${commonInclude}", "${workspaceFolder}/src/platform/kernel/ios", "${workspaceFolder}/src/platform/console/posix", "${workspaceFolder}/src/platform/fs/posix", "${workspaceFolder}/src/platform/memory/posix", "${workspaceFolder}/src/platform/screen/ios", "${workspaceFolder}/src/platform/socket/posix", "${workspaceFolder}/src/platform/system/ios", "${workspaceFolder}/src/platform/system/posix"]
+            "defines": [
+                "ARCHITECTURE_AARCH64", 
+                "PLATFORM_IOS", 
+                "PLATFORM_IOS_AARCH64", 
+                "ENABLE_LOGGING"
+            ],
+            "includePath": [
+                "${commonInclude}", 
+                "${workspaceFolder}/src/platform/kernel/ios", 
+                "${workspaceFolder}/src/platform/console/posix", 
+                "${workspaceFolder}/src/platform/fs/posix",
+                "${workspaceFolder}/src/platform/memory/posix", 
+                "${workspaceFolder}/src/platform/screen/ios", 
+                "${workspaceFolder}/src/platform/socket/posix", 
+                "${workspaceFolder}/src/platform/system/ios", 
+                "${workspaceFolder}/src/platform/system/posix"
+            ]
         }
     ]
 }
