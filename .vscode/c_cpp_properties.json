@@ -43,7 +43,8 @@
                 "ARCHITECTURE_I386",
                 "PLATFORM_WINDOWS",
                 "PLATFORM_WINDOWS_I386",
-                "ENABLE_LOGGING"],
+                "ENABLE_LOGGING"
+            ],
             "includePath": [
                 "${commonInclude}", 
                 "${workspaceFolder}/src/platform/kernel/windows", 
@@ -230,7 +231,8 @@
                 "ARCHITECTURE_RISCV32", 
                 "PLATFORM_LINUX", 
                 "PLATFORM_LINUX_RISCV32", 
-                "ENABLE_LOGGING"],
+                "ENABLE_LOGGING"
+            ],
             "includePath": [
                 "${commonInclude}", 
                 "${workspaceFolder}/src/platform/kernel/linux", 
@@ -467,7 +469,8 @@
                 "ARCHITECTURE_I386", 
                 "PLATFORM_FREEBSD",
                 "PLATFORM_FREEBSD_I386", 
-                "ENABLE_LOGGING"],
+                "ENABLE_LOGGING"
+            ],
             "includePath": [
                 "${commonInclude}", 
                 "${workspaceFolder}/src/platform/kernel/freebsd", 
