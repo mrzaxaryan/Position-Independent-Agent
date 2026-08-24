@@ -42,7 +42,9 @@ public:
 	 *
 	 * @details On POSIX, spawns /bin/sh via PTY. On Windows, spawns cmd.exe
 	 * with stdin/stdout redirected through anonymous pipes and stderr merged
-	 * into the stdout pipe (a single read drains both, matching the PTY).
+	 * into the stdout pipe (a single read drains both, matching the PTY),
+	 * using CREATE_NO_WINDOW so no console window appears even when the host
+	 * process has no console.
 	 *
 	 * @return ShellProcess on success, Error on failure
 	 */

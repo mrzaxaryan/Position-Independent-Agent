@@ -232,8 +232,10 @@ si.hStdInput = stdinRead;     // child reads from this
 si.hStdOutput = stdoutWrite;  // child writes to this
 si.hStdError = stderrWrite;
 
-CreateProcessW(path, cmdLine, ..., TRUE /*inherit*/, ..., &si, &pi)
+CreateProcessW(path, cmdLine, ..., TRUE /*inherit*/, dwCreationFlags, ..., &si, &pi)
 ```
+
+`dwCreationFlags` comes from the caller (`0` by default); `CREATE_NO_WINDOW` is defined in `platform/kernel/windows/kernel32.h` for spawns that must not show a console window.
 
 The generic `Process::Create` accepts three independent handles — the three-pipe layout above is the fully-wired case. `ShellProcess` deliberately deviates: it creates only two pipes and passes the **same** stdout write-end as the stderr handle (see the next section).
 
@@ -254,7 +256,7 @@ Single fd for all I/O — the PTY multiplexes stdin/stdout/stderr.
 
 ### Windows: cmd.exe over Two Pipes (stderr merged)
 
-Windows lacks PTY support, so `cmd.exe` runs over two anonymous pipes (stdin, stdout). In `ShellProcess::Create` (`src/platform/system/windows/shell_process.cc`), the stdout pipe's write-end is passed as **both** `hStdOutput` and `hStdError`, merging the streams — mirroring the single-stream POSIX PTY and ensuring stderr is actually drained (a separate, never-read stderr pipe would fill its buffer and stall `cmd.exe`). `PeekNamedPipe` provides non-blocking read capability for polling.
+Windows lacks PTY support, so `cmd.exe` runs over two anonymous pipes (stdin, stdout). In `ShellProcess::Create` (`src/platform/system/windows/shell_process.cc`), the stdout pipe's write-end is passed as **both** `hStdOutput` and `hStdError`, merging the streams — mirroring the single-stream POSIX PTY and ensuring stderr is actually drained (a separate, never-read stderr pipe would fill its buffer and stall `cmd.exe`). `PeekNamedPipe` provides non-blocking read capability for polling. The process is spawned with `CREATE_NO_WINDOW`, so `cmd.exe` gets a console object with no window — a host process without a console (GUI app) never shows one on the target's desktop.
 
 End-of-prompt detection: `'>'` on Windows (cmd.exe), `'$'` on POSIX (sh).
 
@@ -272,4 +274,4 @@ End-of-prompt detection: `'>'` on Windows (cmd.exe), `'$'` on POSIX (sh).
 | Pipe | `CreatePipe` | `pipe()`/`pipe2()` | Not supported |
 | Process | `CreateProcessW` | `fork()`+`execve()` | Not supported |
 | PTY | Not supported | `/dev/ptmx` (4 variants) | Not supported |
-| Shell | `cmd.exe` + 2 pipes (stderr merged) | `/bin/sh` + PTY | Not supported |
+| Shell | `cmd.exe` + 2 pipes (stderr merged, no window) | `/bin/sh` + PTY | Not supported |

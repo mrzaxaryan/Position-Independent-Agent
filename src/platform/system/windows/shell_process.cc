@@ -37,8 +37,11 @@ Result<ShellProcess, Error> ShellProcess::Create() noexcept
 	// Redirect stderr to the stdout pipe so both streams merge — mirrors the
 	// POSIX PTY (single stream) and ensures stderr is drained. A separate,
 	// never-read stderr pipe would fill its buffer and stall cmd.exe.
+	// CREATE_NO_WINDOW: cmd.exe gets a console with no window, so a host
+	// process without a console never shows one on the target's desktop.
 	auto processResult = Process::Create("cmd.exe", args,
-		stdinPipe.ReadEnd(), stdoutPipe.WriteEnd(), stdoutPipe.WriteEnd());
+		stdinPipe.ReadEnd(), stdoutPipe.WriteEnd(), stdoutPipe.WriteEnd(),
+		CREATE_NO_WINDOW);
 
 	if (!processResult)
 		return Result<ShellProcess, Error>::Err(Error::ShellProcess_CreateFailed);

@@ -12,7 +12,8 @@ Result<Process, Error> Process::Create(
 	[[maybe_unused]] const CHAR *const args[],
 	[[maybe_unused]] SSIZE stdinFd,
 	[[maybe_unused]] SSIZE stdoutFd,
-	[[maybe_unused]] SSIZE stderrFd) noexcept
+	[[maybe_unused]] SSIZE stderrFd,
+	[[maybe_unused]] UINT32 creationFlags) noexcept
 {
 	return Result<Process, Error>::Err(Error::Process_NotSupported);
 }
