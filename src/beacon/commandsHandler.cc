@@ -103,9 +103,10 @@ VOID Handle_HelloCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE 
     AgentBuildInfo buildInfo;
     buildInfo.ApiVersion = AGENT_API_VERSION;
     buildInfo.AgentNameId = AGENT_NAME_ID;
-    const CHAR commitHash[] = AGENT_COMMIT_HASH;
-    Memory::Zero(buildInfo.CommitHash, sizeof(buildInfo.CommitHash));
-    Memory::Copy(buildInfo.CommitHash, commitHash, sizeof(buildInfo.CommitHash) - 1);
+const CHAR commitHash[] = AGENT_COMMIT_HASH;
+Memory::Zero(buildInfo.CommitHash, sizeof(buildInfo.CommitHash));
+const USIZE commitHashChars = (sizeof(commitHash) - 1 < sizeof(buildInfo.CommitHash) - 1) ? (sizeof(commitHash) - 1) : (sizeof(buildInfo.CommitHash) - 1);
+Memory::Copy(buildInfo.CommitHash, commitHash, commitHashChars);
     buildInfo.BuildNumber = AGENT_BUILD_NUMBER;
     buildInfo.Is64Bit = (sizeof(void*) == 8);
 
