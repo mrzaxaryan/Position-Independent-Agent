@@ -22,7 +22,7 @@ Top-level application layer — connects to a relay server over WebSocket (TLS 1
 │       │                                                     │
 │  ┌────┴─────────────────────────────────────────────────┐   │
 │  │              Command Handlers                        │   │
-│  ├─ Hello               → SystemInfo, build info + mask │   │
+│  ├─ Hello               → build info, SystemInfo + mask │   │
 │  ├─ GetDirectoryContent → DirectoryIterator             │   │
 │  ├─ GetFileContent      → File::Open + Read             │   │
 │  ├─ GetFileChunkHash    → File read + SHA-256           │   │

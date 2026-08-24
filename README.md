@@ -49,7 +49,7 @@ This project solves that: a full C++23 codebase that compiles to position-indepe
 - **Cross-Platform** - 8 platforms (Windows, Linux, macOS, FreeBSD, Solaris, UEFI, Android, iOS) across 7 architectures (i386, x86_64, armv7a, aarch64, riscv32, riscv64, mips64) via direct syscalls
 - **TLS 1.3 + WebSocket** - Encrypted command-and-control over `wss://` using ChaCha20-Poly1305 AEAD (RFC 8446, RFC 6455)
 - **Binary Command Protocol** - 11 command types over WebSocket:
-  - `Hello` - handshake: `SystemInfo` (machine UUID, hostname, username, CPU architecture, agent platform, OS version) + `AgentBuildInfo` + 64-bit `CapabilityMask`
+  - `Hello` - handshake: `AgentBuildInfo` (API version, agent name id, commit hash — first, so the C2 can determine the packet structure) + `SystemInfo` (machine UUID, hostname, username, CPU architecture, agent platform, OS version) + 64-bit `CapabilityMask`
   - `GetDirectoryContent` - Directory listing with metadata
   - `GetFileContent` - File read at offset
   - `GetFileChunkHash` - SHA-256 hash of file chunk
@@ -372,11 +372,13 @@ All commands use a binary protocol over WebSocket. Each message starts with a `U
 
 ### `Hello` (0x00)
 
-Handshake: returns system identification, build metadata, and a 64-bit
-capability mask so the C2 can determine which feature categories this beacon supports.
+Handshake: returns build metadata first (so the C2 can identify the agent and
+packet structure before parsing the rest), then system identification, and a
+64-bit capability mask so the C2 can determine which feature categories this
+beacon supports.
 
 - **Request**: No payload (command type byte only)
-- **Response**: `UINT32 status` + `SystemInfo` + `AgentBuildInfo` + `CapabilityMask` (8 bytes)
+- **Response**: `UINT32 status` + `AgentBuildInfo` + `SystemInfo` + `CapabilityMask` (8 bytes)
 
 `SystemInfo` layout (packed):
 
@@ -389,13 +391,14 @@ capability mask so the C2 can determine which feature categories this beacon sup
 | `AgentPlatform` | `CHAR[32]`   | OS target (`windows`, `linux`, `macos`, etc.) — compile-time        |
 | `OSVersion`     | `CHAR[128]`  | Runtime OS version (`Windows 10.0 Build 19045`, `Linux 6.1.0`)     |
 
-`AgentBuildInfo` layout (packed):
+`AgentBuildInfo` layout (packed) — sent first so the C2 can identify the agent and packet structure immediately:
 
 | Field          | Type        | Description                                      |
 |----------------|-------------|--------------------------------------------------|
-| `BuildNumber`  | `UINT32`    | Auto-incrementing build number (git commit count) |
+| `ApiVersion`   | `UINT32`    | Agent API version (currently `5`; bumped on breaking protocol changes) |
+| `AgentNameId`  | `UINT32`    | Agent implementation identifier (`AGENT_NAME_ID`, currently `0` = PIA) |
 | `CommitHash`   | `CHAR[9]`   | Short git commit hash (8 hex chars + null)        |
-| `ApiVersion`   | `UINT32`    | Agent API version (currently `4`; bumped on breaking protocol changes) |
+| `BuildNumber`  | `UINT32`    | Auto-incrementing build number (git commit count) |
 | `Is64Bit`      | `BOOL`      | `true` iff this agent binary is 64-bit (`sizeof(void*) == 8`); agent pointer width, not OS |
 
 `CapabilityMask` layout (packed, 8 bytes = 64 bits, LSB-first per byte):

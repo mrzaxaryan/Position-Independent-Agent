@@ -100,7 +100,7 @@ The agent supports 11 commands, dispatched via a function pointer array (see `do
 
 | Command | What It Does |
 |---------|-------------|
-| `Hello` | Handshake: collects hostname, username, OS version, machine UUID, CPU architecture + reports a 64-bit capability mask |
+| `Hello` | Handshake: build info header first (API version, agent name id, commit hash), then hostname, username, OS version, machine UUID, CPU architecture + a 64-bit capability mask |
 | `GetDirectoryContent` | Lists files and folders in a directory (like `ls` or `dir`) |
 | `GetFileContent` | Reads a file at a specified offset |
 | `GetFileChunkHash` | SHA-256 hash of a file chunk (for integrity checking) |

@@ -173,13 +173,18 @@ The `AgentBuildInfo` struct in `commands.h` follows the same pattern:
 #pragma pack(push, 1)
 struct AgentBuildInfo
 {
-    UINT32 BuildNumber;
+    UINT32 ApiVersion;  // Agent API version (bumped on breaking protocol changes)
+    UINT32 AgentNameId; // Agent implementation identifier (AGENT_NAME_ID)
     CHAR CommitHash[9]; // 8 hex chars + null
-    UINT32 ApiVersion;
+    UINT32 BuildNumber;
     BOOL Is64Bit; // true iff this agent binary is 64-bit (sizeof(void*) == 8)
 };
 #pragma pack(pop)
 ```
+
+It is sent at the **start** of the Hello response (right after the status
+code) so the C2 can read `ApiVersion`/`AgentNameId` and immediately determine
+which packet structure to expect before parsing the rest of the payload.
 
 ---
 
