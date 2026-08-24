@@ -31,6 +31,7 @@ public:
 	 * @param stdinFd File descriptor/handle for child's stdin (-1 to inherit parent's)
 	 * @param stdoutFd File descriptor/handle for child's stdout (-1 to inherit parent's)
 	 * @param stderrFd File descriptor/handle for child's stderr (-1 to inherit parent's)
+	 * @param creationFlags Windows dwCreationFlags (e.g. CREATE_NO_WINDOW); ignored on POSIX/UEFI
 	 * @return Process handle on success, Error on failure
 	 */
 	[[nodiscard]] static Result<Process, Error> Create(
@@ -38,7 +39,8 @@ public:
 		const CHAR *const args[],
 		SSIZE stdinFd = -1,
 		SSIZE stdoutFd = -1,
-		SSIZE stderrFd = -1) noexcept;
+		SSIZE stderrFd = -1,
+		UINT32 creationFlags = 0) noexcept;
 
 	/**
 	 * Wait - Block until the process exits

@@ -3,6 +3,9 @@
 #include "lib/runtime.h"
 #include "platform/system/process.h"
 #include "tests.h"
+#if defined(PLATFORM_WINDOWS)
+#include "platform/kernel/windows/kernel32.h"
+#endif
 
 class ProcessTests
 {
@@ -155,6 +158,52 @@ private:
 				allPassed = false;
 			}
 		}
+
+		// --- Create with creationFlags (Windows: CREATE_NO_WINDOW) ---
+#if defined(PLATFORM_WINDOWS)
+		{
+			auto cmd = "C:\\Windows\\System32\\cmd.exe";
+			auto a1 = "/c";
+			auto a2 = "exit";
+			auto a3 = "0";
+			const CHAR *args[] = {(const CHAR *)cmd, (const CHAR *)a1, (const CHAR *)a2, (const CHAR *)a3, nullptr};
+
+			BOOL passed = true;
+			auto result = Process::Create((const CHAR *)cmd, args, -1, -1, -1, CREATE_NO_WINDOW);
+			if (!result)
+			{
+				LOG_ERROR("Failed to create process with CREATE_NO_WINDOW: %e", result.Error());
+				passed = false;
+			}
+
+			if (passed)
+			{
+				auto waitResult = result.Value().Wait();
+				if (!waitResult)
+				{
+					LOG_ERROR("Wait failed: %e", waitResult.Error());
+					passed = false;
+				}
+				else
+				{
+					SSIZE exitCode = waitResult.Value();
+					if (exitCode != 0)
+					{
+						LOG_ERROR("Expected exit code 0, got %d", (INT32)exitCode);
+						passed = false;
+					}
+				}
+			}
+
+			if (passed)
+				LOG_INFO("  PASSED: Create process with CREATE_NO_WINDOW and wait for exit");
+			else
+			{
+				LOG_ERROR("  FAILED: Create process with CREATE_NO_WINDOW and wait for exit");
+				allPassed = false;
+			}
+		}
+#endif
 
 		// --- Terminate ---
 		{

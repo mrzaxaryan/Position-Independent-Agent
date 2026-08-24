@@ -202,7 +202,8 @@ Result<Process, Error> Process::Create(
 	const CHAR *const args[],
 	SSIZE stdinFd,
 	SSIZE stdoutFd,
-	SSIZE stderrFd) noexcept
+	SSIZE stderrFd,
+	[[maybe_unused]] UINT32 creationFlags) noexcept
 {
 	if (path == nullptr || args == nullptr)
 	{

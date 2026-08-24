@@ -23,7 +23,8 @@ Result<Process, Error> Process::Create(
 	const CHAR *const args[],
 	SSIZE stdinFd,
 	SSIZE stdoutFd,
-	SSIZE stderrFd) noexcept
+	SSIZE stderrFd,
+	UINT32 creationFlags) noexcept
 {
 	if (path == nullptr)
 		return Result<Process, Error>::Err(Error::Process_CreateFailed);
@@ -53,11 +54,11 @@ Result<Process, Error> Process::Create(
 
 		// Make redirected handles inheritable
 		if (stdinFd != -1)
-			(VOID)Kernel32::SetHandleInformation(si.hStdInput, 1, 1);
+			(VOID)Kernel32::SetHandleInformation(si.hStdInput, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
 		if (stdoutFd != -1)
-			(VOID)Kernel32::SetHandleInformation(si.hStdOutput, 1, 1);
+			(VOID)Kernel32::SetHandleInformation(si.hStdOutput, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
 		if (stderrFd != -1)
-			(VOID)Kernel32::SetHandleInformation(si.hStdError, 1, 1);
+			(VOID)Kernel32::SetHandleInformation(si.hStdError, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
 	}
 
 	// Build command line: concatenate args with spaces into a wide string
@@ -91,7 +92,7 @@ Result<Process, Error> Process::Create(
 	auto createResult = Kernel32::CreateProcessW(
 		nullptr, cmdWide, nullptr, nullptr,
 		hasRedirect,  // inherit handles only when redirecting
-		0, nullptr, nullptr, &si, &pi);
+		creationFlags, nullptr, nullptr, &si, &pi);
 
 	if (createResult.IsErr())
 	{

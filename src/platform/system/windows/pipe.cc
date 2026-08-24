@@ -20,15 +20,19 @@ Result<Pipe, Error> Pipe::Create() noexcept
 	PVOID readHandle = nullptr;
 	PVOID writeHandle = nullptr;
 
-	auto bufferSize = (32 * 1024 * 1024);
+	// Large buffer hint: the operator drains the pipe in Read bursts, so a
+	// small default buffer fills quickly and blocks the writing child.
+	constexpr UINT32 bufferSize = 32 * 1024 * 1024;
 
-	auto result = Kernel32::CreatePipe(&readHandle, &writeHandle, nullptr, 0);
+	auto result = Kernel32::CreatePipe(&readHandle, &writeHandle, nullptr, bufferSize);
 	if (result.IsErr())
 	{
 		return Result<Pipe, Error>::Err(result, Error::Pipe_CreateFailed);
 	}
 
-	result = Kernel32::SetHandleInformation(readHandle, HANDLE_FLAG_INHERIT, bufferSize);
+	// The parent's read end stays non-inheritable — only the ends passed to
+	// the child are marked inheritable (see Process::Create).
+	result = Kernel32::SetHandleInformation(readHandle, HANDLE_FLAG_INHERIT, 0);
 
 	if (result.IsErr())
 	{
