@@ -55,16 +55,23 @@ enum CommandType : UINT8
 #define AGENT_COMMIT_HASH "00000000"
 #endif
 #ifndef AGENT_API_VERSION
-#define AGENT_API_VERSION 4
+#define AGENT_API_VERSION 5
+#endif
+#ifndef AGENT_NAME_ID
+#define AGENT_NAME_ID 0
 #endif
 
-// Build metadata appended to the Hello response
+// Build metadata header prepended to the Hello response (right after the
+// status code). ApiVersion and AgentNameId lead the packet so the C2 can
+// identify the agent and determine the expected packet structure before
+// parsing the variable rest of the response.
 #pragma pack(push, 1)
 struct AgentBuildInfo
 {
+    UINT32 ApiVersion;  ///< Agent API version (bumped on breaking protocol changes)
+    UINT32 AgentNameId; ///< Agent implementation identifier (AGENT_NAME_ID)
+    CHAR CommitHash[9]; ///< 8 hex chars + null
     UINT32 BuildNumber;
-    CHAR CommitHash[9]; // 8 hex chars + null
-    UINT32 ApiVersion;
     BOOL Is64Bit; ///< true iff this agent binary is 64-bit (sizeof(void*) == 8)
 };
 #pragma pack(pop)
