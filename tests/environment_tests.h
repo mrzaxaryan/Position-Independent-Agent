@@ -21,7 +21,7 @@ public:
 		RunTest(allPassed, &TestGetOSVersion, "GetOSVersion returns non-empty string");
 		RunTest(allPassed, &TestGetHostname, "GetHostname returns non-empty string");
 		RunTest(allPassed, &TestGetUsername, "GetUsername returns non-empty string");
-		RunTest(allPassed, &TestGetArchitecture, "GetArchitecture returns known architecture");
+		RunTest(allPassed, &TestGetArchitecture, "GetArchitecture returns a valid machine name");
 		RunTest(allPassed, &TestGetMachineUUID, "GetMachineUUID returns valid UUID");
 		RunTest(allPassed, &TestSystemInfoPopulated, "SystemInfo fields are populated");
 
@@ -214,19 +214,25 @@ private:
 			return false;
 		}
 
-		// Must be one of the known architecture strings
-		BOOL isKnown = StringUtils::Equals(buffer, "x86_64") ||
-					   StringUtils::Equals(buffer, "i386") ||
-					   StringUtils::Equals(buffer, "aarch64") ||
-					   StringUtils::Equals(buffer, "armv7a") ||
-					   StringUtils::Equals(buffer, "riscv64") ||
-					   StringUtils::Equals(buffer, "riscv32") ||
-					   StringUtils::Equals(buffer, "mips64") ||
-					   StringUtils::Equals(buffer, "mips");
-
-		if (!isKnown)
+		// The OS-provided machine name is reported verbatim (e.g. "x86_64",
+		// "arm64", "amd64", "armv7l", "i686"). Assert it is a machine name,
+		// not an arbitrary string: lowercase letters, digits, and underscores
+		// only. This rejects hardware model identifiers ("iPhone13,2"),
+		// hostnames, and truncated/garbage output while still accepting every
+		// legitimate kernel-provided machine string.
+		for (USIZE i = 0; i < len; i++)
 		{
-			LOG_ERROR("GetArchitecture returned unknown value: %s", buffer);
+			CHAR c = buffer[i];
+			BOOL valid = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_';
+			if (!valid)
+			{
+				LOG_ERROR("GetArchitecture returned invalid character '%c' (0x%x) at %llu", c, (UINT32)c, (UINT64)i);
+				return false;
+			}
+		}
+		if (buffer[len] != '\0')
+		{
+			LOG_ERROR("GetArchitecture result is not null-terminated at len");
 			return false;
 		}
 

@@ -43,3 +43,27 @@ Result<VOID, Error> Kernel32::PeekNamedPipe(SSIZE hNamedPipe, PVOID lpBuffer, UI
 	}
 	return Result<VOID, Error>::Ok();
 }
+
+Result<VOID, Error> Kernel32::IsWow64Process2(PVOID hProcess, PUINT16 lpProcessMachine, PUINT16 lpNativeMachine)
+{
+	// kernel32 exports IsWow64Process2 as a forwarder to the api-ms-win-core-wow64
+	// API set hosted by kernelbase.dll; GetExportAddress follows the forwarder
+	// (loading the target if needed). Pre-Windows 10 1511 builds export it
+	// nowhere, so resolution fails and the caller falls back.
+	auto fn = (BOOL(STDCALL *)(PVOID hProcess, PUINT16 lpProcessMachine, PUINT16 lpNativeMachine))ResolveKernel32ExportAddress("IsWow64Process2");
+	if (fn == nullptr)
+		return Result<VOID, Error>::Err(Error(Error::Kernel32_ExportUnavailable));
+	if (!fn(hProcess, lpProcessMachine, lpNativeMachine))
+		return Result<VOID, Error>::Err(Error(Error::Kernel32_IsWow64Process2Failed));
+	return Result<VOID, Error>::Ok();
+}
+
+Result<VOID, Error> Kernel32::IsWow64Process(PVOID hProcess, PUINT32 lpWow64Process)
+{
+	auto fn = (BOOL(STDCALL *)(PVOID hProcess, PUINT32 lpWow64Process))ResolveKernel32ExportAddress("IsWow64Process");
+	if (fn == nullptr)
+		return Result<VOID, Error>::Err(Error(Error::Kernel32_ExportUnavailable));
+	if (!fn(hProcess, lpWow64Process))
+		return Result<VOID, Error>::Err(Error(Error::Kernel32_IsWow64ProcessFailed));
+	return Result<VOID, Error>::Ok();
+}

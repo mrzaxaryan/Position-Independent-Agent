@@ -133,13 +133,16 @@ On Linux/Android the runtime reads `/proc/self/environ` — a null-terminated bl
 
 The `Environment` class provides compile-time and runtime system identification via `GetAgentPlatform()`, `GetOSVersion()`, `GetHostname()`, `GetUsername()`, and `GetArchitecture()`.
 
-| Platform | OS Version Source | Hostname Source | Username Source |
-|---|---|---|---|
-| **Windows** | PEB `OSMajorVersion`/`OSMinorVersion`/`OSBuildNumber` | `COMPUTERNAME` env var | `USERNAME` env var |
-| **Linux/Android** | `uname` syscall | `HOSTNAME` env var / `/etc/hostname` | `USER`/`LOGNAME` env → uid (`/proc/self/status`) + `/etc/passwd` |
-| **macOS/iOS/FreeBSD** | `sysctl` (kern.ostype + kern.osrelease) | `sysctl` kern.hostname | `getuid()` + `/etc/passwd` (numeric uid if not in passwd) |
-| **Solaris** | `utssys` → `/etc/release` fallback | `utssys` nodename → `/etc/nodename` | `getuid()` + `/etc/passwd` |
-| **UEFI** | `"uefi"` (static) | empty (no hostname concept) | empty (no user concept) |
+| Platform | OS Version Source | Hostname Source | Username Source | Architecture Source |
+|---|---|---|---|---|
+| **Windows** | PEB `OSMajorVersion`/`OSMinorVersion`/`OSBuildNumber` | `COMPUTERNAME` env var | `USERNAME` env var | `IsWow64Process2` native machine (Win10 1511+); `IsWow64Process` → amd64 pre-1511 |
+| **Linux/Android** | `uname` syscall | `HOSTNAME` env var / `/etc/hostname` | `USER`/`LOGNAME` env → uid (`/proc/self/status`) + `/etc/passwd` | `uname` machine field |
+| **macOS/FreeBSD** | `sysctl` (kern.ostype + kern.osrelease) | `sysctl` kern.hostname | `getuid()` + `/etc/passwd` (numeric uid if not in passwd) | `sysctl` `hw.machine` |
+| **Solaris** | `utssys` → `/etc/release` fallback | `utssys` nodename → `/etc/nodename` | `getuid()` + `/etc/passwd` | `sysinfo` SI_ARCHITECTURE_64 → 32 |
+| **iOS** | `sysctl` (kern.ostype + kern.osrelease) | `sysctl` kern.hostname | `getuid()` + `/etc/passwd` | compile-time (`hw.machine` is a device model, not an arch) |
+| **UEFI** | `"uefi"` (static) | empty (no hostname concept) | empty (no user concept) | compile-time |
+
+Architecture detection reports the **real host CPU** even when the agent runs emulated (x86 agent under WOW64 on x64/ARM64, i386 agent on an x86_64 kernel). The OS-provided machine name is reported **verbatim** — no renaming or normalization (`uname` says `armv7l`, the agent reports `armv7l`; Windows reports `amd64`/`arm64`/`i386`/`arm` per the native machine code; macOS/FreeBSD report `arm64`/`x86_64`/...). When detection fails, the compile-time `ARCHITECTURE_*` string is used as fallback. Caveats: a Linux process with a 32-bit personality (`setarch`/`linux32`) or in some containers sees the personality's machine name (`i686`); a Rosetta 2 process on macOS reports the emulated `x86_64`; iOS reports the compile-time target because `hw.machine` returns hardware model identifiers (`iPhone13,2`).
 
 ## Pseudo-Terminal (PTY) Creation
 

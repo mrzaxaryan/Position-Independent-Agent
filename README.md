@@ -387,7 +387,7 @@ beacon supports.
 | `MachineUUID`   | `UUID` (16B) | Hardware/OS-level unique identifier                                 |
 | `Hostname`      | `CHAR[256]`  | Machine hostname (from env or `/etc/hostname`)                      |
 | `Username`      | `CHAR[256]`  | Current user name (env, `getuid()`+`/etc/passwd`, or numeric uid)    |
-| `Architecture`  | `CHAR[32]`   | CPU architecture (`x86_64`, `aarch64`, etc.) — compile-time         |
+| `Architecture`  | `CHAR[32]`   | Host CPU architecture, OS-provided name verbatim (`x86_64`, `arm64`, `amd64`, ...) — runtime-detected (compile-time fallback); reports the real host under WOW64/emulation; iOS/UEFI and detection failures use the compile-time target |
 | `AgentPlatform` | `CHAR[32]`   | OS target (`windows`, `linux`, `macos`, etc.) — compile-time        |
 | `OSVersion`     | `CHAR[128]`  | Runtime OS version (`Windows 10.0 Build 19045`, `Linux 6.1.0`)     |
 

@@ -10,6 +10,11 @@
  * - GetAgentPlatform(): compile-time OS target from PLATFORM_* defines
  * - GetOSVersion(): runtime OS version via uname syscall (Linux/Android),
  *   sysctl (macOS/iOS/FreeBSD), utssys then /etc/release (Solaris), or 0 on failure
+ * - GetArchitecture(): runtime host CPU architecture via uname machine field
+ *   (Linux/Android), sysctl hw.machine (macOS/FreeBSD — iOS reports hardware
+ *   model identifiers, so it uses the compile-time fallback), or sysinfo
+ *   SI_ARCHITECTURE_64/32 (Solaris), falling back to the compile-time
+ *   ARCHITECTURE_* target
  * - GetHostname(): HOSTNAME env var (Linux/Android), /etc/hostname (Linux/Android),
  *   sysctl kern.hostname (macOS/iOS/FreeBSD), utssys then /etc/nodename (Solaris)
  *
@@ -608,8 +613,89 @@ Result<USIZE, Error> Environment::GetHostname(Span<CHAR> buffer) noexcept
 	return Result<USIZE, Error>::Err(Error(Error::None));
 }
 
+// Copy the kernel-provided machine string (uname Machine / sysctl hw.machine /
+// sysinfo SI_ARCHITECTURE) verbatim — the OS-standard name ("x86_64",
+// "armv7l", "amd64", "i686", ...) is reported unmodified. Clamps to the
+// output buffer. Returns the copied length, or 0 if empty (caller falls back
+// to the compile-time target). Unused on iOS, which skips runtime detection
+// (hw.machine reports device models there).
+[[maybe_unused]] static USIZE CopyKernelMachine(const CHAR *machine, Span<CHAR> buffer) noexcept
+{
+	if (buffer.Size() == 0)
+		return 0;
+
+	USIZE len = StringUtils::Length(machine);
+	if (len == 0)
+		return 0;
+
+	if (len >= buffer.Size())
+		len = buffer.Size() - 1;
+
+	Memory::Copy(buffer.Data(), machine, len);
+	buffer.Data()[len] = '\0';
+	return len;
+}
+
 USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept
 {
+#if defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)
+	// uname reports the host machine architecture, not the build target
+	// (e.g. "x86_64" when an i386 process runs on an x86_64 kernel).
+	// Exception: a process with a 32-bit personality (setarch/linux32) or in
+	// some containers sees the personality's machine name ("i686"), not the
+	// physical CPU.
+	Utsname uts;
+	Memory::Zero(&uts, sizeof(Utsname));
+	if (System::Call(SYS_UNAME, (USIZE)&uts) == 0)
+	{
+		USIZE len = CopyKernelMachine(uts.Machine, buffer);
+		if (len > 0)
+			return len;
+	}
+#elif defined(PLATFORM_MACOS) || defined(PLATFORM_FREEBSD)
+	// sysctl hw.machine reports the host architecture ("x86_64", "arm64").
+	// iOS deliberately does not use it: on iOS devices hw.machine returns a
+	// hardware model identifier ("iPhone13,2"), not a CPU architecture, so
+	// iOS falls through to the compile-time fallback below.
+	// Note: a Rosetta 2 process on Apple Silicon reports "x86_64" here —
+	// the emulated instruction set, not the physical CPU.
+	{
+		INT32 mib[2];
+		mib[0] = 6; // CTL_HW
+		mib[1] = 1; // HW_MACHINE
+		CHAR machine[64];
+		Memory::Zero(machine, sizeof(machine));
+		USIZE len = sizeof(machine) - 1;
+		if (System::Call(SYS_SYSCTL, (USIZE)mib, 2, (USIZE)machine, (USIZE)&len, 0, 0) == 0)
+		{
+			USIZE archLen = CopyKernelMachine(machine, buffer);
+			if (archLen > 0)
+				return archLen;
+		}
+	}
+#elif defined(PLATFORM_SOLARIS)
+	// sysinfo SI_ARCHITECTURE_64 reports the kernel instruction set ("amd64",
+	// "aarch64"), so a 32-bit process on a 64-bit kernel reports the real host.
+	// On 32-bit-only kernels SI_ARCHITECTURE_64 fails with EINVAL; fall back
+	// to SI_ARCHITECTURE_32. System::Call normalizes Solaris carry-flag
+	// errors to negative returns, so >= 0 means success.
+	{
+		CHAR machine[64];
+		Memory::Zero(machine, sizeof(machine));
+		SSIZE ret = System::Call(SYS_SYSINFO, SI_ARCHITECTURE_64, (USIZE)machine, sizeof(machine) - 1);
+		if (ret < 0)
+			ret = System::Call(SYS_SYSINFO, SI_ARCHITECTURE_32, (USIZE)machine, sizeof(machine) - 1);
+		if (ret >= 0 && machine[0] != '\0')
+		{
+			machine[sizeof(machine) - 1] = '\0';
+			USIZE archLen = CopyKernelMachine(machine, buffer);
+			if (archLen > 0)
+				return archLen;
+		}
+	}
+#endif
+
+	// Fallback: the architecture the agent was compiled for.
 #if defined(ARCHITECTURE_X86_64)
 	StringUtils::Copy(buffer, Span<const CHAR>("x86_64"));
 #elif defined(ARCHITECTURE_I386)

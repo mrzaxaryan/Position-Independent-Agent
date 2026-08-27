@@ -5680,7 +5680,7 @@
       "type": "file",
       "name": "environment.cc (POSIX)",
       "filePath": "src/platform/system/posix/environment.cc",
-      "summary": "POSIX Environment implementation: GetVariable reads /proc/self/environ on Linux/Android (stub on other POSIX); GetAgentPlatform/GetArchitecture return compile-time strings; GetOSVersion uses uname/sysctl/utssys; GetHostname uses env vars, sysctl, or /etc/hostname.",
+      "summary": "POSIX Environment implementation: GetVariable reads /proc/self/environ on Linux/Android (stub on other POSIX); GetAgentPlatform returns the compile-time string, GetArchitecture runtime-detects the host CPU (uname/sysctl hw.machine/sysinfo, compile-time fallback); GetOSVersion uses uname/sysctl/utssys; GetHostname uses env vars, sysctl, or /etc/hostname.",
       "tags": [
         "environment",
         "posix",

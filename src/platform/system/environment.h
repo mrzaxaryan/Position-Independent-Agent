@@ -14,7 +14,8 @@
  * - GetOSVersion(): runtime OS version string (e.g. "Windows 10.0 Build 19045")
  * - GetHostname(): machine hostname from OS environment
  * - GetUsername(): current user name (env, getuid()+/etc/passwd, or numeric uid)
- * - GetArchitecture(): compile-time CPU architecture string (e.g. "x86_64")
+ * - GetArchitecture(): runtime host CPU architecture string (e.g. "x86_64"),
+ *   falling back to the compile-time target when OS detection is unavailable
  */
 
 #pragma once
@@ -102,14 +103,27 @@ public:
 	[[nodiscard]] static Result<USIZE, Error> GetUsername(Span<CHAR> buffer) noexcept;
 
 	/**
-	 * @brief Retrieves the compile-time CPU architecture string.
+	 * @brief Retrieves the runtime host CPU architecture string.
 	 *
 	 * @param buffer Output buffer to receive the architecture string.
 	 * @return Length of the string written (excluding null terminator).
 	 *
-	 * @details Returns a short identifier for the CPU architecture the agent
-	 * was compiled for (e.g. "x86_64", "aarch64", "i386", "armv7a", "riscv64",
-	 * "riscv32", "mips64"). Determined at compile time from ARCHITECTURE_* defines.
+	 * @details Returns the OS-standard machine name for the host CPU,
+	 * detected at runtime so an emulated process (e.g. an x86 agent under
+	 * WOW64 on x64/ARM64, or an i386 agent on an x86_64 kernel) reports the
+	 * real host architecture. The OS-provided name is reported verbatim:
+	 * - Windows: IsWow64Process2 native machine (Windows 10 1511+) →
+	 *   "amd64", "arm64", "i386", "arm"; pre-1511 x86-under-WOW64 falls
+	 *   back to IsWow64Process → "amd64"
+	 * - Linux/Android: uname machine field → "x86_64", "aarch64", "armv7l", ...
+	 *   (a 32-bit personality via setarch/linux32 reports the personality
+	 *   name, e.g. "i686", not the physical CPU)
+	 * - macOS/FreeBSD: sysctl hw.machine → "arm64", "x86_64", ...
+	 *   (a Rosetta 2 process reports the emulated "x86_64")
+	 * - Solaris: sysinfo SI_ARCHITECTURE_64/32 → "amd64", "i386", ...
+	 * - iOS / UEFI / detection failure: the compile-time ARCHITECTURE_* target
+	 *   (e.g. "x86_64", "aarch64", "i386", "armv7a", "riscv64",
+	 *   "riscv32", "mips64")
 	 */
 	static USIZE GetArchitecture(Span<CHAR> buffer) noexcept;
 

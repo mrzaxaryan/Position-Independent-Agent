@@ -19,9 +19,11 @@
  *   Service), runtime OS version from sysctl/utssys
  * - UEFI: UUID unavailable, hostname/username unavailable (returns defaults)
  *
- * Architecture and AgentPlatform strings are determined at compile time from
- * the ARCHITECTURE_* and PLATFORM_* preprocessor defines. The OSVersion string
- * is populated at runtime via Environment::GetOSVersion().
+ * Architecture is detected at runtime via Environment::GetArchitecture() so an
+ * emulated process (e.g. x86 under WOW64) reports the real host CPU; it falls
+ * back to the compile-time ARCHITECTURE_* define when detection is unavailable.
+ * AgentPlatform is the compile-time OS target from the PLATFORM_* define. The
+ * OSVersion string is populated at runtime via Environment::GetOSVersion().
  *
  * @ingroup platform
  */
@@ -44,7 +46,7 @@ struct SystemInfo
     UUID MachineUUID;        ///< Machine-unique identifier (hardware/OS level)
     CHAR Hostname[256];      ///< Machine hostname / computer name
     CHAR Username[256];      ///< Current user name (e.g. "root", "admin"); empty if unavailable
-    CHAR Architecture[32];   ///< CPU architecture (e.g. "x86_64", "aarch64")
+    CHAR Architecture[32];   ///< Host CPU architecture (e.g. "x86_64", "aarch64"); runtime-detected, compile-time fallback
     CHAR AgentPlatform[32];  ///< Compile-time OS target (e.g. "windows", "linux")
     CHAR OSVersion[128];     ///< Runtime OS version (e.g. "Windows 10.0 Build 19045", "Linux 6.1.0")
 };
@@ -57,7 +59,8 @@ struct SystemInfo
  * - MachineUUID: Hardware/OS-level unique identifier (platform-specific)
  * - Hostname: Retrieved from OS environment (platform-specific)
  * - Username: Current user name (env, getuid()+/etc/passwd, or numeric uid)
- * - Architecture: Compile-time string from ARCHITECTURE_* define
+ * - Architecture: Runtime-detected host CPU architecture (compile-time
+ *   ARCHITECTURE_* define as fallback)
  * - AgentPlatform: Compile-time string from PLATFORM_* define
  * - OSVersion: Runtime OS version string (e.g. "Windows 10.0 Build 19045")
  *
