@@ -47,6 +47,9 @@ constexpr USIZE SYS_GETDENTS64 = 213;  // ILP32 only: 64-bit dirent for 32-bit p
 
 // System information
 constexpr USIZE SYS_UTSSYS     = 57;   // utssys(buf, arg, type): type 0 = uname
+constexpr USIZE SYS_SYSINFO    = 139;  // sysinfo(cmd, buf, count)
+constexpr USIZE SI_ARCHITECTURE_64 = 517; // sysinfo cmd: kernel 64-bit instruction set name
+constexpr USIZE SI_ARCHITECTURE_32 = 516; // sysinfo cmd: kernel 32-bit instruction set name
 
 // I/O control
 constexpr USIZE SYS_IOCTL      = 54;

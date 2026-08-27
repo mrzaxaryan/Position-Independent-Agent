@@ -2,6 +2,26 @@
 #include "platform/kernel/windows/peb.h"
 #include "platform/kernel/windows/ntdll.h"
 #include "core/algorithms/djb2.h"
+#include "core/string/string.h"
+
+// Load a module by wide base name (e.g. L"kernelbase.dll",
+// L"api-ms-win-core-wow64-l1-1-0.dll") via LdrLoadDll and return its base
+// address. API-set names name no real DLL, but the loader understands them
+// natively and maps them onto the host DLL (usually kernelbase.dll).
+static PVOID LoadForwardedModule(const WCHAR *moduleName) noexcept
+{
+	UNICODE_STRING dllName;
+	UINT16 nameLen = (UINT16)StringUtils::Length(moduleName);
+	dllName.Length = nameLen * sizeof(WCHAR);
+	dllName.MaximumLength = dllName.Length + sizeof(WCHAR);
+	dllName.Buffer = (PWCHAR)moduleName;
+
+	PVOID moduleBase = nullptr;
+	auto r = NTDLL::LdrLoadDll(nullptr, nullptr, &dllName, &moduleBase);
+	if (!r || moduleBase == nullptr)
+		return nullptr;
+	return moduleBase;
+}
 
 // Get the address of an exported function from a module base address
 PVOID GetExportAddress(PVOID hModule, UINT64 functionNameHash)
@@ -79,6 +99,15 @@ PVOID GetExportAddress(PVOID hModule, UINT64 functionNameHash)
 
 				// Get the target module base address from the PEB and validate it
 				PVOID targetModule = GetModuleHandleFromPEB(targetModuleHash);
+
+				// Not loaded: load it. The forwarder names its target ("NTDLL.RtlRandomEx",
+				// "api-ms-win-core-wow64.IsWow64Process2"); LdrLoadDll resolves both real
+				// DLL names and API-set schema names onto the host DLL. API-set names
+				// never map back onto the forwarding module itself, so recursion
+				// terminates.
+				if (targetModule == nullptr)
+					targetModule = LoadForwardedModule(wideModuleName);
+
 				if (targetModule == nullptr)
 					return nullptr;
 

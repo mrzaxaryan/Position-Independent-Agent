@@ -194,4 +194,64 @@ public:
 	 * https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-peeknamedpipe
 	 */
 	[[nodiscard]] static Result<VOID, Error> PeekNamedPipe(SSIZE hNamedPipe, PVOID lpBuffer, UINT32 nBufferSize, PUINT32 lpBytesRead, PUINT32 lpTotalBytesAvail, PUINT32 lpBytesLeftThisMessage);
+
+	/**
+	 * @brief Determines whether the specified process is running under WOW64.
+	 *
+	 * @details Reports the machine architectures of the target process and the
+	 * host operating system. When the process is not running under WOW64,
+	 * *lpProcessMachine is set to IMAGE_FILE_MACHINE_UNKNOWN and *lpNativeMachine
+	 * receives the host architecture. When it is running under WOW64 (e.g. an
+	 * x86 process on x64, or an x86/x64 process on ARM64 emulation),
+	 * *lpProcessMachine receives the architecture the process was built for.
+	 * Used to report the real host CPU architecture regardless of the
+	 * architecture the agent was compiled for.
+	 *
+	 * @param hProcess Handle to the process to query (NtCurrentProcess() for self).
+	 * @param lpProcessMachine Receives the architecture of the target process
+	 *                         (IMAGE_FILE_MACHINE_UNKNOWN if not under WOW64).
+	 * @param lpNativeMachine Receives the architecture of the host operating system.
+	 *
+	 * @return Result<VOID, Error> Ok() on success; Err(Kernel32_ExportUnavailable)
+	 *         if the export is missing (pre-Windows 10 1511, where the export
+	 *         exists in no module); Err(Kernel32_IsWow64Process2Failed) if the
+	 *         call itself failed.
+	 *
+	 * @note Resolved from kernel32.dll; the export is a forwarder into the
+	 *       api-ms-win-core-wow64 API set, which GetExportAddress follows
+	 *       (loading the host DLL if it is not already mapped).
+	 *
+	 * @par Requirements
+	 * Minimum supported client: Windows 10 version 1511 [desktop apps | UWP apps]
+	 * Minimum supported server: Windows Server 2016
+	 *
+	 * @see Microsoft Learn -- IsWow64Process2 function
+	 *      https://learn.microsoft.com/en-us/windows/win32/api/wow64apiset/nf-wow64apiset-iswow64process2
+	 */
+	[[nodiscard]] static Result<VOID, Error> IsWow64Process2(PVOID hProcess, PUINT16 lpProcessMachine, PUINT16 lpNativeMachine);
+
+	/**
+	 * @brief Determines whether the specified process is running under WOW64.
+	 *
+	 * @details Legacy single-bit query: sets *lpWow64Process to TRUE when the
+	 * 32-bit target process is running inside the x64 WOW64 emulator. Used as
+	 * the fallback for IsWow64Process2() on pre-Windows 10 1511 systems, where
+	 * a TRUE result implies an x64 host (the ARM64 WOW64 emulator post-dates
+	 * this export).
+	 *
+	 * @param hProcess Handle to the process to query (NtCurrentProcess() for self).
+	 * @param lpWow64Process Receives TRUE when the process runs under WOW64.
+	 *
+	 * @return Result<VOID, Error> Ok() on success; Err(Kernel32_ExportUnavailable)
+	 *         if the export is missing (pre-Windows XP); Err(Kernel32_IsWow64ProcessFailed)
+	 *         if the call itself failed.
+	 *
+	 * @par Requirements
+	 * Minimum supported client: Windows XP with SP2 [desktop apps | UWP apps]
+	 * Minimum supported server: Windows Server 2003 with SP1
+	 *
+	 * @see Microsoft Learn -- IsWow64Process function
+	 *      https://learn.microsoft.com/en-us/windows/win32/api/wow64apiset/nf-wow64apiset-iswow64process
+	 */
+	[[nodiscard]] static Result<VOID, Error> IsWow64Process(PVOID hProcess, PUINT32 lpWow64Process);
 };

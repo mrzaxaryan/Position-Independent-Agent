@@ -248,6 +248,13 @@ struct Error
 		ShellProcess_NotSupported = 136, // shell not supported on this platform
 		ShellProcess_ReadFailed = 137,	  // shell read failed
 		Shell_NoFreeSlot = 138,          // all shell slots in use
+
+		// -------------------------
+		// Kernel32 WOW64 query errors (139–141)
+		// -------------------------
+		Kernel32_ExportUnavailable = 139, // IsWow64Process2/IsWow64Process export not present (pre-Windows 10 1511 / pre-XP)
+		Kernel32_IsWow64ProcessFailed = 140, // IsWow64Process query failed
+		Kernel32_IsWow64Process2Failed = 141, // IsWow64Process2 query failed
 	};
 
 	/**

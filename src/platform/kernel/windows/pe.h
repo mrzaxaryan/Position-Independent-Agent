@@ -264,6 +264,17 @@ typedef struct _IMAGE_DOS_HEADER
 #define IMAGE_NT_SIGNATURE 0x00004550  ///< "PE\0\0" NT signature
 #define IMAGE_DIRECTORY_ENTRY_EXPORT 0 ///< Index of the export directory in the data directory array
 
+/// @brief Unknown or corrupted machine type (IsWow64Process2: not running under WOW64)
+#define IMAGE_FILE_MACHINE_UNKNOWN 0x0000
+/// @brief Intel 386 (or later) processor architecture
+#define IMAGE_FILE_MACHINE_I386 0x014C
+/// @brief ARM Thumb-2 processor architecture
+#define IMAGE_FILE_MACHINE_ARMNT 0x01C4
+/// @brief x64 (AMD64 / x86-64) processor architecture
+#define IMAGE_FILE_MACHINE_AMD64 0x8664
+/// @brief ARM64 processor architecture
+#define IMAGE_FILE_MACHINE_ARM64 0xAA64
+
 /**
  * @brief Resolves an exported function address from a loaded PE module by name hash.
  *
