@@ -24,6 +24,7 @@ struct DirectoryEntry
 	BOOL IsHidden;           ///< TRUE if the file has the hidden attribute
 	BOOL IsSystem;           ///< TRUE if the file has the system attribute
 	BOOL IsReadOnly;         ///< TRUE if the file has the read-only attribute
+	UINT64 VolumeSerial;     ///< Volume serial number when IsDrive is set; 0 for files/dirs or when unavailable
 };
 
 #pragma pack(pop)

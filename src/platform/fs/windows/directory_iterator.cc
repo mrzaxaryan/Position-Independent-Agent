@@ -33,10 +33,70 @@ static VOID FillEntry(DirectoryEntry &entry, const FILE_BOTH_DIR_INFORMATION &da
 	// 5. LastModifiedTime
 	entry.LastModifiedTime = data.LastWriteTime.QuadPart;
 
-	// 6. IsDrive
-	entry.IsDrive = (entry.Name[1] == ':' && entry.Name[2] == L'\0');
+	// 6. IsDrive — drive roots are formatted "X:\"; ':' and '\' cannot appear in
+	// an ordinary file name, so this cannot false-positive on real entries.
+	entry.IsDrive = (entry.Name[1] == L':' && entry.Name[2] == L'\\' && entry.Name[3] == L'\0');
+
+	// 7. VolumeSerial (files and directories never carry one)
+	entry.VolumeSerial = 0;
 
 	entry.Type = 3; // Default to Fixed
+}
+
+// Queries the volume serial number for a drive root (e.g. L"C:\\") via
+// FileFsVolumeInformation. Best-effort: returns 0 when the volume cannot be
+// opened or queried (no media, BitLocker-locked, ...).
+static UINT64 QueryVolumeSerial(PCWCHAR driveRoot)
+{
+	// 1. Resolve the drive root to an NT path (\??\X:\) through the DOS device map
+	UNICODE_STRING uniPath;
+	auto pathResult = NTDLL::RtlDosPathNameToNtPathName_U(driveRoot, &uniPath, nullptr, nullptr);
+	if (!pathResult)
+		return 0;
+
+	OBJECT_ATTRIBUTES objAttr;
+	InitializeObjectAttributes(&objAttr, &uniPath, OBJ_CASE_INSENSITIVE, nullptr, nullptr);
+
+	// 2. Open the volume root. FILE_READ_ATTRIBUTES is sufficient for FileFsVolumeInformation.
+	PVOID volumeHandle = nullptr;
+	IO_STATUS_BLOCK ioStatusBlock;
+	Memory::Zero(&ioStatusBlock, sizeof(IO_STATUS_BLOCK));
+
+	auto openResult = NTDLL::ZwOpenFile(
+		&volumeHandle,
+		FILE_READ_ATTRIBUTES | SYNCHRONIZE,
+		&objAttr,
+		&ioStatusBlock,
+		FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+		FILE_DIRECTORY_FILE | FILE_SYNCHRONOUS_IO_NONALERT);
+
+	NTDLL::RtlFreeUnicodeString(&uniPath);
+
+	if (!openResult)
+		return 0;
+
+	// 3. Query the serial. VolumeLabel is variable length, so over-allocate for it;
+	//    only VolumeSerialNumber (at a fixed offset) is consumed.
+	alignas(alignof(FILE_FS_VOLUME_INFORMATION)) UINT8 buffer[sizeof(FILE_FS_VOLUME_INFORMATION) + 32 * sizeof(WCHAR)];
+	Memory::Zero(buffer, sizeof(buffer));
+
+	auto queryResult = NTDLL::ZwQueryVolumeInformationFile(
+		volumeHandle,
+		&ioStatusBlock,
+		buffer,
+		sizeof(buffer),
+		FileFsVolumeInformation);
+
+	(VOID)NTDLL::ZwClose(volumeHandle);
+
+	// STATUS_BUFFER_OVERFLOW (0x80000005) means the variable-length label did
+	// not fit; the kernel fills the fixed header first, so VolumeSerialNumber
+	// is still valid. Only other failures yield "unknown".
+	if (!queryResult && (UINT32)queryResult.Error().Code != 0x80000005u)
+		return 0;
+
+	const FILE_FS_VOLUME_INFORMATION &info = *(const FILE_FS_VOLUME_INFORMATION *)buffer;
+	return (UINT64)info.VolumeSerialNumber;
 }
 
 DirectoryIterator::DirectoryIterator()
@@ -179,6 +239,17 @@ Result<VOID, Error> DirectoryIterator::Next()
 					currentEntry.Type = (UINT32)devMapInfo.Query.DriveType[i];
 				else
 					currentEntry.Type = DRIVE_UNKNOWN;
+
+				// Fetch the volume serial only when the device map positively
+				// identifies the drive as non-remote: opening an unreachable
+				// share's root can block for the redirector timeout (seconds per
+				// drive) inside this synchronous call. A degraded device-map
+				// query (Type == DRIVE_UNKNOWN) still queries: that value means
+				// "type unknown", not "unopenable volume".
+				if (devMapResult && devMapInfo.Query.DriveType[i] == DRIVE_REMOTE)
+					currentEntry.VolumeSerial = 0;
+				else
+					currentEntry.VolumeSerial = QueryVolumeSerial(currentEntry.Name);
 
 				// Update mask for next time (remove the bit we just processed)
 				mask &= ~(1 << i);

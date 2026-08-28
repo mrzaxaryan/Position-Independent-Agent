@@ -137,7 +137,7 @@ Commands arrive as raw bytes over a binary WebSocket frame. The agent casts
 those bytes directly to struct pointers. For that to work, the struct layout
 must match the protocol exactly -- no compiler-inserted padding.
 
-From `src/beacon/commandsHandler.cc` (lines 17-31):
+From `src/beacon/commandsHandler.cc` (lines 18-33):
 
 ```cpp
 #pragma pack(push, 1)
@@ -153,6 +153,7 @@ struct WireDirectoryEntry
     BOOL IsHidden;
     BOOL IsSystem;
     BOOL IsReadOnly;
+    UINT64 VolumeSerial;
 };
 #pragma pack(pop)
 ```
@@ -166,6 +167,10 @@ One critical detail: wire strings use `CHAR16` (always 2 bytes), never `WCHAR`.
 On Windows, `WCHAR` is 2 bytes and this would work by accident. On Linux and
 macOS, `WCHAR` is 4 bytes. Using `WCHAR` in a wire struct would silently corrupt
 every string field. `CHAR16` is a fixed 2-byte type on all platforms.
+
+`WireDirectoryEntry` is read as a fixed-size array, so appending `VolumeSerial`
+(API v6) changes the array stride — a breaking change for any parser that
+sizes the response by the struct, which is why the API version was bumped.
 
 The `AgentBuildInfo` struct in `commands.h` follows the same pattern:
 

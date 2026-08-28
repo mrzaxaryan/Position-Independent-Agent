@@ -158,6 +158,27 @@ typedef struct _FILE_FS_DEVICE_INFORMATION
 } FILE_FS_DEVICE_INFORMATION, *PFILE_FS_DEVICE_INFORMATION;
 
 /**
+ * @brief Contains volume information for a file system volume.
+ *
+ * @details Returned by ZwQueryVolumeInformationFile with FileFsVolumeInformation
+ * class. VolumeLabel is variable length; the caller supplies a buffer larger
+ * than sizeof(FILE_FS_VOLUME_INFORMATION) and reads VolumeLabelLength before
+ * accessing VolumeLabel.
+ *
+ * @see ZwQueryVolumeInformationFile
+ *      https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-zwqueryvolumeinformationfile
+ * @see FILE_FS_VOLUME_INFORMATION structure
+ *      https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-file_fs_volume_information
+ */
+typedef struct _FILE_FS_VOLUME_INFORMATION
+{
+	LARGE_INTEGER VolumeCreationTime; ///< Time the volume was created
+	UINT32 VolumeSerialNumber;        ///< Volume serial number (the value "vol X:" reports)
+	UINT32 VolumeLabelLength;         ///< Length of VolumeLabel in bytes (no null terminator)
+	WCHAR VolumeLabel[1];             ///< Variable-length volume label
+} FILE_FS_VOLUME_INFORMATION, *PFILE_FS_VOLUME_INFORMATION;
+
+/**
  * @brief Contains detailed information about a file in a directory listing.
  *
  * @details Returned by ZwQueryDirectoryFile with FileBothDirectoryInformation
@@ -196,11 +217,28 @@ typedef struct _FILE_BOTH_DIR_INFORMATION
 typedef enum _FILE_INFORMATION_CLASS_DIR
 {
 	FileBothDirectoryInformation = 3,  ///< Query directory with both long and short names
-	FileFsDeviceInformation = 4,       ///< Query file system device information
 	FileStandardInformation = 5,       ///< Query standard file information (size, links)
 	FileDispositionInformation = 13,   ///< Set file deletion disposition
 	FilePositionInformation = 14,      ///< Query or set current byte offset
 } FILE_INFORMATION_CLASS_DIR;
+
+/**
+ * @brief Identifies the type of volume information to query.
+ *
+ * @details Used as the FsInformationClass parameter in ZwQueryVolumeInformationFile.
+ * This is a distinct enumeration from FILE_INFORMATION_CLASS_DIR in the NT API:
+ * the numeric values overlap (e.g. 1 is FileDirectoryInformation as a file
+ * class but FileFsVolumeInformation as a volume class), so mixing them in one
+ * enum would make the values ambiguous.
+ *
+ * @see ZwQueryVolumeInformationFile
+ *      https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntddk/nf-ntddk-zwqueryvolumeinformationfile
+ */
+typedef enum _FS_INFORMATION_CLASS
+{
+	FileFsVolumeInformation = 1, ///< Query volume information (serial, label, creation time)
+	FileFsDeviceInformation = 4, ///< Query file system device information
+} FS_INFORMATION_CLASS;
 
 /**
  * @brief Wrappers for NT Native API functions exported by ntdll.dll.

@@ -54,8 +54,9 @@ enum CommandType : UINT8
 #ifndef AGENT_COMMIT_HASH
 #define AGENT_COMMIT_HASH "00000000"
 #endif
+// v6: WireDirectoryEntry gained UINT64 VolumeSerial (appended; array stride changed)
 #ifndef AGENT_API_VERSION
-#define AGENT_API_VERSION 5
+#define AGENT_API_VERSION 6
 #endif
 #ifndef AGENT_NAME_ID
 #define AGENT_NAME_ID 0

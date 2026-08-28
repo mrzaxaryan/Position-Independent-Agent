@@ -293,6 +293,7 @@ Result<VOID, Error> DirectoryIterator::Next()
 	currentEntry.Type = (UINT32)d->Type;
 #endif
 	currentEntry.IsDrive = false;
+	currentEntry.VolumeSerial = 0;
 	currentEntry.IsHidden = (d->Name[0] == '.');
 	currentEntry.IsSystem = false;
 	currentEntry.IsReadOnly = false;

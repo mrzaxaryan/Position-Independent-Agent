@@ -89,7 +89,20 @@ ZwQueryInformationProcess(NtCurrentProcess(), ProcessDeviceMap, ...)
                                                                                   └── bit 3 = D: drive
 ```
 
-The 26-bit bitmask (A: through Z:) is stored directly in the iterator's handle field. Each `Next()` call finds the next set bit, formats the drive letter as `"X:\"`, and queries `ZwQueryVolumeInformationFile` for the drive type (fixed, removable, network, etc.).
+The 26-bit bitmask (A: through Z:) is stored directly in the iterator's handle field. Each `Next()` call finds the next set bit and formats the drive letter as `"X:\"`.
+
+Drive type (fixed, removable, network, ...) comes from the same device-map query: `PROCESS_DEVICEMAP_INFORMATION.Query.DriveType[i]` already carries the Win32 `DRIVE_*` constant per letter, so no extra syscall is needed. If the device-map query fails, `Type` degrades to `DRIVE_UNKNOWN`.
+
+Each local drive also gets a volume serial number (`VolumeSerial` on the entry, 0 when unavailable), fetched with a second round trip per drive:
+
+```
+ZwOpenFile("\??\X:\", FILE_READ_ATTRIBUTES | SYNCHRONIZE, ..., FILE_DIRECTORY_FILE)
+  → ZwQueryVolumeInformationFile(handle, FileFsVolumeInformation)
+      → FILE_FS_VOLUME_INFORMATION.VolumeSerialNumber
+  → ZwClose
+```
+
+This is the same value `vol X:` prints, and it is stable across drive-letter changes when a removable drive is replugged. The query is best-effort: an empty card-reader slot or a BitLocker-locked volume yields `VolumeSerial = 0`, but the drive entry is still emitted. Only drives the device map positively identifies as `DRIVE_REMOTE` skip the query — opening an unreachable network share can block for the redirector timeout (seconds per drive) inside the synchronous `Next()` call. A degraded device-map query (`Type == DRIVE_UNKNOWN`) still queries: that value means "type unknown", not "unopenable volume".
 
 ## Path Manipulation
 

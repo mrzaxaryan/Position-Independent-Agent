@@ -395,7 +395,7 @@ beacon supports.
 
 | Field          | Type        | Description                                      |
 |----------------|-------------|--------------------------------------------------|
-| `ApiVersion`   | `UINT32`    | Agent API version (currently `5`; bumped on breaking protocol changes) |
+| `ApiVersion`   | `UINT32`    | Agent API version (currently `6`; bumped on breaking protocol changes) |
 | `AgentNameId`  | `UINT32`    | Agent implementation identifier (`AGENT_NAME_ID`, currently `0` = PIA) |
 | `CommitHash`   | `CHAR[9]`   | Short git commit hash (8 hex chars + null)        |
 | `BuildNumber`  | `UINT32`    | Auto-incrementing build number (git commit count) |
@@ -421,10 +421,28 @@ Which feature categories are supported is fixed at **compile time** by the `SUPP
 
 ### `GetDirectoryContent` (0x01)
 
-Lists all entries in a directory (excluding `.` and `..`).
+Lists all entries in a directory (excluding `.` and `..`). An empty path enumerates drive roots on Windows; POSIX platforms list `/`, and UEFI lists the EFI volume root.
 
 - **Request**: `CHAR16[] directoryPath` (null-terminated UTF-16LE string)
 - **Response**: `UINT32 status` + `UINT64 entryCount` + `DirectoryEntry[entryCount]`
+
+`DirectoryEntry` layout (packed, 553 bytes; `BOOL` is 1 byte on the wire):
+
+| Field              | Type          | Description                                                          |
+|--------------------|---------------|----------------------------------------------------------------------|
+| `Name`             | `CHAR16[256]` | Entry name; drive roots are `"X:\"`                                   |
+| `CreationTime`     | `UINT64`      | Creation timestamp in platform filetime format                        |
+| `LastModifiedTime` | `UINT64`      | Last modification timestamp                                           |
+| `Size`             | `UINT64`      | File size in bytes (0 for drives)                                     |
+| `Type`             | `UINT32`      | When `IsDrive`: Win32 drive type (2=Removable, 3=Fixed, 4=Remote, 5=CD-ROM, 6=RAM disk); otherwise filesystem-specific |
+| `IsDirectory`      | `BOOL`        | True for directories and drive roots                                  |
+| `IsDrive`          | `BOOL`        | True if the entry is a drive root                                     |
+| `IsHidden`         | `BOOL`        | Hidden attribute                                                      |
+| `IsSystem`         | `BOOL`        | System attribute                                                      |
+| `IsReadOnly`       | `BOOL`        | Read-only attribute                                                   |
+| `VolumeSerial`     | `UINT64`      | Volume serial number when `IsDrive` (API v6); `0` for files/directories or when the serial is unavailable |
+
+The volume serial is the value `vol X:` reports (`FileFsVolumeInformation.VolumeSerialNumber` on Windows). It is stable across drive-letter changes when a removable drive is replugged, so the C2 can recognize a previously scanned drive by comparing serials. `0` means unknown — the drive is still listed. Remote drives (`DRIVE_REMOTE`) skip the query so an unreachable share cannot stall the listing; unknown-type and local drives are still queried.
 
 ### `GetFileContent` (0x02)
 
