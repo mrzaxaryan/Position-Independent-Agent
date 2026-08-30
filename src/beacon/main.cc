@@ -136,13 +136,13 @@ static const CHAR *CommandTypeName(UINT8 type)
 
 INT32 start()
 {
-    // Resolve the relay URL from the R_URL environment variable at runtime.
+    // Resolve the relay URL from the W_URL environment variable at runtime.
     // There is no fallback: the agent will not run without an explicit endpoint.
     CHAR urlBuffer[512];
-    USIZE urlLen = Environment::GetVariable("R_URL", Span<CHAR>(urlBuffer, sizeof(urlBuffer)));
+    USIZE urlLen = Environment::GetVariable("W_URL", Span<CHAR>(urlBuffer, sizeof(urlBuffer)));
     if (urlLen == 0)
     {
-        LOG_ERROR("R_URL environment variable is not set; cannot start agent without a relay endpoint");
+        LOG_ERROR("W_URL environment variable is not set; cannot start agent without a relay endpoint");
         return 0;
     }
     Span<const CHAR> urlSpan(urlBuffer, urlLen); // exclude null terminator (ParseUrl bounds on Span size)

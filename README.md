@@ -509,7 +509,7 @@ Opens a new interactive shell session. The beacon owns slot assignment: it picks
 
 ## Configuration
 
-- **Server URL**: Read at startup from the `R_URL` environment variable (accepted schemes: `ws://`, `wss://`, `http://`, `https://`). There is no fallback — the agent exits if `R_URL` is unset.
+- **Server URL**: Read at startup from the `W_URL` environment variable (accepted schemes: `ws://`, `wss://`, `http://`, `https://`). There is no fallback — the agent exits if `W_URL` is unset.
 
 ---
 

@@ -12,7 +12,7 @@ The main agent loop and its command handlers. This is where everything comes tog
 The `start()` function is the heart of the agent. The whole flow looks like this:
 ```
 start():
-  1. Read relay URL from the R_URL environment variable (no fallback)
+  1. Read relay URL from the W_URL environment variable (no fallback)
   2. Build command handler function pointer array (lines 54-72)
   3. Infinite retry loop:
      a. Connect: DNS -> TCP -> TLS -> HTTP -> WebSocket
