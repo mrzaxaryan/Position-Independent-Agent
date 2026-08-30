@@ -6,8 +6,7 @@
 
 // Enum to represent the different command types that can be handled by the agent.
 // Values are wire opcodes — shell commands first, then FileSystem, then Display,
-// Exit last. Opcode 0x00 is retired (was Hello in API <= 5 — identity now travels
-// on the WebSocket upgrade's HTTP headers, see main.cc BuildIdentityHeaders).
+// Exit last.
 enum CommandType : UINT8
 {
     Command_OpenShell = 1,

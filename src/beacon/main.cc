@@ -10,7 +10,7 @@
 /**
  * Builds the identity header block sent with the /agent WebSocket upgrade (API 1).
  *
- * @details Identity travels as HTTP headers — there is no Hello frame. The relay
+ * @details Identity travels as HTTP headers. The relay
  * copies these headers into its agent events and /status; the C2 consumes them as
  * typed fields without parsing anything binary. Two formats must stay stable:
  *  - X-Agent-Uuid: the machine UUID's 16 bytes formatted as C# Guid.ToString()

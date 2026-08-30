@@ -91,9 +91,6 @@ static BOOL IsDotEntry(const DirectoryEntry &entry)
 // Command handlers
 // =============================================================================
 
-// NOTE: the Hello command (0x00) is gone — identity travels on the WebSocket
-// upgrade request as X-Agent-* HTTP headers (see main.cc BuildIdentityHeaders).
-
 VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
     LOG_INFO("Handling GetDirectoryContentCommand.");
