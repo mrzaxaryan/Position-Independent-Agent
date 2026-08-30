@@ -25,7 +25,7 @@
  */
 static USIZE BuildIdentityHeaders(const SystemInfo &info, Span<CHAR> out)
 {
-    CONST CHAR *hex = "0123456789abcdef";
+    const CHAR *hex = "0123456789abcdef";
     USIZE off = 0;
 
     auto append = [&](PCCHAR s) -> BOOL

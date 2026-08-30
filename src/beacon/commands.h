@@ -5,21 +5,21 @@
 #include "screen_capture.h"
 
 // Enum to represent the different command types that can be handled by the agent.
-// Opcode 0x00 is retired (was Hello in API <= 5 — identity now travels on the
-// WebSocket upgrade's HTTP headers, see main.cc BuildIdentityHeaders); the hole
-// is left so remaining opcodes keep their wire values.
+// Values are wire opcodes — shell commands first, then FileSystem, then Display,
+// Exit last. Opcode 0x00 is retired (was Hello in API <= 5 — identity now travels
+// on the WebSocket upgrade's HTTP headers, see main.cc BuildIdentityHeaders).
 enum CommandType : UINT8
 {
-    Command_GetDirectoryContent = 1,
-    Command_GetFileContent = 2,
-    Command_GetFileChunkHash = 3,
-    Command_WriteShell = 4,
-    Command_ReadShell = 5,
-    Command_GetDisplays = 6,
-    Command_GetScreenshot = 7,
-    Command_CloseShell = 8,
-    Command_Exit = 9,
-    Command_OpenShell = 10,
+    Command_OpenShell = 1,
+    Command_WriteShell = 2,
+    Command_ReadShell = 3,
+    Command_CloseShell = 4,
+    Command_GetDirectoryContent = 5,
+    Command_GetFileContent = 6,
+    Command_GetFileChunkHash = 7,
+    Command_GetDisplays = 8,
+    Command_GetScreenshot = 9,
+    Command_Exit = 10,
     CommandTypeCount
 };
 
@@ -36,8 +36,8 @@ enum CommandType : UINT8
 // registered; it is not feature-gated and not advertised in the mask.
 //
 // Category -> owned commands:
+//   SHELL       OpenShell, WriteShell, ReadShell, CloseShell
 //   FILESYSTEM  GetDirectoryContent, GetFileContent, GetFileChunkHash
-//   SHELL       OpenShell, CloseShell, ReadShell, WriteShell
 //   DISPLAY     GetDisplays, GetScreenshot
 // =============================================================================
 #ifndef SUPPORT_FILESYSTEM
@@ -76,8 +76,8 @@ enum CommandType : UINT8
  */
 enum CapabilityBit : UINT8
 {
-    Capability_FileSystem = 0, ///< File system access (dir listing, file read, chunk hash)
-    Capability_Shell = 1,      ///< Interactive shell (open/close/read/write)
+    Capability_Shell = 0,      ///< Interactive shell (open/write/read/close)
+    Capability_FileSystem = 1, ///< File system access (dir listing, file read, chunk hash)
     Capability_Display = 2,    ///< Display enumeration + screenshot
     CapabilityBitCount
 };
@@ -122,8 +122,8 @@ inline constexpr CapabilityMask BuildCapabilityMask() noexcept
             mask.Bits[b / 8] |= static_cast<UINT8>(1u << (b % 8));
         }
     };
-    set(Capability_FileSystem, SUPPORT_FILESYSTEM);
     set(Capability_Shell, SUPPORT_SHELL);
+    set(Capability_FileSystem, SUPPORT_FILESYSTEM);
     set(Capability_Display, SUPPORT_DISPLAY);
     return mask;
 }
