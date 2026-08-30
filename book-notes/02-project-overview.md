@@ -64,7 +64,7 @@ handles all of them.
 **Priority:** MEDIUM
 
 The agent doesn't connect directly to the operator's machine. Instead it talks
-to a relay — in this case a Cloudflare Worker at `relay.nostdlib.workers.dev`.
+to a relay — in this case a Cloudflare Worker.
 The operator also connects to the relay. Commands and responses get forwarded
 between them through this intermediary.
 

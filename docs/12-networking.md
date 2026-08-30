@@ -21,7 +21,7 @@ For the custom types (`Result`, `Span`, `Error`) used throughout, see
             |
  Layer 2: TCP Socket        socket.h              connect() to IP:443
             |
- Layer 1: DNS Resolution    dns_client.h          "relay.nostdlib.workers.dev" -> IP
+ Layer 1: DNS Resolution    dns_client.h          "relay.example.com" -> IP
 ```
 
 Each layer wraps the one below it. The sequence for a single connection: DNS resolves
@@ -182,7 +182,7 @@ What actually goes over the TLS channel:
 ```
 Request:                              Response:
   GET /agent HTTP/1.1\r\n              HTTP/1.1 101 Switching Protocols\r\n
-  Host: relay.nostdlib.workers.dev\r\n Upgrade: websocket\r\n
+  Host: relay.example.com\r\n           Upgrade: websocket\r\n
   Connection: Upgrade\r\n             Connection: Upgrade\r\n
   Upgrade: websocket\r\n              Sec-WebSocket-Accept: s3pPLM...\r\n
   Sec-WebSocket-Key: dGhlIH...\r\n    \r\n
@@ -287,7 +287,7 @@ for small frames (<=242 bytes), and streaming 256-byte masked chunks for large o
 ## 9. Full Connection Trace
 
 ```
-WebSocketClient::Create("wss://relay.nostdlib.workers.dev/agent")
+WebSocketClient::Create("wss://relay.example.com/agent")
   |
   +-- HttpClient::ParseUrl()     -> host, path, port=443, secure=true
   +-- DnsClient::Resolve()       -> AAAA via Cloudflare, fallback Google, fallback A

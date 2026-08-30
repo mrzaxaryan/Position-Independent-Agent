@@ -12,7 +12,7 @@ Questions about DNS, HTTP, TLS 1.3, and WebSocket.
 Lay out the layering from bottom to top so readers have a map before diving into details:
 ```
 1. DNS Resolution (dns_client.h)
-   "relay.nostdlib.workers.dev" -> 1.2.3.4
+   "relay.example.com" -> 1.2.3.4
 
 2. TCP Socket (socket.h)
    Connect to 1.2.3.4:443
@@ -108,7 +108,7 @@ People use HTTP every day without ever seeing the wire format. Here's what actua
 ```
 Request (bytes sent over TLS):
   GET /agent HTTP/1.1\r\n
-  Host: relay.nostdlib.workers.dev\r\n
+  Host: relay.example.com\r\n
   Connection: Upgrade\r\n
   Upgrade: websocket\r\n
   Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n

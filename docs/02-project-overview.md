@@ -71,7 +71,7 @@ A single codebase that compiles to all of these is extremely valuable for securi
 
 ## The Relay / C2 Architecture
 
-The agent doesn't connect directly to the operator's machine. It talks to a relay — a Cloudflare Worker at `relay.nostdlib.workers.dev`. The operator also connects to the relay. Commands and responses get forwarded between them through this intermediary.
+The agent doesn't connect directly to the operator's machine. It talks to a relay — a Cloudflare Worker. The operator also connects to the relay. Commands and responses get forwarded between them through this intermediary.
 
 ```
 +----------+        HTTPS/WSS       +---------+        HTTPS/WSS       +----------+
@@ -84,7 +84,7 @@ The agent doesn't connect directly to the operator's machine. It talks to a rela
 This is standard C2 (command-and-control) architecture. The operator's real IP stays hidden behind the CDN. From a network perspective, the agent's traffic looks like normal HTTPS to a Cloudflare domain — indistinguishable from legitimate web traffic.
 
 The connection chain from the agent's perspective:
-1. DNS-over-HTTPS resolves `relay.nostdlib.workers.dev`
+1. DNS-over-HTTPS resolves the relay hostname
 2. TCP socket connects to the resolved IP on port 443
 3. TLS 1.3 handshake establishes encryption
 4. HTTP/1.1 request with `Upgrade: websocket`
