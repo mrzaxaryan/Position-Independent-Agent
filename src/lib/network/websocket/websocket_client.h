@@ -180,10 +180,10 @@ private:
 	 *      - Host, Upgrade: websocket, Connection: Upgrade
 	 *      - Sec-WebSocket-Key, Sec-WebSocket-Version: 13, Origin
 	 *      - <paramref name="extraHeaders"/> (verbatim, CRLF-terminated lines) — carries
-	 *        the agent's identity headers on the /agent upgrade
+	 *        the agent's identity headers on the root (/) upgrade
 	 *   4. Validates the server returns HTTP 101 Switching Protocols (Section 4.2.2)
 	 *
-	 * @param path Request target (e.g. "/agent")
+	 * @param path Request target (the agent leg is "/" — relay root)
 	 * @param extraHeaders Optional extra header lines, each CRLF-terminated, no leading
 	 *        CRLF (one is written before them). May be empty.
 	 *
@@ -290,7 +290,7 @@ public:
 	 * @brief Factory method — creates and connects a WebSocketClient from a ws:// or wss:// URL
 	 * @param url WebSocket URL (e.g., "wss://example.com/path")
 	 * @param extraHeaders Optional extra header lines for the upgrade request (CRLF-terminated,
-	 *        no leading CRLF) — the agent's identity headers on the /agent upgrade
+	 *        no leading CRLF) — the agent's identity headers on the root (/) upgrade
 	 * @return Ok(WebSocketClient) in the OPEN state, or Err on parse/DNS/TLS/handshake failure
 	 *
 	 * @details Performs the full connection sequence:
