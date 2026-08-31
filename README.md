@@ -419,7 +419,7 @@ Category bit assignments:
 
 Which feature categories are supported is fixed at **compile time** by the `SUPPORT_<CATEGORY>` macros (default `1`; override to `0` per build/platform to compile a whole category out — its commands are then neither registered in the dispatch table nor advertised in this mask).
 
-### `GetDirectoryContent` (0x01)
+### `GetDirectoryContent` (0x05)
 
 Lists all entries in a directory (excluding `.` and `..`). An empty path enumerates drive roots on Windows; POSIX platforms list `/`, and UEFI lists the EFI volume root.
 
