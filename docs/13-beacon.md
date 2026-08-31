@@ -169,7 +169,7 @@ macOS, `WCHAR` is 4 bytes. Using `WCHAR` in a wire struct would silently corrupt
 every string field. `CHAR16` is a fixed 2-byte type on all platforms.
 
 `WireDirectoryEntry` is read as a fixed-size array, so appending `VolumeSerial`
-(API v6) changes the array stride — a breaking change for any parser that
+(API v2) changes the array stride — a breaking change for any parser that
 sizes the response by the struct, which is why the API version was bumped.
 
 The `AgentBuildInfo` struct in `commands.h` follows the same pattern:

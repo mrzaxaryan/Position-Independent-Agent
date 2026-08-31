@@ -395,7 +395,7 @@ beacon supports.
 
 | Field          | Type        | Description                                      |
 |----------------|-------------|--------------------------------------------------|
-| `ApiVersion`   | `UINT32`    | Agent API version (currently `6`; bumped on breaking protocol changes) |
+| `ApiVersion`   | `UINT32`    | Agent API version (currently `2`; bumped on breaking protocol changes) |
 | `AgentNameId`  | `UINT32`    | Agent implementation identifier (`AGENT_NAME_ID`, currently `0` = PIA) |
 | `CommitHash`   | `CHAR[9]`   | Short git commit hash (8 hex chars + null)        |
 | `BuildNumber`  | `UINT32`    | Auto-incrementing build number (git commit count) |
@@ -440,7 +440,7 @@ Lists all entries in a directory (excluding `.` and `..`). An empty path enumera
 | `IsHidden`         | `BOOL`        | Hidden attribute                                                      |
 | `IsSystem`         | `BOOL`        | System attribute                                                      |
 | `IsReadOnly`       | `BOOL`        | Read-only attribute                                                   |
-| `VolumeSerial`     | `UINT64`      | Volume serial number when `IsDrive` (API v6); `0` for files/directories or when the serial is unavailable |
+| `VolumeSerial`     | `UINT64`      | Volume serial number when `IsDrive` (API v2); `0` for files/directories or when the serial is unavailable |
 
 The volume serial is the value `vol X:` reports (`FileFsVolumeInformation.VolumeSerialNumber` on Windows). It is stable across drive-letter changes when a removable drive is replugged, so the C2 can recognize a previously scanned drive by comparing serials. `0` means unknown — the drive is still listed. Remote drives (`DRIVE_REMOTE`) skip the query so an unreachable share cannot stall the listing; unknown-type and local drives are still queried.
 
@@ -527,7 +527,7 @@ Opens a new interactive shell session. The beacon owns slot assignment: it picks
 
 ## Configuration
 
-- **Server URL**: Read at startup from the `R_URL` environment variable (accepted schemes: `ws://`, `wss://`, `http://`, `https://`). There is no fallback — the agent exits if `R_URL` is unset.
+- **Server URL**: Read at startup from the `W_URL` environment variable (accepted schemes: `ws://`, `wss://`, `http://`, `https://`). There is no fallback — the agent exits if `W_URL` is unset.
 
 ---
 

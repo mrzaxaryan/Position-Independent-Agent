@@ -10,10 +10,12 @@
  * @brief Performs the WebSocket opening handshake (RFC 6455 Section 4)
  * @details Sends the HTTP Upgrade request with Sec-WebSocket-Key (16 random bytes,
  * Base64-encoded per Section 4.1) and validates the server responds with HTTP 101.
+ * Any extraHeaders span (CRLF-terminated lines) is written verbatim between the
+ * standard headers and the blank line — the agent's identity headers ride here.
  * Falls back to IPv4 if the initial IPv6 connection attempt fails.
  * @see https://datatracker.ietf.org/doc/html/rfc6455#section-4
  */
-Result<VOID, Error> WebSocketClient::Open(PCCHAR path)
+Result<VOID, Error> WebSocketClient::Open(PCCHAR path, Span<const CHAR> extraHeaders)
 {
 	BOOL isSecure = tlsContext.IsSecure();
 	LOG_DEBUG("Opening WebSocket client to %s:%u%s (secure: %s)", hostName, port, path, isSecure ? "true" : "false");
@@ -75,7 +77,25 @@ Result<VOID, Error> WebSocketClient::Open(PCCHAR path)
 		!writeStr("\r\nSec-WebSocket-Version: 13\r\nOrigin: ") ||
 		!writeStr(isSecure ? "https://" : "http://") ||
 		!writeStr(hostName) ||
-		!writeStr("\r\n\r\n"))
+		!writeStr("\r\n"))
+	{
+		(VOID)Close();
+		return Result<VOID, Error>::Err(Error::Ws_WriteFailed);
+	}
+
+	// Extra headers (identity) — written as their own span since they are not
+	// null-terminated.
+	if (extraHeaders.Size() > 0)
+	{
+		auto extraWrite = tlsContext.Write(extraHeaders);
+		if (!extraWrite || extraWrite.Value() != extraHeaders.Size())
+		{
+			(VOID)Close();
+			return Result<VOID, Error>::Err(Error::Ws_WriteFailed);
+		}
+	}
+
+	if (!writeStr("\r\n"))
 	{
 		(VOID)Close();
 		return Result<VOID, Error>::Err(Error::Ws_WriteFailed);
@@ -502,7 +522,7 @@ Result<WebSocketMessage, Error> WebSocketClient::Read()
  * @see https://datatracker.ietf.org/doc/html/rfc6455#section-3
  * @see https://datatracker.ietf.org/doc/html/rfc6455#section-4
  */
-Result<WebSocketClient, Error> WebSocketClient::Create(Span<const CHAR> url)
+Result<WebSocketClient, Error> WebSocketClient::Create(Span<const CHAR> url, Span<const CHAR> extraHeaders)
 {
 	CHAR host[254];
 	CHAR parsedPath[2048];
@@ -539,7 +559,7 @@ Result<WebSocketClient, Error> WebSocketClient::Create(Span<const CHAR> url)
 
 	WebSocketClient client(host, ip, port, static_cast<TlsClient &&>(tlsResult.Value()));
 
-	auto openResult = client.Open(parsedPath);
+	auto openResult = client.Open(parsedPath, extraHeaders);
 	if (!openResult)
 		return Result<WebSocketClient, Error>::Err(openResult, Error::Ws_CreateFailed);
 

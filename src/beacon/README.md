@@ -44,7 +44,7 @@ Top-level application layer — connects to a relay server over WebSocket (TLS 1
 
 ## Connection Pipeline
 
-The relay URL is read at startup from the `R_URL` environment variable; there is no fallback — the agent exits if `R_URL` is unset.
+The relay URL is read at startup from the `W_URL` environment variable; there is no fallback — the agent exits if `W_URL` is unset.
 
 Full protocol stack, all implemented in-process:
 

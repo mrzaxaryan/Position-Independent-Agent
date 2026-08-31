@@ -179,14 +179,20 @@ private:
 	 *      - GET <path> HTTP/1.1
 	 *      - Host, Upgrade: websocket, Connection: Upgrade
 	 *      - Sec-WebSocket-Key, Sec-WebSocket-Version: 13, Origin
+	 *      - <paramref name="extraHeaders"/> (verbatim, CRLF-terminated lines) — carries
+	 *        the agent's identity headers on the /agent upgrade
 	 *   4. Validates the server returns HTTP 101 Switching Protocols (Section 4.2.2)
+	 *
+	 * @param path Request target (e.g. "/agent")
+	 * @param extraHeaders Optional extra header lines, each CRLF-terminated, no leading
+	 *        CRLF (one is written before them). May be empty.
 	 *
 	 * @see RFC 6455 Section 4 — Opening Handshake
 	 *      https://datatracker.ietf.org/doc/html/rfc6455#section-4
 	 * @see RFC 6455 Section 4.1 — Client Requirements
 	 *      https://datatracker.ietf.org/doc/html/rfc6455#section-4.1
 	 */
-	[[nodiscard]] Result<VOID, Error> Open(PCCHAR path);
+	[[nodiscard]] Result<VOID, Error> Open(PCCHAR path, Span<const CHAR> extraHeaders = Span<const CHAR>());
 
 	/**
 	 * @brief Reads exactly buffer.Size() bytes from the TLS transport
@@ -283,6 +289,8 @@ public:
 	/**
 	 * @brief Factory method — creates and connects a WebSocketClient from a ws:// or wss:// URL
 	 * @param url WebSocket URL (e.g., "wss://example.com/path")
+	 * @param extraHeaders Optional extra header lines for the upgrade request (CRLF-terminated,
+	 *        no leading CRLF) — the agent's identity headers on the /agent upgrade
 	 * @return Ok(WebSocketClient) in the OPEN state, or Err on parse/DNS/TLS/handshake failure
 	 *
 	 * @details Performs the full connection sequence:
@@ -299,7 +307,7 @@ public:
 	 * @see RFC 6455 Section 4 — Opening Handshake
 	 *      https://datatracker.ietf.org/doc/html/rfc6455#section-4
 	 */
-	[[nodiscard]] static Result<WebSocketClient, Error> Create(Span<const CHAR> url);
+	[[nodiscard]] static Result<WebSocketClient, Error> Create(Span<const CHAR> url, Span<const CHAR> extraHeaders = Span<const CHAR>());
 
 	/** @brief Returns true if the underlying TLS transport is valid */
 	constexpr BOOL IsValid() const { return tlsContext.IsValid(); }

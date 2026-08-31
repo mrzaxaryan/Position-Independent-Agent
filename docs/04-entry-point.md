@@ -246,10 +246,10 @@ somewhere." The linker finds it later. The definition lives in
 ```cpp
 INT32 start()
 {
-    // Resolve the relay URL from the R_URL environment variable at runtime.
+    // Resolve the relay URL from the W_URL environment variable at runtime.
     // There is no fallback: the agent will not run without an explicit endpoint.
     CHAR urlBuffer[512];
-    USIZE urlLen = Environment::GetVariable("R_URL", Span<CHAR>(urlBuffer, sizeof(urlBuffer)));
+    USIZE urlLen = Environment::GetVariable("W_URL", Span<CHAR>(urlBuffer, sizeof(urlBuffer)));
     if (urlLen == 0)
         return 0;
     // ... registers command handlers ...
