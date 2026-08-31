@@ -82,6 +82,7 @@ static USIZE BuildIdentityHeaders(const SystemInfo &info, Span<CHAR> out)
     ok = ok && append("X-Agent-Hostname: ") && append(info.Hostname) && append("\r\n");
     ok = ok && append("X-Agent-Username: ") && append(info.Username) && append("\r\n");
     ok = ok && append("X-Agent-Arch: ") && append(info.Architecture) && append("\r\n");
+    ok = ok && append("X-Agent-Process-Arch: ") && append(info.ProcessArchitecture) && append("\r\n");
     ok = ok && append("X-Agent-Platform: ") && append(info.AgentPlatform) && append("\r\n");
     ok = ok && append("X-Agent-Os-Version: ") && append(info.OSVersion) && append("\r\n");
     ok = ok && append("X-Agent-Build: ") && appendNum(AGENT_BUILD_NUMBER) && append("\r\n");
