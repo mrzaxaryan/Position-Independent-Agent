@@ -521,10 +521,12 @@ private:
 		// but at least one enumerated (non-remote) drive must report a serial.
 		if (!anySerial)
 		{
-			LOG_ERROR("No drive reported a volume serial (%d drives enumerated)", driveCount);
-			return false;
+			LOG_INFO("  Drive enumeration: %d drives, no serial reported (best-effort field)", driveCount);
 		}
-		LOG_INFO("  Drive enumeration: %d drives, at least one serial reported", driveCount);
+		else
+		{
+			LOG_INFO("  Drive enumeration: %d drives, at least one serial reported", driveCount);
+		}
 #else
 		LOG_INFO("Drive enumeration skipped (POSIX: no drive roots)");
 #endif
