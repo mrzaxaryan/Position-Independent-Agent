@@ -13,7 +13,7 @@ INT32 TlsBuffer::Append(Span<const CHAR> data)
 		return -1;
 	Memory::Copy(buffer + size, data.Data(), data.Size());
 	size += (INT32)data.Size();
-	return size - (INT32)data.Size();
+	return size - (INT32)data.Size() - startPos;
 }
 
 /// @brief Append a value of any type to the TLS buffer
@@ -25,7 +25,7 @@ INT32 TlsBuffer::AppendSize(INT32 count)
 	if (!r)
 		return -1;
 	size += count;
-	return size - count;
+	return size - count - startPos;
 }
 
 /// @brief Set the size of the TLS buffer
@@ -33,6 +33,9 @@ INT32 TlsBuffer::AppendSize(INT32 count)
 /// @return Result indicating success or failure
 Result<VOID, Error> TlsBuffer::SetSize(INT32 newSize)
 {
+	// SetSize is a write-mode operation: it discards any dead prefix too
+	startPos = 0;
+	readPos = 0;
 	size = 0;
 	auto r = CheckSize(newSize);
 	if (!r)
@@ -53,6 +56,7 @@ VOID TlsBuffer::Clear()
 	size = 0;
 	capacity = 0;
 	readPos = 0;
+	startPos = 0;
 }
 
 /// @brief Ensure there is enough capacity in the TLS buffer to append additional data
@@ -67,54 +71,74 @@ Result<VOID, Error> TlsBuffer::CheckSize(INT32 appendSize)
 		return Result<VOID, Error>::Ok();
 	}
 
-	PCHAR oldBuffer = buffer;
-	INT32 newLen = (size + appendSize) * 4;
-	if (newLen < 256)
-	{
-		newLen = 256;
-	}
-
-	// Allocate new buffer and copy existing data if necessary
-	PCHAR newBuffer = (PCHAR) new CHAR[newLen];
-	// Validate allocation
-	if (!newBuffer)
-	{
+	// A wrapped (non-owning) buffer cannot be grown
+	if (!ownsMemory)
 		return Result<VOID, Error>::Err(Error::TlsBuffer_AllocationFailed);
-	}
-	if (size > 0)
-	{
-		LOG_DEBUG("Resizing buffer from %d to %d bytes", capacity, newLen);
-		Memory::Copy(newBuffer, oldBuffer, size);
-	}
 
-	// Clean up old buffer if owned memory
-	if (oldBuffer && ownsMemory)
-	{
-		delete[] oldBuffer;
-		oldBuffer = nullptr;
-	}
-	buffer = newBuffer;
-	capacity = newLen;
+	// Delegate the grow-and-copy to the core container: the new capacity keeps
+	// TlsBuffer's original sizing (4x the request, floored at 256 bytes).
+	// Only the live bytes are carried over — the dead prefix is dropped.
+	UINT32 newLen = (UINT32)(size + appendSize) * 4;
+	if (newLen < 256)
+		newLen = 256;
+	if (newLen < (UINT32)(size + appendSize))
+		newLen = (UINT32)(size + appendSize); // INT32 overflow guard
+
+	Buffer<CHAR> grown;
+	if (!grown.Init(newLen) || !grown.Append(Span<const CHAR>(buffer + startPos, (USIZE)(size - startPos))))
+		return Result<VOID, Error>::Err(Error::TlsBuffer_AllocationFailed);
+
+	LOG_DEBUG("Resizing buffer from %d to %u bytes", capacity, newLen);
+
+	delete[] buffer;
+	buffer = grown.Release();
+	capacity = (INT32)newLen;
+	size -= startPos;
+	startPos = 0;
+	readPos = Math::Min(readPos, size);
 	ownsMemory = true;
 	return Result<VOID, Error>::Ok();
 }
 
-/// @brief Remove consumed bytes from the front and shift remaining data down
+/// @brief Remove consumed bytes from the front without moving data
 /// @param bytes Number of bytes to consume from the front of the buffer
 /// @return void
+/// @note O(1) — advances the dead-prefix cursor. The live suffix is moved down
+///       later, by Compact(), once the dead prefix exceeds capacity / 2.
 VOID TlsBuffer::Consume(INT32 bytes)
 {
 	if (bytes <= 0)
 		return;
-	if (bytes >= size)
+	if (startPos + bytes >= size)
 	{
+		// Everything consumed: reset to an empty buffer, keep the allocation
 		size = 0;
+		startPos = 0;
 		readPos = 0;
 		return;
 	}
-	Memory::Move(buffer, buffer + bytes, size - bytes);
-	size -= bytes;
-	readPos = 0;
+	startPos += bytes;
+	// The read cursor previously reset to 0 because Consume moved data down;
+	// it now resets to the live start instead
+	readPos = startPos;
+	if (startPos > (capacity >> 1))
+		Compact();
+}
+
+/// @brief Reclaim the dead prefix left by Consume() by moving the live suffix down
+/// @return void
+VOID TlsBuffer::Compact()
+{
+	if (startPos == 0)
+		return;
+	INT32 dead = startPos;
+	INT32 live = size - dead;
+	if (live > 0)
+		Memory::Move(buffer, buffer + dead, live);
+	size = live;
+	startPos = 0;
+	// readPos is an absolute index, so it shifts down by the reclaimed prefix
+	readPos = (readPos > dead) ? (readPos - dead) : 0;
 }
 
 /// @brief Read a block of data from the TLS buffer

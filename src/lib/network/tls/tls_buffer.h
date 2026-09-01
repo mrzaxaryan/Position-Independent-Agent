@@ -11,6 +11,12 @@ private:
 	INT32 size;
 	INT32 readPos;
 	BOOL ownsMemory;
+	// Dead prefix left behind by Consume(). Compaction is deferred: the live
+	// region is [buffer + startPos, buffer + size) and the dead prefix is only
+	// reclaimed once it exceeds capacity / 2, so a per-record Consume() is O(1)
+	// instead of an O(n) memmove. Always 0 for write-mode buffers, which never
+	// call Consume().
+	INT32 startPos;
 
 public:
 	// Stack-only — placement new required by Result
@@ -20,10 +26,10 @@ public:
 	VOID operator delete(VOID *, PVOID) noexcept {}
 
 	// Default constructor - owns memory, write mode
-	TlsBuffer() : buffer(nullptr), capacity(0), size(0), readPos(0), ownsMemory(true) {}
+	TlsBuffer() : buffer(nullptr), capacity(0), size(0), readPos(0), ownsMemory(true), startPos(0) {}
 
 	// Constructor for wrapping existing data - read mode (does not own memory)
-	TlsBuffer(Span<CHAR> data) : buffer(data.Data()), capacity((INT32)data.Size()), size((INT32)data.Size()), readPos(0), ownsMemory(false) {}
+	TlsBuffer(Span<CHAR> data) : buffer(data.Data()), capacity((INT32)data.Size()), size((INT32)data.Size()), readPos(0), ownsMemory(false), startPos(0) {}
 
 	~TlsBuffer()
 	{
@@ -35,13 +41,14 @@ public:
 	TlsBuffer &operator=(const TlsBuffer &) = delete;
 
 	TlsBuffer(TlsBuffer &&other) noexcept
-		: buffer(other.buffer), capacity(other.capacity), size(other.size), readPos(other.readPos), ownsMemory(other.ownsMemory)
+		: buffer(other.buffer), capacity(other.capacity), size(other.size), readPos(other.readPos), ownsMemory(other.ownsMemory), startPos(other.startPos)
 	{
 		other.buffer = nullptr;
 		other.capacity = 0;
 		other.size = 0;
 		other.readPos = 0;
 		other.ownsMemory = false;
+		other.startPos = 0;
 	}
 	TlsBuffer &operator=(TlsBuffer &&other) noexcept
 	{
@@ -54,16 +61,20 @@ public:
 			size = other.size;
 			readPos = other.readPos;
 			ownsMemory = other.ownsMemory;
+			startPos = other.startPos;
 			other.buffer = nullptr;
 			other.capacity = 0;
 			other.size = 0;
 			other.readPos = 0;
 			other.ownsMemory = false;
+			other.startPos = 0;
 		}
 		return *this;
 	}
 
 	// Write operations
+	// Append offsets are relative to GetBuffer() (the first live byte), so
+	// `GetBuffer() + returnedIndex` is correct whether or not a dead prefix exists.
 	INT32 Append(Span<const CHAR> data);
 
 	template <typename T>
@@ -74,7 +85,7 @@ public:
 			return -1;
 		Memory::Copy(buffer + size, &value, sizeof(T));
 		size += sizeof(T);
-		return size - sizeof(T);
+		return size - sizeof(T) - startPos;
 	}
 
 	INT32 AppendSize(INT32 count);
@@ -102,13 +113,22 @@ public:
 	VOID Read(Span<CHAR> buf);
 	UINT32 ReadU24BE();
 
-	// Remove consumed bytes from the front, shift remaining data down
+	// Remove consumed bytes from the front. O(1): only advances the dead-prefix
+	// cursor. The data is moved down later, by Compact(), once the dead prefix
+	// exceeds capacity / 2 (amortized O(1) per byte).
 	VOID Consume(INT32 bytes);
 
+	// Reclaim the dead prefix left by Consume() by moving the live suffix down
+	VOID Compact();
+
 	// Accessors
-	INT32 GetSize() const { return size; }
-	PCHAR GetBuffer() const { return buffer; }
+	// GetSize() returns the LIVE byte count (appended minus consumed), so
+	// callers wrapping GetBuffer() in a span get only unconsumed bytes.
+	INT32 GetSize() const { return size - startPos; }
+	// GetBuffer() points at the first LIVE byte, so GetBuffer()+GetSize() is the
+	// append position and GetBuffer()-startPos is the raw allocation.
+	PCHAR GetBuffer() const { return buffer + startPos; }
 	INT32 GetReadPosition() const { return readPos; }
 	VOID AdvanceReadPosition(INT32 sz) { readPos += sz; }
-	VOID ResetReadPos() { readPos = 0; }
+	VOID ResetReadPos() { readPos = startPos; }
 };

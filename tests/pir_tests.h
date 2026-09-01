@@ -8,6 +8,9 @@
  *   ArrayStorageTests      - Compile-time array storage tests
  *   Base64Tests            - Base64 encoding/decoding tests
  *   BinaryIOTests          - Binary reader/writer tests
+ *   BitsetTests            - Bitset container tests
+ *   BufferTests            - Buffer container tests
+ *   ByteQueueTests         - ByteQueue container tests
  *   Djb2Tests              - Hash function tests
  *   DnsTests               - DNS resolution tests (DoT, DoH JSON, DoH binary)
  *   DoubleTests            - Floating-point tests
@@ -59,6 +62,9 @@
 #include "array_storage_tests.h"
 #include "base64_tests.h"
 #include "binary_io_tests.h"
+#include "bitset_tests.h"
+#include "buffer_tests.h"
+#include "byte_queue_tests.h"
 #include "djb2_tests.h"
 #include "dns_tests.h"
 #include "double_tests.h"
@@ -95,6 +101,10 @@ static BOOL RunPIRTests()
 	LOG_INFO("");
 
 	// CORE - Types
+	RunTestSuite<BinaryIOTests>(allPassed);
+	RunTestSuite<BitsetTests>(allPassed);
+	RunTestSuite<BufferTests>(allPassed);
+	RunTestSuite<ByteQueueTests>(allPassed);
 	RunTestSuite<DoubleTests>(allPassed);
 	RunTestSuite<IPAddressTests>(allPassed);
 	RunTestSuite<ResultTests>(allPassed);
@@ -105,7 +115,6 @@ static BOOL RunPIRTests()
 	// CORE - Strings and Algorithms
 	RunTestSuite<ArrayStorageTests>(allPassed);
 	RunTestSuite<Base64Tests>(allPassed);
-	RunTestSuite<BinaryIOTests>(allPassed);
 	RunTestSuite<Djb2Tests>(allPassed);
 	RunTestSuite<PrngTests>(allPassed);
 	RunTestSuite<StringFormatterTests>(allPassed);

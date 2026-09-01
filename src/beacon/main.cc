@@ -8,6 +8,20 @@
 #include "platform/system/system_info.h"
 
 /**
+ * Appends a decimal number to the identity header block.
+ *
+ * @param writer Writer positioned at the current end of the header block.
+ * @param value Number to render as decimal digits.
+ * @return true if it fit, false if the buffer was exhausted (cursor unchanged).
+ */
+static BOOL WriteNumber(BinaryWriter &writer, UINT64 value)
+{
+    CHAR buf[24];
+    StringUtils::UIntToStr(value, Span<CHAR>(buf, sizeof(buf)));
+    return writer.WriteString(buf) != nullptr;
+}
+
+/**
  * Builds the identity header block sent with the /agent WebSocket upgrade (API 1).
  *
  * @details Identity travels as HTTP headers. The relay
@@ -26,27 +40,8 @@
 static USIZE BuildIdentityHeaders(const SystemInfo &info, Span<CHAR> out)
 {
     const CHAR *hex = "0123456789abcdef";
-    USIZE off = 0;
 
-    auto append = [&](PCCHAR s) -> BOOL
-    {
-        USIZE len = StringUtils::Length(s);
-        if (off + len >= out.Size())
-            return false;
-        Memory::Copy(out.Data() + off, s, len);
-        off += len;
-        return true;
-    };
-    auto appendNum = [&](UINT64 value) -> BOOL
-    {
-        CHAR buf[24];
-        USIZE len = StringUtils::UIntToStr(value, Span<CHAR>(buf, sizeof(buf)));
-        if (off + len >= out.Size())
-            return false;
-        Memory::Copy(out.Data() + off, buf, len);
-        off += len;
-        return true;
-    };
+    BinaryWriter writer{Span<UINT8>((UINT8 *)out.Data(), out.Size())};
 
     // Reconstruct the UUID's raw 16 bytes from its 64-bit halves.
     UINT64 msb = info.MachineUUID.GetMostSignificantBits();
@@ -76,33 +71,29 @@ static USIZE BuildIdentityHeaders(const SystemInfo &info, Span<CHAR> out)
 
     CapabilityMask mask = BuildCapabilityMask();
 
+    // Each append fails cleanly (nullptr, cursor unchanged) when the buffer is
+    // too small, so a single ok flag folds every overflow into one result.
     BOOL ok = true;
-    ok = ok && append("X-Agent-Api-Version: ") && appendNum(AGENT_API_VERSION) && append("\r\n");
-    ok = ok && append("X-Agent-Uuid: ") && append(uuid) && append("\r\n");
-    ok = ok && append("X-Agent-Hostname: ") && append(info.Hostname) && append("\r\n");
-    ok = ok && append("X-Agent-Username: ") && append(info.Username) && append("\r\n");
-    ok = ok && append("X-Agent-Arch: ") && append(info.Architecture) && append("\r\n");
-    ok = ok && append("X-Agent-Platform: ") && append(info.AgentPlatform) && append("\r\n");
-    ok = ok && append("X-Agent-Os-Version: ") && append(info.OSVersion) && append("\r\n");
-    ok = ok && append("X-Agent-Build: ") && appendNum(AGENT_BUILD_NUMBER) && append("\r\n");
-    ok = ok && append("X-Agent-Commit: ") && append(AGENT_COMMIT_HASH) && append("\r\n");
-    ok = ok && append("X-Agent-Name-Id: ") && appendNum(AGENT_NAME_ID) && append("\r\n");
-    ok = ok && append("X-Agent-Bitness: ") && appendNum(sizeof(void *) * 8) && append("\r\n");
-    ok = ok && append("X-Agent-Capabilities: ");
+    ok = ok && writer.WriteString("X-Agent-Api-Version: ") != nullptr && WriteNumber(writer, AGENT_API_VERSION) && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Uuid: ") != nullptr && writer.WriteString(uuid) != nullptr && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Hostname: ") != nullptr && writer.WriteString(info.Hostname) != nullptr && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Username: ") != nullptr && writer.WriteString(info.Username) != nullptr && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Arch: ") != nullptr && writer.WriteString(info.Architecture) != nullptr && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Platform: ") != nullptr && writer.WriteString(info.AgentPlatform) != nullptr && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Os-Version: ") != nullptr && writer.WriteString(info.OSVersion) != nullptr && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Build: ") != nullptr && WriteNumber(writer, AGENT_BUILD_NUMBER) && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Commit: ") != nullptr && writer.WriteString(AGENT_COMMIT_HASH) != nullptr && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Name-Id: ") != nullptr && WriteNumber(writer, AGENT_NAME_ID) && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Bitness: ") != nullptr && WriteNumber(writer, sizeof(void *) * 8) && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Capabilities: ") != nullptr;
     for (USIZE i = 0; ok && i < CAPABILITY_MASK_BYTES; i++)
     {
-        CHAR byte[2] = {hex[mask.Bits[i] >> 4], hex[mask.Bits[i] & 0xF]};
-        if (off + 2 >= out.Size())
-        {
-            ok = false;
-            break;
-        }
-        Memory::Copy(out.Data() + off, byte, 2);
-        off += 2;
+        CHAR byte[3] = {hex[mask.Bits[i] >> 4], hex[mask.Bits[i] & 0xF], '\0'};
+        ok = writer.WriteString(byte) != nullptr;
     }
-    ok = ok && append("\r\n");
+    ok = ok && writer.WriteString("\r\n") != nullptr;
 
-    return ok ? off : 0;
+    return ok ? writer.GetOffset() : 0;
 }
 
 static const CHAR *CommandTypeName(UINT8 type)

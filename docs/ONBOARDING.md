@@ -23,8 +23,8 @@ The codebase follows a strict layered architecture. Each layer depends only on l
 |  Beacon (4 files)                                              |
 |  Agent command loop, handlers, screen capture                  |
 +----------------------------------------------------------------+
-|  Lib (32 files)                                                |
-|  Crypto, TLS 1.3, HTTP, DNS, WebSocket, JPEG, shell, containers|
+|  Lib (31 files)                                                |
+|  Crypto, TLS 1.3, HTTP, DNS, WebSocket, JPEG, shell            |
 +----------------------------------------------------------------+
 |  Platform (82 files)                                           |
 |  Console, filesystem, sockets, screen, memory, system utils    |
@@ -34,8 +34,9 @@ The codebase follows a strict layered architecture. Each layer depends only on l
 |  Raw syscall definitions and OS API wrappers                   |
 |  Per-OS: linux/, windows/, macos/, freebsd/, solaris/, uefi/   |
 +----------------------------------------------------------------+
-|  Core (32 files)                                               |
-|  Types, memory ops, strings, math, algorithms, compiler RT     |
+|  Core (36 files)                                               |
+|  Types, memory ops, strings, math, algorithms, compiler RT,    |
+|  containers                                                    |
 +----------------------------------------------------------------+
 ```
 
@@ -44,7 +45,7 @@ Supporting layers outside the main stack:
 | Layer | Files | What it does |
 |-------|-------|-------------|
 | Build System | 27 | CMake modules, linker scripts, platform configs, post-build verification |
-| Tests | 33 | Test suites for every major subsystem |
+| Tests | 39 | Test suites for every major subsystem |
 | Tools | 3 | The pic-transform LLVM pass (the core innovation) |
 | Loaders | 1 | Python shellcode loader |
 | Entry Point | 1 | `src/entry_point.cc` — the bootstrap bridge |
@@ -171,7 +172,7 @@ These files are the most complex in the codebase. Approach them with care (and c
 |------|-------------|
 | `src/entry_point.cc` | Bootstrap bridge — first byte of .text, calls start(), exits |
 
-### Core (31 files)
+### Core (36 files)
 | File | What it does |
 |------|-------------|
 | `src/core/core.h` | Aggregate include for all core modules |
@@ -194,6 +195,10 @@ These files are the most complex in the codebase. Approach them with care (and c
 | `src/core/encoding/utf16.h` | UTF-16 to UTF-8 conversion |
 | `src/core/binary/binary_reader.h` | Sequential byte reading with big-endian support |
 | `src/core/binary/binary_writer.h` | Sequential byte writing with big-endian support |
+| `src/core/containers/vector.h` | Move-only dynamic array with fallible allocation |
+| `src/core/containers/buffer.h` | Move-only dynamic buffer with USIZE counts (2 GB+) |
+| `src/core/containers/bitset.h` | Heap-backed bit array (1 bit per index) |
+| `src/core/containers/byte_queue.h` | Linear byte queue with O(1) consume and deferred compaction |
 
 ### Beacon (4 files)
 | File | What it does |
@@ -207,7 +212,6 @@ These files are the most complex in the codebase. Approach them with care (and c
 | File | What it does |
 |------|-------------|
 | `src/lib/runtime.h` | Aggregate include for entire runtime |
-| `src/lib/vector.h` | Move-only dynamic array with fallible allocation |
 | `src/lib/shell/shell.*` | Interactive shell wrapper and `ShellManager` pool |
 | `src/lib/crypto/chacha20.*` | ChaCha20-Poly1305 AEAD cipher (RFC 8439) |
 | `src/lib/crypto/ecc.*` | ECDH key exchange, P-256/P-384 |

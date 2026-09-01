@@ -16,7 +16,7 @@
 
 /// @name Containers
 /// @{
-#include "lib/vector.h"
+#include "core/containers/vector.h"
 /// @}
 
 /// @name Cryptography
