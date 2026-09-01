@@ -2,7 +2,6 @@
 #include "lib/network/dns/dns_client.h"
 #include "platform/console/logger.h"
 
-// Helper to append a null-terminated string to a buffer
 static USIZE AppendStr(Span<CHAR> buf, USIZE pos, const CHAR *str) noexcept
 {
 	for (USIZE i = 0; str[i] != '\0' && pos < buf.Size(); i++)
@@ -145,7 +144,6 @@ Result<VOID, Error> HttpClient::SendPostRequest(PCCHAR host, PCCHAR path, Span<c
 	pos = AppendStr(requestSpan, pos, host);
 	pos = AppendStr(requestSpan, pos, "\r\nContent-Length: ");
 
-	// Convert data.Size() to string
 	CHAR lenStr[16];
 	StringUtils::UIntToStr((UINT32)data.Size(), Span<CHAR>(lenStr));
 
@@ -154,14 +152,12 @@ Result<VOID, Error> HttpClient::SendPostRequest(PCCHAR host, PCCHAR path, Span<c
 
 	request[pos] = '\0';
 
-	// Send headers
 	auto r = Write(Span<const CHAR>(request, (UINT32)pos));
 	if (!r)
 		return Result<VOID, Error>::Err(r, Error::Http_SendPostFailed);
 	if (r.Value() != (UINT32)pos)
 		return Result<VOID, Error>::Err(Error::Http_SendPostFailed);
 
-	// Send body
 	if (data.Size() > 0)
 	{
 		auto bodyResult = Write(data);

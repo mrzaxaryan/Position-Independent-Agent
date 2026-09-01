@@ -96,7 +96,6 @@ typedef struct _AfdSocketParams
 
 Result<VOID, Error> Socket::Bind(const SockAddr &socketAddress, INT32 shareType)
 {
-	LOG_DEBUG("Bind(handle: 0x%p, family: %d, shareType: %d)\n", handle, socketAddress.SinFamily, shareType);
 
 	PVOID SockEvent = nullptr;
 	auto evtResult = NTDLL::ZwCreateEvent(&SockEvent, EVENT_ALL_ACCESS, nullptr, SynchronizationEvent, false);
@@ -171,7 +170,6 @@ Result<VOID, Error> Socket::Bind(const SockAddr &socketAddress, INT32 shareType)
 
 Result<VOID, Error> Socket::Open()
 {
-	LOG_DEBUG("Open(handle: 0x%p, port: %d)\n", handle, port);
 
 	// AFD requires an explicit bind to a wildcard local address before connect
 	union
@@ -268,13 +266,11 @@ Result<VOID, Error> Socket::Open()
 			Error::Socket_OpenFailed_Connect);
 	}
 
-	LOG_DEBUG("Open: connected successfully\n");
 	return Result<VOID, Error>::Ok();
 }
 
 Result<VOID, Error> Socket::Close()
 {
-	LOG_DEBUG("Close(handle: 0x%p)\n", handle);
 
 	auto closeResult = NTDLL::ZwClose(handle);
 	handle = nullptr;
@@ -287,7 +283,6 @@ Result<VOID, Error> Socket::Close()
 
 Result<SSIZE, Error> Socket::Read(Span<CHAR> buffer)
 {
-	LOG_DEBUG("Read(handle: 0x%p, bufferSize: %d)\n", handle, (UINT32)buffer.Size());
 
 	PVOID SockEvent = nullptr;
 	auto evtResult = NTDLL::ZwCreateEvent(&SockEvent, EVENT_ALL_ACCESS, nullptr, SynchronizationEvent, false);
@@ -353,7 +348,6 @@ Result<SSIZE, Error> Socket::Read(Span<CHAR> buffer)
 
 Result<UINT32, Error> Socket::Write(Span<const CHAR> buffer)
 {
-	LOG_DEBUG("Write(handle: 0x%p, length: %d)\n", handle, (UINT32)buffer.Size());
 
 	PVOID SockEvent = nullptr;
 	auto evtResult = NTDLL::ZwCreateEvent(&SockEvent, EVENT_ALL_ACCESS, nullptr, SynchronizationEvent, false);
@@ -424,15 +418,12 @@ Result<UINT32, Error> Socket::Write(Span<const CHAR> buffer)
 	} while (totalSent < (UINT32)buffer.Size());
 
 	(VOID)NTDLL::ZwClose(SockEvent);
-	LOG_DEBUG("Write: sent %d bytes\n", totalSent);
 	return Result<UINT32, Error>::Ok(totalSent);
 }
 
 Result<Socket, Error> Socket::Create(const IPAddress &ipAddress, UINT16 port)
 {
 	Socket sock(ipAddress, port);
-
-	LOG_DEBUG("Create(sock: 0x%p)\n", &sock);
 
 	AfdSocketParams EaBuffer;
 	Memory::Zero(&EaBuffer, sizeof(EaBuffer));
@@ -471,10 +462,8 @@ Result<Socket, Error> Socket::Create(const IPAddress &ipAddress, UINT16 port)
 	                                        sizeof(EaBuffer));
 	if (!createResult)
 	{
-		LOG_DEBUG("Create: ZwCreateFile failed: errors=%e\n", createResult.Error());
 		return Result<Socket, Error>::Err(createResult, Error::Socket_CreateFailed_Open);
 	}
 
-	LOG_DEBUG("Create: handle: 0x%p\n", sock.handle);
 	return Result<Socket, Error>::Ok(static_cast<Socket &&>(sock));
 }

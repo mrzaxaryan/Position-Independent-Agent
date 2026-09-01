@@ -14,7 +14,6 @@ VOID TlsCipher::Reset()
 	{
 		if (privateEccKeys[i])
 		{
-			LOG_DEBUG("Freeing ECC key: %p", privateEccKeys[i]);
 			delete privateEccKeys[i];
 			privateEccKeys[i] = nullptr;
 		}
@@ -23,7 +22,6 @@ VOID TlsCipher::Reset()
 	Memory::Zero(privateEccKeys, sizeof(privateEccKeys));
 	publicKey.Clear();
 	decodeBuffer.Clear();
-	LOG_DEBUG("Resetting tls_cipher structure for cipher: %p", this);
 	Memory::Zero(&data12, Math::Max(sizeof(data12), sizeof(data13)));
 	SetCipherCount(1);
 	clientSeqNum = 0;
@@ -47,12 +45,10 @@ PINT8 TlsCipher::CreateClientRand()
 	// Use a local Random instance to generate client random data
 	Random random;
 
-	LOG_DEBUG("Creating client random data for cipher: %p", this);
 	for (UINT64 i = 0; i < (UINT64)sizeof(data12.clientRandom); i++)
 	{
 		data12.clientRandom[i] = random.Get() & 0xff;
 	}
-	LOG_DEBUG("Client random data created: %p", data12.clientRandom);
 	return (PINT8)data12.clientRandom;
 }
 
@@ -93,7 +89,6 @@ Result<VOID, Error> TlsCipher::ComputePublicKey(INT32 eccIndex, TlsBuffer &out)
 	// Allocate ECC key if it doesn't exist
 	if (privateEccKeys[eccIndex] == nullptr)
 	{
-		LOG_DEBUG("Allocating memory for private ECC key at index %d", eccIndex);
 		privateEccKeys[eccIndex] = new ECC();
 		INT32 ecc_size_list[2];
 		ecc_size_list[0] = 32;
@@ -182,10 +177,8 @@ Result<VOID, Error> TlsCipher::ComputeKey(ECC_GROUP ecc, Span<const CHAR> server
 {
 	if (cipherIndex == -1)
 	{
-		LOG_DEBUG("Cipher index is -1, cannot compute TLS key");
 		return Result<VOID, Error>::Err(Error::TlsCipher_ComputeKeyFailed);
 	}
-	LOG_DEBUG("Computing TLS key for cipher: %p, ECC group: %d", this, ecc);
 
 	INT32 keyLen = CIPHER_KEY_SIZE;
 	INT32 hashLen = CIPHER_HASH_SIZE;
@@ -208,14 +201,12 @@ Result<VOID, Error> TlsCipher::ComputeKey(ECC_GROUP ecc, Span<const CHAR> server
 	// For ECC_NONE, the pre-master key is all zeros and the client/server random values are not used in key computation
 	if (ecc == ECC_NONE)
 	{
-		LOG_DEBUG("Using ECC_NONE for TLS key computation");
 
 		TlsHKDF::ExpandLabel(Span<UCHAR>(salt, hashLen), Span<const UCHAR>((UINT8 *)data13.pseudoRandomKey, hashLen), Span<const CHAR>("derived", 7), Span<const UCHAR>(hash, hashLen));
 		TlsHKDF::Extract(Span<UCHAR>(data13.pseudoRandomKey, hashLen), Span<const UCHAR>(salt, hashLen), Span<const UCHAR>(earlysecret, hashLen));
 
 		if (finishedHash.Data())
 		{
-			LOG_DEBUG("Using finished hash for TLS key computation with size: %d bytes", (INT32)finishedHash.Size());
 			Memory::Copy(hash, (VOID *)finishedHash.Data(), hashLen);
 		}
 	}
@@ -225,12 +216,10 @@ Result<VOID, Error> TlsCipher::ComputeKey(ECC_GROUP ecc, Span<const CHAR> server
 		auto preKeyResult = ComputePreKey(ecc, serverKey, premaster_key);
 		if (!preKeyResult)
 		{
-			LOG_DEBUG("Failed to compute pre-master key for ECC group %d", ecc);
 			Memory::Zero(hash, sizeof(hash));
 			Memory::Zero(earlysecret, sizeof(earlysecret));
 			return Result<VOID, Error>::Err(preKeyResult, Error::TlsCipher_ComputeKeyFailed);
 		}
-		LOG_DEBUG("Computed pre-master key for ECC group %d, size: %d bytes", ecc, premaster_key.GetSize());
 
 		// RFC 8446 §7.1: the initial Extract uses a salt of HashLen zero bytes
 		UCHAR zeroSalt[MAX_HASH_LEN];
@@ -269,7 +258,6 @@ Result<VOID, Error> TlsCipher::ComputeKey(ECC_GROUP ecc, Span<const CHAR> server
 		return Result<VOID, Error>::Err(initResult, Error::TlsCipher_ComputeKeyFailed);
 	}
 
-	LOG_DEBUG("Encoder initialized successfully");
 	return Result<VOID, Error>::Ok();
 }
 
@@ -282,12 +270,10 @@ Result<VOID, Error> TlsCipher::ComputeVerify(TlsBuffer &out, INT32 verifySize, I
 {
 	if (cipherIndex == -1)
 	{
-		LOG_DEBUG("tls_cipher_compute_verify: cipher_index is -1, cannot compute verify data");
 		return Result<VOID, Error>::Err(Error::TlsCipher_ComputeVerifyFailed);
 	}
 	CHAR hash[MAX_HASH_LEN];
 	INT32 hashLen = CIPHER_HASH_SIZE;
-	LOG_DEBUG("tls_cipher_compute_verify: Getting handshake hash, hash_len = %d", hashLen);
 	// Get the current handshake hash
 	GetHash(Span<CHAR>(hash, hashLen));
 
@@ -295,12 +281,10 @@ Result<VOID, Error> TlsCipher::ComputeVerify(TlsBuffer &out, INT32 verifySize, I
 	auto finishedLabel = "finished";
 	if (localOrRemote)
 	{
-		LOG_DEBUG("tls_cipher_compute_verify: Using server finished key");
 		TlsHKDF::ExpandLabel(Span<UCHAR>(finished_key, hashLen), Span<const UCHAR>(data13.mainSecret, hashLen), Span<const CHAR>(finishedLabel, 8), Span<const UCHAR>());
 	}
 	else
 	{
-		LOG_DEBUG("tls_cipher_compute_verify: Using client finished key");
 		TlsHKDF::ExpandLabel(Span<UCHAR>(finished_key, hashLen), Span<const UCHAR>(data13.handshakeSecret, hashLen), Span<const CHAR>(finishedLabel, 8), Span<const UCHAR>());
 	}
 	// Set size and validate 
@@ -311,7 +295,6 @@ Result<VOID, Error> TlsCipher::ComputeVerify(TlsBuffer &out, INT32 verifySize, I
 		Memory::Zero(finished_key, sizeof(finished_key));
 		return Result<VOID, Error>::Err(setSizeResult, Error::TlsCipher_ComputeVerifyFailed);
 	}
-	LOG_DEBUG("tls_cipher_compute_verify: Calculating HMAC for verify, verify_size=%d", verifySize);
 	HMAC_SHA256 hmac;
 	// Initialize HMAC with the finished key and validate initialization and update with the handshake hash
 	hmac.Init(Span<const UCHAR>(finished_key, hashLen));
@@ -322,7 +305,6 @@ Result<VOID, Error> TlsCipher::ComputeVerify(TlsBuffer &out, INT32 verifySize, I
 	Memory::Zero(hash, sizeof(hash));
 	Memory::Zero(finished_key, sizeof(finished_key));
 
-	LOG_DEBUG("tls_cipher_compute_verify: Finished verify computation");
 	return Result<VOID, Error>::Ok();
 }
 
@@ -335,12 +317,10 @@ VOID TlsCipher::Encode(TlsBuffer &sendbuf, Span<const CHAR> packet, BOOL keepOri
 {
 	if (!isEncoding || keepOriginal)
 	{
-		LOG_DEBUG("Encoding not enabled or encoder is nullptr, appending packet directly to sendbuf");
 		sendbuf.Append(packet);
 		return;
 	}
 	INT32 packetSize = (INT32)packet.Size();
-	LOG_DEBUG("Encoding packet with size: %d bytes", packetSize);
 
 	UCHAR aad[13];
 
@@ -364,7 +344,6 @@ Result<VOID, Error> TlsCipher::Decode(TlsBuffer &inout, INT32 version)
 {
 	if (!isEncoding)
 	{
-		LOG_DEBUG("Encoding not enabled or encoder is nullptr, cannot Decode packet");
 		return Result<VOID, Error>::Ok();
 	}
 	// Initalize AAD with content type and version

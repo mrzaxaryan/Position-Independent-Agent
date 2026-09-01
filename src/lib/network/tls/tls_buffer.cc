@@ -63,7 +63,6 @@ Result<VOID, Error> TlsBuffer::CheckSize(INT32 appendSize)
 	// Capacity check
 	if (size + appendSize <= capacity)
 	{
-		LOG_DEBUG("Buffer size is sufficient: %d + %d <= %d", size, appendSize, capacity);
 		return Result<VOID, Error>::Ok();
 	}
 
@@ -83,7 +82,6 @@ Result<VOID, Error> TlsBuffer::CheckSize(INT32 appendSize)
 	}
 	if (size > 0)
 	{
-		LOG_DEBUG("Resizing buffer from %d to %d bytes", capacity, newLen);
 		Memory::Copy(newBuffer, oldBuffer, size);
 	}
 
