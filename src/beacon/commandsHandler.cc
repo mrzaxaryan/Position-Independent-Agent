@@ -145,6 +145,7 @@ VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR res
     // Getting parameters from command buffer: read count, offset and file path
     UINT64 readCount = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
+    LOG_INFO("Reading file content with offset: %llu and count: %llu.", offset, readCount);
 
     USIZE pathOffset = sizeof(UINT64) + sizeof(UINT64);
     WCHAR filePath[1024];
@@ -187,6 +188,7 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
     // Getting parameters from command buffer: chunk size, offset and file path
     UINT64 chunkSize = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
+    LOG_INFO("Computing file chunk hash with offset: %llu and chunk size: %llu.", offset, chunkSize);
 
     USIZE hashPathOffset = sizeof(UINT64) + sizeof(UINT64);
     WCHAR filePath[1024];
@@ -211,6 +213,7 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
     while (totalRead < chunkSize)
     {
         UINT64 bytesToRead = Math::Min(bufferSize, chunkSize - totalRead);
+        LOG_INFO("Reading file chunk with offset: %llu and count: %llu.", offset + totalRead, bytesToRead);
         auto setOffsetResult = file.SetOffset((USIZE)(offset + totalRead));
 
         if (!setOffsetResult)

@@ -113,9 +113,11 @@ Result<VOID, Error> TlsClient::SendClientHello(const CHAR *host)
 	INT32 handshakeSizeIndex = sendBuffer.AppendSize(3); // tls handshake body size
 
 	sendBuffer.Append<INT16>(0x0303);
+	LOG_DEBUG("Appending ClientHello with version: 0x0303");
 	sendBuffer.Append(Span<const CHAR>((const CHAR *)crypto.CreateClientRand(), RAND_SIZE));
 	sendBuffer.Append<CHAR>(0);
 	INT32 cipherCountIndex = sendBuffer.AppendSize(2);
+	LOG_DEBUG("Client has %d ciphers to append", crypto.GetCipherCount());
 	for (INT32 i = 0; i < crypto.GetCipherCount(); i++)
 	{
 		AppendU16BE(sendBuffer, (UINT16)TLS_CHACHA20_POLY1305_SHA256);
@@ -128,6 +130,7 @@ Result<VOID, Error> TlsClient::SendClientHello(const CHAR *host)
 	sendBuffer.Append<CHAR>(0);
 
 	INT32 extSizeIndex = sendBuffer.AppendSize(2);
+	LOG_DEBUG("Appending ClientHello with extension size index: %d", extSizeIndex);
 	AppendU16BE(sendBuffer, EXT_SERVER_NAME);
 	INT32 hostLen = (INT32)StringUtils::Length((PCHAR)host);
 	LOG_DEBUG("Appending ClientHello with host: %s, length: %d", host, hostLen);
@@ -137,6 +140,7 @@ Result<VOID, Error> TlsClient::SendClientHello(const CHAR *host)
 	AppendU16BE(sendBuffer, hostLen);
 	sendBuffer.Append(Span<const CHAR>(host, hostLen));
 
+	LOG_DEBUG("Appending ClientHello with supported groups, count: %d", ECC_COUNT);
 	AppendU16BE(sendBuffer, EXT_SUPPORTED_GROUPS); // ext type
 	AppendU16BE(sendBuffer, ECC_COUNT * 2 + 2);    // ext size
 	AppendU16BE(sendBuffer, ECC_COUNT * 2);

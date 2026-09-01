@@ -417,6 +417,7 @@ Result<UINT32, Error> Socket::Write(Span<const CHAR> buffer)
 			(VOID)NTDLL::ZwClose(SockEvent);
 			return Result<UINT32, Error>::Err(Error::Socket_WriteFailed_Send);
 		}
+	LOG_DEBUG("Write: sent %d bytes", totalSent);
 	} while (totalSent < (UINT32)buffer.Size());
 
 	(VOID)NTDLL::ZwClose(SockEvent);

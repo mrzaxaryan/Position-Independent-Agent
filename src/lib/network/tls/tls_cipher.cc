@@ -275,21 +275,24 @@ Result<VOID, Error> TlsCipher::ComputeVerify(TlsBuffer &out, INT32 verifySize, I
 {
 	if (cipherIndex == -1)
 	{
+		LOG_DEBUG("tls_cipher_compute_verify: cipher_index is -1, cannot compute verify data");
 		return Result<VOID, Error>::Err(Error::TlsCipher_ComputeVerifyFailed);
 	}
 	CHAR hash[MAX_HASH_LEN];
 	INT32 hashLen = CIPHER_HASH_SIZE;
-	// Get the current handshake hash
+	LOG_DEBUG("tls_cipher_compute_verify: Getting handshake hash, hash_len = %d", hashLen);
 	GetHash(Span<CHAR>(hash, hashLen));
 
 	UINT8 finished_key[MAX_HASH_LEN];
 	auto finishedLabel = "finished";
 	if (localOrRemote)
 	{
+		LOG_DEBUG("tls_cipher_compute_verify: Using server finished key");
 		TlsHKDF::ExpandLabel(Span<UCHAR>(finished_key, hashLen), Span<const UCHAR>(data13.mainSecret, hashLen), Span<const CHAR>(finishedLabel, 8), Span<const UCHAR>());
 	}
 	else
 	{
+		LOG_DEBUG("tls_cipher_compute_verify: Using client finished key");
 		TlsHKDF::ExpandLabel(Span<UCHAR>(finished_key, hashLen), Span<const UCHAR>(data13.handshakeSecret, hashLen), Span<const CHAR>(finishedLabel, 8), Span<const UCHAR>());
 	}
 	// Set size and validate 
@@ -300,6 +303,7 @@ Result<VOID, Error> TlsCipher::ComputeVerify(TlsBuffer &out, INT32 verifySize, I
 		Memory::Zero(finished_key, sizeof(finished_key));
 		return Result<VOID, Error>::Err(setSizeResult, Error::TlsCipher_ComputeVerifyFailed);
 	}
+	LOG_DEBUG("tls_cipher_compute_verify: Calculating HMAC for verify, verify_size=%d", verifySize);
 	HMAC_SHA256 hmac;
 	// Initialize HMAC with the finished key and validate initialization and update with the handshake hash
 	hmac.Init(Span<const UCHAR>(finished_key, hashLen));
