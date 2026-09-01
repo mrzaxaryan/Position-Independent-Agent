@@ -144,7 +144,7 @@ private:
 				LOG_ERROR("Size != 5 after Append");
 				passed = false;
 			}
-			if (passed && b.Data[0] != 'h' && b.Data[4] != 'o')
+			if (passed && (b.Data[0] != 'h' || b.Data[4] != 'o'))
 			{
 				LOG_ERROR("Appended bytes incorrect");
 				passed = false;

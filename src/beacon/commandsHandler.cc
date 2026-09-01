@@ -7,7 +7,8 @@
 #include "math.h"
 #include "logger.h"
 #include "sha2.h"
-#include "containers/vector.h"
+#include "vector.h"
+#include "binary_writer.h"
 #include "system_info.h"
 #include "shell.h"
 

@@ -93,9 +93,11 @@ Result<VOID, Error> TlsBuffer::CheckSize(INT32 appendSize)
 	delete[] buffer;
 	buffer = grown.Release();
 	capacity = (INT32)newLen;
+	// The dead prefix is gone: size shrinks to the live byte count and the read
+	// cursor — an absolute index — shifts down with it, exactly like Compact().
+	readPos = (readPos > startPos) ? (readPos - startPos) : 0;
 	size -= startPos;
 	startPos = 0;
-	readPos = Math::Min(readPos, size);
 	ownsMemory = true;
 	return Result<VOID, Error>::Ok();
 }

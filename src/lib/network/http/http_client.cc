@@ -97,14 +97,18 @@ Result<UINT32, Error> HttpClient::Write(Span<const CHAR> buffer)
 Result<VOID, Error> HttpClient::SendGetRequest(PCCHAR host, PCCHAR path)
 {
 	// Build GET request: "GET <path> HTTP/1.1\r\nHost: <host>\r\nConnection: close\r\n\r\n"
+	// WriteString returns nullptr (cursor unchanged) when it does not fit — a truncated
+	// request must fail loudly, not be sent half-formed.
 	CHAR request[2048];
 	BinaryWriter writer{Span<UINT8>((UINT8 *)request, 2000)};
 
-	writer.WriteString("GET ");
-	writer.WriteString(path);
-	writer.WriteString(" HTTP/1.1\r\nHost: ");
-	writer.WriteString(host);
-	writer.WriteString("\r\nConnection: close\r\n\r\n");
+	BOOL ok = writer.WriteString("GET ") != nullptr;
+	ok = ok && writer.WriteString(path) != nullptr;
+	ok = ok && writer.WriteString(" HTTP/1.1\r\nHost: ") != nullptr;
+	ok = ok && writer.WriteString(host) != nullptr;
+	ok = ok && writer.WriteString("\r\nConnection: close\r\n\r\n") != nullptr;
+	if (!ok)
+		return Result<VOID, Error>::Err(Error::Http_SendGetFailed);
 
 	USIZE pos = writer.GetOffset();
 	request[pos] = '\0';
@@ -125,21 +129,25 @@ Result<VOID, Error> HttpClient::SendGetRequest(PCCHAR host, PCCHAR path)
 
 Result<VOID, Error> HttpClient::SendPostRequest(PCCHAR host, PCCHAR path, Span<const CHAR> data)
 {
-	// Build POST request with Content-Length
+	// Build POST request with Content-Length.
+	// WriteString returns nullptr (cursor unchanged) when it does not fit — a truncated
+	// request must fail loudly, not be sent half-formed.
 	CHAR request[2048];
 	BinaryWriter writer{Span<UINT8>((UINT8 *)request, 1900)};
 
-	writer.WriteString("POST ");
-	writer.WriteString(path);
-	writer.WriteString(" HTTP/1.1\r\nHost: ");
-	writer.WriteString(host);
-	writer.WriteString("\r\nContent-Length: ");
+	BOOL ok = writer.WriteString("POST ") != nullptr;
+	ok = ok && writer.WriteString(path) != nullptr;
+	ok = ok && writer.WriteString(" HTTP/1.1\r\nHost: ") != nullptr;
+	ok = ok && writer.WriteString(host) != nullptr;
+	ok = ok && writer.WriteString("\r\nContent-Length: ") != nullptr;
 
 	// Convert data.Size() to string
 	CHAR lenStr[16];
 	StringUtils::UIntToStr((UINT32)data.Size(), Span<CHAR>(lenStr));
-	writer.WriteString(lenStr);
-	writer.WriteString("\r\nConnection: close\r\n\r\n");
+	ok = ok && writer.WriteString(lenStr) != nullptr;
+	ok = ok && writer.WriteString("\r\nConnection: close\r\n\r\n") != nullptr;
+	if (!ok)
+		return Result<VOID, Error>::Err(Error::Http_SendPostFailed);
 
 	USIZE pos = writer.GetOffset();
 	request[pos] = '\0';

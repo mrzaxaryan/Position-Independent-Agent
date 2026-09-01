@@ -193,8 +193,15 @@ struct ByteQueue
 		if (!OwnsMemory)
 			return false;
 
-		// Drop the dead prefix so the reallocation only carries live bytes
+		// Drop the dead prefix so the reallocation only carries live bytes, then
+		// re-check: compaction frees the prefix, so growth is sized to what is
+		// actually still live rather than to the pre-compaction footprint.
 		Compact();
+		required = Size + appendSize;
+		if (required < Size)
+			return false; // overflow
+		if (required <= Capacity)
+			return true;
 
 		// Seed at the minimum capacity, then double until the request fits.
 		// The floor applies only to the first allocation so a caller that
