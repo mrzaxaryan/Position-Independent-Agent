@@ -24,6 +24,7 @@ Result<VOID, Error> WebSocketClient::Open(PCCHAR path, Span<const CHAR> extraHea
 
 	if (!openResult && ipAddress.IsIPv6())
 	{
+		LOG_DEBUG("Failed to open network transport for WebSocket client using IPv6 address, attempting IPv4 fallback");
 
 		auto dnsResult = DnsClient::Resolve(Span<const CHAR>(hostName, StringUtils::Length(hostName)), DnsRecordType::A);
 		if (!dnsResult)
@@ -47,6 +48,7 @@ Result<VOID, Error> WebSocketClient::Open(PCCHAR path, Span<const CHAR> extraHea
 
 	if (!openResult)
 	{
+		LOG_DEBUG("Failed to open network transport for WebSocket client (error: %e)", openResult.Error());
 		return Result<VOID, Error>::Err(openResult, Error::Ws_TransportFailed);
 	}
 

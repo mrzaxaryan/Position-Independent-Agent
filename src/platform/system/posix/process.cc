@@ -261,12 +261,14 @@ Result<Process, Error> Process::Create(
 			}
 		}
 
+		// Build envp (empty environment)
 		USIZE envp[1];
 		envp[0] = 0;
 
 		// Execute — does not return on success
 		System::Call(SYS_EXECVE, (USIZE)path, (USIZE)args, (USIZE)envp);
 
+		// If execve returned, exit child
 		System::Call(SYS_EXIT, 1);
 	}
 

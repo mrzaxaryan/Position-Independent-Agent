@@ -186,6 +186,7 @@ static BOOL PtyOpenPair(SSIZE &masterFd, SSIZE &slaveFd)
 	rdev = *(UINT32 *)(statBuf + STAT_RDEV_OFFSET);
 	INT32 ptyNum = (INT32)(rdev & 0x3ffff); // ILP32 minor(): lower 18 bits (O_MAXMIN)
 #endif
+	LOG_INFO("PTY: Solaris rdev=0x%x ptyNum=%d", (UINT32)rdev, ptyNum);
 	// Build "/dev/pts/<N>"
 	const char prefix[] = "/dev/pts/";
 	USIZE i = 0;

@@ -96,6 +96,7 @@ typedef struct _AfdSocketParams
 
 Result<VOID, Error> Socket::Bind(const SockAddr &socketAddress, INT32 shareType)
 {
+	LOG_DEBUG("Bind(family: %d, shareType: %d)", socketAddress.SinFamily, shareType);
 
 	PVOID SockEvent = nullptr;
 	auto evtResult = NTDLL::ZwCreateEvent(&SockEvent, EVENT_ALL_ACCESS, nullptr, SynchronizationEvent, false);
@@ -170,6 +171,7 @@ Result<VOID, Error> Socket::Bind(const SockAddr &socketAddress, INT32 shareType)
 
 Result<VOID, Error> Socket::Open()
 {
+	LOG_DEBUG("Open(port: %d)", port);
 
 	// AFD requires an explicit bind to a wildcard local address before connect
 	union
@@ -462,6 +464,7 @@ Result<Socket, Error> Socket::Create(const IPAddress &ipAddress, UINT16 port)
 	                                        sizeof(EaBuffer));
 	if (!createResult)
 	{
+		LOG_DEBUG("Create: ZwCreateFile failed: errors=%e", createResult.Error());
 		return Result<Socket, Error>::Err(createResult, Error::Socket_CreateFailed_Open);
 	}
 

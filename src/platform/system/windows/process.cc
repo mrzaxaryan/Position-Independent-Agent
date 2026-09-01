@@ -82,6 +82,7 @@ Result<Process, Error> Process::Create(
 	}
 	else
 	{
+		// No args — use path as the command line
 		StringUtils::Utf8ToWide(
 			Span<const CHAR>(path, StringUtils::Length(path)),
 			Span<WCHAR>(cmdWide, 1024));
@@ -114,6 +115,7 @@ Result<SSIZE, Error> Process::Wait() noexcept
 	if (!IsValid())
 		return Result<SSIZE, Error>::Err(Error::Process_WaitFailed);
 
+	// Wait indefinitely for the process to exit
 	auto waitResult = NTDLL::ZwWaitForSingleObject(handle, 0, nullptr);
 	if (waitResult.IsErr())
 	{

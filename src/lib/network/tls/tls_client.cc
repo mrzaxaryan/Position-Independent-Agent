@@ -68,6 +68,7 @@ Result<VOID, Error> TlsClient::SendPacket(INT32 packetType, INT32 ver, TlsBuffer
 	{
 		crypto.UpdateHash(Span<const CHAR>(buf.GetBuffer(), buf.GetSize()));
 	}
+	LOG_DEBUG("Sending packet with type: %d, version: %d, size: %d bytes", packetType, ver, buf.GetSize());
 
 	// Initialize a temporary buffer to construct the TLS record
 	TlsBuffer tempBuffer;
@@ -81,6 +82,7 @@ Result<VOID, Error> TlsClient::SendPacket(INT32 packetType, INT32 ver, TlsBuffer
 		buf.Append<CHAR>(packetType);
 		(tempBuffer.GetBuffer())[0] = CONTENT_APPLICATION_DATA;
 	}
+	LOG_DEBUG("Encoding buffer with size: %d bytes, keepOriginal: %d", buf.GetSize(), keepOriginal);
 	crypto.Encode(tempBuffer, Span<const CHAR>(buf.GetBuffer(), buf.GetSize()), keepOriginal);
 	// Swap the body size to big-endian and write it to the temporary buffer
 	UINT16 bodySize = ByteOrder::Swap16(tempBuffer.GetSize() - bodySizeIndex - 2);
@@ -90,6 +92,7 @@ Result<VOID, Error> TlsClient::SendPacket(INT32 packetType, INT32 ver, TlsBuffer
 	auto writeResult = context.Write(Span<const CHAR>(tempBuffer.GetBuffer(), tempBuffer.GetSize()));
 	if (!writeResult)
 	{
+		LOG_DEBUG("Failed to write packet to socket");
 		return Result<VOID, Error>::Err(writeResult, Error::Tls_SendPacketFailed);
 	}
 	return Result<VOID, Error>::Ok();
@@ -118,6 +121,7 @@ Result<VOID, Error> TlsClient::SendClientHello(const CHAR *host)
 		AppendU16BE(sendBuffer, (UINT16)TLS_CHACHA20_POLY1305_SHA256);
 		hastls13 = true;
 	}
+	LOG_DEBUG("Appending ClientHello with %d ciphers", crypto.GetCipherCount());
 	UINT16 cipherSize = ByteOrder::Swap16(sendBuffer.GetSize() - cipherCountIndex - 2);
 	Memory::Copy(sendBuffer.GetBuffer() + cipherCountIndex, &cipherSize, sizeof(UINT16));
 	sendBuffer.Append<CHAR>(1);
@@ -126,6 +130,7 @@ Result<VOID, Error> TlsClient::SendClientHello(const CHAR *host)
 	INT32 extSizeIndex = sendBuffer.AppendSize(2);
 	AppendU16BE(sendBuffer, EXT_SERVER_NAME);
 	INT32 hostLen = (INT32)StringUtils::Length((PCHAR)host);
+	LOG_DEBUG("Appending ClientHello with host: %s, length: %d", host, hostLen);
 	AppendU16BE(sendBuffer, hostLen + 5);
 	AppendU16BE(sendBuffer, hostLen + 3);
 	sendBuffer.Append<CHAR>(0);
@@ -176,8 +181,10 @@ Result<VOID, Error> TlsClient::SendClientHello(const CHAR *host)
 			auto r = crypto.ComputePublicKey(i, sendBuffer);
 			if (!r)
 			{
+				LOG_DEBUG("Failed to compute public key for ECC group %d", i);
 				return Result<VOID, Error>::Err(r, Error::Tls_ClientHelloFailed);
 			}
+			LOG_DEBUG("Computed public key for ECC group %d, size: %d bytes", i, sendBuffer.GetSize() - shareSizeSub - 2);
 			UINT16 shareSizeVal = ByteOrder::Swap16(sendBuffer.GetSize() - shareSizeSub - 2);
 			Memory::Copy(sendBuffer.GetBuffer() + shareSizeSub, &shareSizeVal, sizeof(UINT16));
 		}
@@ -186,6 +193,7 @@ Result<VOID, Error> TlsClient::SendClientHello(const CHAR *host)
 		UINT16 shareInner = ByteOrder::Swap16(sendBuffer.GetSize() - shareSize - 4);
 		Memory::Copy(sendBuffer.GetBuffer() + shareSize + 2, &shareInner, sizeof(UINT16));
 	}
+	LOG_DEBUG("Appending ClientHello with extensions, size: %d bytes", sendBuffer.GetSize() - extSizeIndex - 2);
 
 	UINT16 extSizeVal = ByteOrder::Swap16(sendBuffer.GetSize() - extSizeIndex - 2);
 	Memory::Copy(sendBuffer.GetBuffer() + extSizeIndex, &extSizeVal, sizeof(UINT16));
@@ -209,6 +217,7 @@ Result<VOID, Error> TlsClient::SendClientFinished()
 	if (!verifyResult)
 		return Result<VOID, Error>::Err(verifyResult, Error::Tls_ClientFinishedFailed);
 
+	LOG_DEBUG("Computed verify data for Client Finished, size: %d bytes", verify.GetSize());
 	sendBuffer.Append<CHAR>(MSG_FINISHED);
 	sendBuffer.Append<CHAR>(0);
 	sendBuffer.Append<INT16>(ByteOrder::Swap16(verify.GetSize()));
@@ -226,6 +235,7 @@ Result<VOID, Error> TlsClient::SendClientExchange()
 {
 	sendBuffer.Clear();
 	TlsBuffer &pubkey = crypto.GetPubKey();
+	LOG_DEBUG("Sending Client Key Exchange, public key size: %d bytes", pubkey.GetSize());
 	sendBuffer.Append<CHAR>(MSG_CLIENT_KEY_EXCHANGE);
 	sendBuffer.Append<CHAR>(0);
 	sendBuffer.Append<INT16>(ByteOrder::Swap16(pubkey.GetSize() + 1));
@@ -260,23 +270,27 @@ Result<VOID, Error> TlsClient::OnServerHello(TlsBuffer &reader)
 	reader.Read<INT16>();   // version (skip)
 	reader.Read(Span<CHAR>(serverRand, sizeof(serverRand)));
 	INT32 sessionLen = reader.Read<INT8>();
+	LOG_DEBUG("ServerHello session length: %d", sessionLen);
 	reader.AdvanceReadPosition(sessionLen);
 	reader.Read<INT16>(); // cur_cipher
 	reader.Read<INT8>();
 	auto ret = crypto.UpdateServerInfo();
 	if (!ret)
 	{
+		LOG_DEBUG("Failed to update server info");
 		return Result<VOID, Error>::Err(ret, Error::Tls_ServerHelloFailed);
 	}
 
 	if (reader.GetReadPosition() >= reader.GetSize())
 	{
+		LOG_DEBUG("ServerHello reader has reached the end of buffer, no extensions found");
 		return Result<VOID, Error>::Ok();
 	}
 
 	INT32 extSize = ByteOrder::Swap16(reader.Read<INT16>());
 	INT32 extStart = reader.GetReadPosition();
 	INT32 tlsVer = 0;
+	LOG_DEBUG("ServerHello extensions size: %d bytes, start index: %d", extSize, extStart);
 	TlsBuffer pubkey;
 	ECC_GROUP eccgroup = ECC_NONE;
 	while (reader.GetReadPosition() < extStart + extSize)
@@ -296,6 +310,7 @@ Result<VOID, Error> TlsClient::OnServerHello(TlsBuffer &reader)
 				(VOID)pubkey.SetSize(ByteOrder::Swap16(reader.Read<INT16>()));
 				reader.Read(Span<CHAR>(pubkey.GetBuffer(), pubkey.GetSize()));
 			}
+			LOG_DEBUG("EXT_KEY_SHARE processed, ECC group: %d, public key size: %d bytes", eccgroup, pubkey.GetSize());
 		}
 		else
 		{
@@ -306,14 +321,17 @@ Result<VOID, Error> TlsClient::OnServerHello(TlsBuffer &reader)
 	}
 	if (tlsVer != 0)
 	{
+		LOG_DEBUG("TLS version from ServerHello: %d", tlsVer);
 		if (tlsVer != 0x0304 || pubkey.GetSize() <= 0 || eccgroup == ECC_NONE)
 		{
+			LOG_DEBUG("Invalid TLS version or public key size, tlsVer: %d, pubkey.size: %d, eccgroup: %d", tlsVer, pubkey.GetSize(), eccgroup);
 			return Result<VOID, Error>::Err(Error::Tls_ServerHelloFailed);
 		}
 
 		auto r = crypto.ComputeKey(eccgroup, Span<const CHAR>(pubkey.GetBuffer(), pubkey.GetSize()), Span<CHAR>());
 		if (!r)
 		{
+			LOG_DEBUG("Failed to compute TLS 1.3 key, ECC group: %d, public key size: %d bytes", eccgroup, pubkey.GetSize());
 			return Result<VOID, Error>::Err(r, Error::Tls_ServerHelloFailed);
 		}
 		crypto.SetEncoding(true);
@@ -328,20 +346,23 @@ Result<VOID, Error> TlsClient::OnServerHelloDone()
 	auto r = SendClientExchange();
 	if (!r)
 	{
+		LOG_DEBUG("Failed to send Client Key Exchange");
 		return Result<VOID, Error>::Err(r, Error::Tls_ServerHelloDoneFailed);
 	}
 	r = SendChangeCipherSpec();
 	if (!r)
 	{
+		LOG_DEBUG("Failed to send Change Cipher Spec");
 		return Result<VOID, Error>::Err(r, Error::Tls_ServerHelloDoneFailed);
 	}
 	crypto.SetEncoding(true);
 	r = SendClientFinished();
 	if (!r)
 	{
+		LOG_DEBUG("Failed to send Client Finished");
 		return Result<VOID, Error>::Err(r, Error::Tls_ServerHelloDoneFailed);
 	}
-	LOG_DEBUG("Client Finished sent successfully for client: %p", this);
+	LOG_DEBUG("Client Finished sent successfully");
 
 	return Result<VOID, Error>::Ok();
 }
@@ -354,6 +375,7 @@ Result<VOID, Error> TlsClient::VerifyFinished(TlsBuffer &reader)
 	INT32 server_finished_size = reader.ReadU24BE();
 	if (server_finished_size < 0 || server_finished_size > reader.GetSize() - reader.GetReadPosition())
 		return Result<VOID, Error>::Err(Error::Tls_VerifyFinishedFailed);
+	LOG_DEBUG("Verifying Finished, size: %d bytes", server_finished_size);
 	TlsBuffer verify;
 	auto verifyResult = crypto.ComputeVerify(verify, server_finished_size, 1);
 	if (!verifyResult)
@@ -361,9 +383,10 @@ Result<VOID, Error> TlsClient::VerifyFinished(TlsBuffer &reader)
 
 	if (Memory::Compare(verify.GetBuffer(), reader.GetBuffer() + reader.GetReadPosition(), server_finished_size) != 0)
 	{
+		LOG_DEBUG("Finished verification failed, expected size: %d, actual size: %d", verify.GetSize(), server_finished_size);
 		return Result<VOID, Error>::Err(Error::Tls_VerifyFinishedFailed);
 	}
-	LOG_DEBUG("Finished verification succeeded for client: %p", this);
+	LOG_DEBUG("Finished verification succeeded");
 	return Result<VOID, Error>::Ok();
 }
 
@@ -377,22 +400,25 @@ Result<VOID, Error> TlsClient::OnServerFinished()
 
 	if (!ret)
 	{
+		LOG_DEBUG("Failed to send Change Cipher Spec");
 		return Result<VOID, Error>::Err(ret, Error::Tls_ServerFinishedFailed);
 	}
 	auto r = SendClientFinished();
 	if (!r)
 	{
+		LOG_DEBUG("Failed to send Client Finished");
 		return Result<VOID, Error>::Err(r, Error::Tls_ServerFinishedFailed);
 	}
-	LOG_DEBUG("Client Finished sent successfully for client: %p", this);
+	LOG_DEBUG("Client Finished sent successfully");
 	crypto.ResetSequenceNumber();
 	auto r2 = crypto.ComputeKey(ECC_NONE, Span<const CHAR>(), Span<CHAR>(finished_hash, CIPHER_HASH_SIZE));
 	if (!r2)
 	{
+		LOG_DEBUG("Failed to compute TLS 1.3 key");
 		return Result<VOID, Error>::Err(r2, Error::Tls_ServerFinishedFailed);
 	}
 
-	LOG_DEBUG("Server Finished processed successfully for client: %p", this);
+	LOG_DEBUG("Server Finished processed successfully");
 	return Result<VOID, Error>::Ok();
 }
 
@@ -405,9 +431,11 @@ Result<VOID, Error> TlsClient::OnPacket(INT32 packetType, INT32 version, TlsBuff
 {
 	if (packetType != CONTENT_CHANGECIPHERSPEC && packetType != CONTENT_ALERT)
 	{
+		LOG_DEBUG("Processing packet with type: %d, version: %d, size: %d bytes", packetType, version, TlsReader.GetSize());
 		auto r = crypto.Decode(TlsReader, version);
 		if (!r)
 		{
+			LOG_DEBUG("Failed to Decode packet, type: %d, version: %d", packetType, version);
 			return Result<VOID, Error>::Err(r, Error::Tls_OnPacketFailed);
 		}
 		if (crypto.GetEncoding() && TlsReader.GetSize() > 0)
@@ -415,6 +443,7 @@ Result<VOID, Error> TlsClient::OnPacket(INT32 packetType, INT32 version, TlsBuff
 			packetType = TlsReader.GetBuffer()[TlsReader.GetSize() - 1];
 			(VOID)TlsReader.SetSize(TlsReader.GetSize() - 1);
 		}
+		LOG_DEBUG("Packet type after processing: %d, buffer size: %d bytes", packetType, TlsReader.GetSize());
 	}
 
 	TlsState state_seq[6]{};
@@ -448,6 +477,8 @@ Result<VOID, Error> TlsClient::OnPacket(INT32 packetType, INT32 version, TlsBuff
 		{
 			if (state_seq[stateIndex].contentType != packetType || state_seq[stateIndex].handshakeType != reader_sig.GetBuffer()[0])
 			{
+				LOG_DEBUG("State sequence mismatch, expected type: %d, expected handshake type: %d, actual type: %d, actual handshake type: %d",
+						  state_seq[stateIndex].contentType, state_seq[stateIndex].handshakeType, packetType, reader_sig.GetBuffer()[0]);
 				return Result<VOID, Error>::Err(Error::Tls_OnPacketFailed);
 			}
 			stateIndex++;
@@ -460,28 +491,23 @@ Result<VOID, Error> TlsClient::OnPacket(INT32 packetType, INT32 version, TlsBuff
 		if (packetType == CONTENT_HANDSHAKE)
 		{
 			INT32 handshakeType = reader_sig.Read<INT8>();
+			LOG_DEBUG("Handshake type: %d", handshakeType);
 			if (handshakeType == MSG_SERVER_HELLO)
 			{
 				auto r = OnServerHello(reader_sig);
 				if (!r)
 				{
+					LOG_DEBUG("Failed to process handshake packet, handshake type: %d", handshakeType);
 					(VOID)Close();
 					return Result<VOID, Error>::Err(r, Error::Tls_OnPacketFailed);
 				}
-			}
-
-			else if (handshakeType == MSG_CERTIFICATE)
-			{
-			}
-
-			else if (handshakeType == MSG_CERTIFICATE_VERIFY)
-			{
 			}
 			else if (handshakeType == MSG_SERVER_HELLO_DONE)
 			{
 				auto r = OnServerHelloDone();
 				if (!r)
 				{
+					LOG_DEBUG("Failed to process Server Hello Done");
 					return Result<VOID, Error>::Err(r, Error::Tls_OnPacketFailed);
 				}
 			}
@@ -490,12 +516,14 @@ Result<VOID, Error> TlsClient::OnPacket(INT32 packetType, INT32 version, TlsBuff
 				auto r = VerifyFinished(reader_sig);
 				if (!r)
 				{
+					LOG_DEBUG("Failed to verify Finished");
 					return Result<VOID, Error>::Err(r, Error::Tls_OnPacketFailed);
 				}
 				crypto.UpdateHash(Span<const CHAR>(reader_sig.GetBuffer(), reader_sig.GetSize()));
 				auto r2 = OnServerFinished();
 				if (!r2)
 				{
+					LOG_DEBUG("Failed to process Server Finished");
 					return Result<VOID, Error>::Err(r2, Error::Tls_OnPacketFailed);
 				}
 			}
@@ -509,12 +537,14 @@ Result<VOID, Error> TlsClient::OnPacket(INT32 packetType, INT32 version, TlsBuff
 			{
 				[[maybe_unused]] INT32 level = reader_sig.Read<INT8>();
 				[[maybe_unused]] INT32 code = reader_sig.Read<INT8>();
-				LOG_ERROR("TLS Alert received for client: %p, level: %d, code: %d", this, level, code);
+				LOG_ERROR("TLS Alert received, level: %d, code: %d", level, code);
 				return Result<VOID, Error>::Err(Error::Tls_OnPacketFailed);
 			}
+			LOG_DEBUG("TLS Alert received but buffer size is less than 2 bytes");
 		}
 		else if (packetType == CONTENT_APPLICATION_DATA)
 		{
+			LOG_DEBUG("Processing Application Data, size: %d bytes", reader_sig.GetSize());
 			channelBuffer.Append(Span<const CHAR>(reader_sig.GetBuffer(), reader_sig.GetSize()));
 		}
 		TlsReader.AdvanceReadPosition(seg_size);
@@ -527,23 +557,27 @@ Result<VOID, Error> TlsClient::OnPacket(INT32 packetType, INT32 version, TlsBuff
 /// @return Result indicating success or Tls_ProcessReceiveFailed error
 Result<VOID, Error> TlsClient::ProcessReceive()
 {
+	LOG_DEBUG("Processing received data, current state index: %d", stateIndex);
 	auto checkResult = recvBuffer.CheckSize(4096 * 4);
 	if (!checkResult)
 		return Result<VOID, Error>::Err(checkResult, Error::Tls_ProcessReceiveFailed);
 	auto readResult = context.Read(Span<CHAR>(recvBuffer.GetBuffer() + recvBuffer.GetSize(), 4096 * 4));
 	if (!readResult)
 	{
+		LOG_DEBUG("Failed to read data from socket");
 		(VOID)Close();
 		return Result<VOID, Error>::Err(readResult, Error::Tls_ProcessReceiveFailed);
 	}
 	if (readResult.Value() <= 0)
 	{
+		LOG_DEBUG("Read returned 0 bytes from socket");
 		(VOID)Close();
 		return Result<VOID, Error>::Err(Error::Tls_ProcessReceiveFailed);
 	}
 	INT64 len = readResult.Value();
 	if (len > 0x7FFFFFFF)
 		return Result<VOID, Error>::Err(Error::Tls_ProcessReceiveFailed);
+	LOG_DEBUG("Received %lld bytes from socket", len);
 	recvBuffer.AppendSize((INT32)len);
 
 	BinaryReader reader(Span<const UINT8>((const UINT8*)recvBuffer.GetBuffer(), (USIZE)recvBuffer.GetSize()));
@@ -567,6 +601,7 @@ Result<VOID, Error> TlsClient::ProcessReceive()
 		auto ret = OnPacket(contentType, version, unnamed);
 		if (!ret)
 		{
+			LOG_DEBUG("Failed to process packet, current index: %d, packet size: %d", (INT32)headerStart, packetSize);
 			(VOID)Close();
 			return Result<VOID, Error>::Err(ret, Error::Tls_ProcessReceiveFailed);
 		}
@@ -584,10 +619,14 @@ Result<VOID, Error> TlsClient::ProcessReceive()
 Result<INT32, Error> TlsClient::ReadChannel(Span<CHAR> output)
 {
 	INT32 movesize = Math::Min((INT32)output.Size(), channelBuffer.GetSize() - channelBytesRead);
+	LOG_DEBUG("Reading from channel, requested size: %d, available size: %d, readed size: %d",
+			  (INT32)output.Size(), channelBuffer.GetSize() - channelBytesRead, channelBytesRead);
 	Memory::Copy(output.Data(), channelBuffer.GetBuffer() + channelBytesRead, movesize);
 	channelBytesRead += movesize;
 	if (((channelBytesRead > (channelBuffer.GetSize() >> 2) * 3) && (channelBuffer.GetSize() > 1024 * 1024)) || (channelBytesRead >= channelBuffer.GetSize()))
 	{
+		LOG_DEBUG("Clearing recv channel, readed size: %d, total size: %d",
+				  channelBytesRead, channelBuffer.GetSize());
 		channelBuffer.Consume(channelBytesRead);
 		channelBytesRead = 0;
 	}
@@ -603,34 +642,38 @@ Result<INT32, Error> TlsClient::ReadChannel(Span<CHAR> output)
 /// @return Result indicating whether the TLS connection was opened and the handshake completed successfully
 Result<VOID, Error> TlsClient::Open()
 {
+	LOG_DEBUG("Connecting to host: %s, secure: %d", host, secure);
 
 	crypto.Reset();
 
 	auto openResult = context.Open();
 	if (!openResult)
 	{
+		LOG_DEBUG("Failed to connect to host: %s", host);
 		return Result<VOID, Error>::Err(openResult, Error::Tls_OpenFailed_Socket);
 	}
-	LOG_DEBUG("Connected to host: %s, for client: %p", host, this);
+	LOG_DEBUG("Connected to host: %s", host);
 
 	if (!secure)
 	{
-		LOG_DEBUG("Non-secure connection opened for client: %p", this);
+		LOG_DEBUG("Non-secure connection opened");
 		return Result<VOID, Error>::Ok();
 	}
 
 	auto helloResult = SendClientHello(host);
 	if (!helloResult)
 	{
+		LOG_DEBUG("Failed to send Client Hello");
 		return Result<VOID, Error>::Err(helloResult, Error::Tls_OpenFailed_Handshake);
 	}
-	LOG_DEBUG("Client Hello sent successfully for client: %p", this);
+	LOG_DEBUG("Client Hello sent successfully");
 
 	while (stateIndex < 6)
 	{
 		auto recvResult = ProcessReceive();
 		if (!recvResult)
 		{
+			LOG_DEBUG("Failed to process received data");
 			return Result<VOID, Error>::Err(recvResult, Error::Tls_OpenFailed_Handshake);
 		}
 	}
@@ -667,6 +710,7 @@ Result<VOID, Error> TlsClient::Close()
 Result<UINT32, Error> TlsClient::Write(Span<const CHAR> buffer)
 {
 	UINT32 bufferLength = (UINT32)buffer.Size();
+	LOG_DEBUG("Sending data, size: %d bytes", bufferLength);
 
 	if (!secure)
 	{
@@ -680,6 +724,7 @@ Result<UINT32, Error> TlsClient::Write(Span<const CHAR> buffer)
 
 	if (stateIndex < 6)
 	{
+		LOG_DEBUG("send error, state index is %d", stateIndex);
 		return Result<UINT32, Error>::Err(Error::Tls_WriteFailed_NotReady);
 	}
 
@@ -694,6 +739,7 @@ Result<UINT32, Error> TlsClient::Write(Span<const CHAR> buffer)
 		auto sendResult = SendPacket(CONTENT_APPLICATION_DATA, 0x303, sendBuffer);
 		if (!sendResult)
 		{
+			LOG_DEBUG("Failed to send packet, size: %d bytes", sendSize);
 			return Result<UINT32, Error>::Err(sendResult, Error::Tls_WriteFailed_Send);
 		}
 
@@ -720,6 +766,7 @@ Result<SSIZE, Error> TlsClient::Read(Span<CHAR> buffer)
 
 	if (stateIndex < 6)
 	{
+		LOG_DEBUG("recv error, state index is %d", stateIndex);
 		return Result<SSIZE, Error>::Err(Error::Tls_ReadFailed_NotReady);
 	}
 	while (channelBuffer.GetSize() <= channelBytesRead)
@@ -727,6 +774,7 @@ Result<SSIZE, Error> TlsClient::Read(Span<CHAR> buffer)
 		auto recvResult = ProcessReceive();
 		if (!recvResult)
 		{
+			LOG_DEBUG("recv error, maybe close socket");
 			return Result<SSIZE, Error>::Err(recvResult, Error::Tls_ReadFailed_Receive);
 		}
 	}

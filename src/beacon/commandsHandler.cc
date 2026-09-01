@@ -73,12 +73,14 @@ static USIZE DecodeWirePath(PCHAR command, USIZE commandLength, WCHAR *widePath,
     return len;
 }
 
+// Writes a simple error response with the given status code
 static VOID WriteErrorResponse(PPCHAR response, PUSIZE responseLength, StatusCode code)
 {
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = code;
 }
 
+// Checks if a directory entry is "." or ".."
 static BOOL IsDotEntry(const DirectoryEntry &entry)
 {
     return StringUtils::Equals((PWCHAR)entry.Name, (const WCHAR *)L".") ||
@@ -120,6 +122,7 @@ VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHA
         }
     }
 
+    // Prepare the response buffer - writing entry count, status code and array of WireDirectoryEntry structures
     UINT64 entryCount = (UINT64)entries.Count;
     *responseLength = sizeof(UINT32) + sizeof(UINT64) + (USIZE)(entryCount * sizeof(WireDirectoryEntry));
     *response = new CHAR[*responseLength];
@@ -133,11 +136,13 @@ VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHA
         Memory::Zero(&wireEntries[i], sizeof(WireDirectoryEntry));
         ToWireEntry(entries.Data[i], wireEntries[i]);
     }
+    LOG_INFO("Directory content retrieved successfully with %llu entries", entryCount);
 }
 
 // Reads a chunk of file content
 VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
+    // Getting parameters from command buffer: read count, offset and file path
     UINT64 readCount = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
 
@@ -153,6 +158,7 @@ VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR res
         return;
     }
 
+    // Prepare the response buffer - writing status code, bytes read and file content chunk
     File &file = openResult.Value();
     *responseLength = sizeof(UINT32) + sizeof(UINT64) + (USIZE)readCount;
     *response = new CHAR[*responseLength];
@@ -171,11 +177,14 @@ VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR res
 
     *(PUINT32)*response = StatusCode::StatusSuccess;
     *(PUINT64)(*response + sizeof(UINT32)) = bytesRead;
+
+    LOG_INFO("File content read successfully for %llu bytes requested, %llu bytes read", readCount, bytesRead);
 }
 
 // Computes the SHA-256 hash of a file chunk
 VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
+    // Getting parameters from command buffer: chunk size, offset and file path
     UINT64 chunkSize = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
 
@@ -192,6 +201,7 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
     }
 
     File &file = openResult.Value();
+    // Cap the per-read buffer at 64 KB — the chunk is hashed incrementally, not loaded whole
     UINT64 bufferSize = Math::Min((UINT64)chunkSize, (UINT64)0xffff);
     PUINT8 buffer = new UINT8[bufferSize];
 
@@ -219,6 +229,7 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
         totalRead += bytesRead;
     }
     delete[] buffer;
+    // Prepare the response buffer - writing status code and SHA-256 digest of the file chunk
     *responseLength += SHA256_DIGEST_SIZE;
     *response = new CHAR[*responseLength];
 
@@ -227,6 +238,7 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
 
     *(PUINT32)*response = StatusCode::StatusSuccess;
     Memory::Copy(*response + sizeof(UINT32), digest, SHA256_DIGEST_SIZE);
+    LOG_INFO("GetFileChunkHash: hashed %llu bytes", (UINT64)totalRead);
 }
 
 // Open (spawn) a shell. Request: (none). Response: [status:4][shellId:8].
@@ -243,6 +255,7 @@ VOID Handle_OpenShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
     }
 
     ShellId shellId = openResult.Value();
+    LOG_INFO("Shell opened, assigned id %llu", shellId);
     *responseLength = sizeof(UINT32) + sizeof(ShellId);
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = StatusCode::StatusSuccess;
@@ -284,6 +297,7 @@ VOID Handle_WriteShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
         WriteErrorResponse(response, responseLength, StatusCode::StatusError);
         return;
     }
+    LOG_INFO("Command written to shell (id %llu), bytes written: %llu", shellId, writeResult.Value());
 
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = StatusCode::StatusSuccess;
@@ -339,6 +353,7 @@ VOID Handle_CloseShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
     ShellId shellId = 0;
     Memory::Copy(&shellId, command, sizeof(shellId));
     context->shellManager.Close(shellId);
+    LOG_INFO("Shell instance closed for id %llu", shellId);
 
     *responseLength = sizeof(UINT32);
     *response = new CHAR[*responseLength];
@@ -383,11 +398,14 @@ VOID Handle_GetDisplaysCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] 
     ScreenDeviceList &deviceList = displays.Value();
     context->screenCaptureContext->DeviceList = deviceList;
 
+    // Prepare the response buffer - writing status code, device count and array of ScreenDevice structures
     *responseLength += sizeof(deviceList.Count) + (USIZE)(deviceList.Count * sizeof(ScreenDevice));
     *response = new CHAR[*responseLength];
     *(PUINT32)*response = StatusCode::StatusSuccess;
     Memory::Copy(*response + sizeof(UINT32), &deviceList.Count, sizeof(deviceList.Count));
     Memory::Copy(*response + sizeof(UINT32) + sizeof(deviceList.Count), deviceList.Devices, (USIZE)(deviceList.Count * sizeof(ScreenDevice)));
+
+    LOG_INFO("GetDisplays: %u display(s)", deviceList.Count);
 }
 
 // Callback function for JPEG encoding - called by the encoder to write encoded data chunks
@@ -467,6 +485,7 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
 
         Rectangle rect(0, 0, graphics.jpegBuffer.offset, graphics.jpegBuffer.outputBuffer);
 
+        // We are sending the full JPEG data in one segment, so the segment count is 1
         UINT32 countOfSegments = 1;
 
         *responseLength += sizeof(countOfSegments) + sizeof(rect.x) + sizeof(rect.y) + sizeof(rect.sizeOfData) + graphics.jpegBuffer.offset;

@@ -681,6 +681,7 @@ Result<IPAddress, Error> DnsClient::Resolve(Span<const CHAR> host, DnsRecordType
 
 	if (!result && dnstype == DnsRecordType::AAAA)
 	{
+		LOG_DEBUG("IPv6 resolution failed, falling back to IPv4 (A) for %s", host.Data());
 		result = CloudflareResolve(host, DnsRecordType::A);
 		if (!result)
 			result = GoogleResolve(host, DnsRecordType::A);

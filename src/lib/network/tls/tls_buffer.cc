@@ -82,6 +82,7 @@ Result<VOID, Error> TlsBuffer::CheckSize(INT32 appendSize)
 	}
 	if (size > 0)
 	{
+		LOG_DEBUG("Resizing buffer from %d to %d bytes", capacity, newLen);
 		Memory::Copy(newBuffer, oldBuffer, size);
 	}
 

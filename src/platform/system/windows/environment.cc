@@ -101,6 +101,7 @@ USIZE Environment::GetVariable(const CHAR *name, Span<CHAR> buffer) noexcept
 				USIZE len = 0;
 				while (*value != L'\0' && len < buffer.Size() - 1)
 				{
+					// Simple wide to narrow conversion (ASCII only)
 					buffer[len++] = (CHAR)*value++;
 				}
 				buffer[len] = '\0';

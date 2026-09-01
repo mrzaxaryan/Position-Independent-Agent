@@ -2,6 +2,7 @@
 #include "lib/network/dns/dns_client.h"
 #include "platform/console/logger.h"
 
+// Helper to append a null-terminated string to a buffer
 static USIZE AppendStr(Span<CHAR> buf, USIZE pos, const CHAR *str) noexcept
 {
 	for (USIZE i = 0; str[i] != '\0' && pos < buf.Size(); i++)

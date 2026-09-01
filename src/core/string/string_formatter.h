@@ -707,7 +707,7 @@ INT32 StringFormatter::FormatWithArgs(BOOL (*writer)(PVOID, TChar), PVOID contex
 			if (format[i] == (TChar)'\0')
 				break;
 
-			precision = 6;
+			precision = 6; // Reset default precision
 
 			// Parse flags: '-', '0', '#'
 			INT32 addPrefix = 0;
@@ -721,7 +721,7 @@ INT32 StringFormatter::FormatWithArgs(BOOL (*writer)(PVOID, TChar), PVOID contex
 				if (format[i] == (TChar)'-')
 				{
 					leftAlign = 1;
-					zeroPad = 0;
+					zeroPad = 0; // '-' overrides '0'
 					i++;
 				}
 				else if (format[i] == (TChar)'0' && !leftAlign)

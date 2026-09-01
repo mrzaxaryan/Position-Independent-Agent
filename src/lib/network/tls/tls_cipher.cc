@@ -177,8 +177,10 @@ Result<VOID, Error> TlsCipher::ComputeKey(ECC_GROUP ecc, Span<const CHAR> server
 {
 	if (cipherIndex == -1)
 	{
+		LOG_DEBUG("Cipher index is -1, cannot compute TLS key");
 		return Result<VOID, Error>::Err(Error::TlsCipher_ComputeKeyFailed);
 	}
+	LOG_DEBUG("Computing TLS key, ECC group: %d", ecc);
 
 	INT32 keyLen = CIPHER_KEY_SIZE;
 	INT32 hashLen = CIPHER_HASH_SIZE;
@@ -207,6 +209,7 @@ Result<VOID, Error> TlsCipher::ComputeKey(ECC_GROUP ecc, Span<const CHAR> server
 
 		if (finishedHash.Data())
 		{
+			LOG_DEBUG("Using finished hash for TLS key computation with size: %d bytes", (INT32)finishedHash.Size());
 			Memory::Copy(hash, (VOID *)finishedHash.Data(), hashLen);
 		}
 	}
@@ -216,10 +219,12 @@ Result<VOID, Error> TlsCipher::ComputeKey(ECC_GROUP ecc, Span<const CHAR> server
 		auto preKeyResult = ComputePreKey(ecc, serverKey, premaster_key);
 		if (!preKeyResult)
 		{
+			LOG_DEBUG("Failed to compute pre-master key for ECC group %d", ecc);
 			Memory::Zero(hash, sizeof(hash));
 			Memory::Zero(earlysecret, sizeof(earlysecret));
 			return Result<VOID, Error>::Err(preKeyResult, Error::TlsCipher_ComputeKeyFailed);
 		}
+		LOG_DEBUG("Computed pre-master key for ECC group %d, size: %d bytes", ecc, premaster_key.GetSize());
 
 		// RFC 8446 §7.1: the initial Extract uses a salt of HashLen zero bytes
 		UCHAR zeroSalt[MAX_HASH_LEN];
@@ -321,6 +326,7 @@ VOID TlsCipher::Encode(TlsBuffer &sendbuf, Span<const CHAR> packet, BOOL keepOri
 		return;
 	}
 	INT32 packetSize = (INT32)packet.Size();
+	LOG_DEBUG("Encoding packet with size: %d bytes", packetSize);
 
 	UCHAR aad[13];
 

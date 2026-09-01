@@ -217,6 +217,7 @@ Result<USIZE, Error> Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 		return Result<USIZE, Error>::Ok(pos);
 	}
 
+	// Fallback: try reading /proc/version via raw syscalls
 	{
 		const CHAR *path = "/proc/version";
 #if defined(ARCHITECTURE_AARCH64) || defined(ARCHITECTURE_RISCV64) || defined(ARCHITECTURE_RISCV32)
@@ -522,6 +523,7 @@ Result<USIZE, Error> Environment::GetHostname(Span<CHAR> buffer) noexcept
 		return Result<USIZE, Error>::Ok(len);
 
 #if defined(PLATFORM_LINUX) || defined(PLATFORM_ANDROID)
+	// Fallback: read /etc/hostname
 	{
 		const CHAR *path = "/etc/hostname";
 #if defined(ARCHITECTURE_AARCH64) || defined(ARCHITECTURE_RISCV64) || defined(ARCHITECTURE_RISCV32)

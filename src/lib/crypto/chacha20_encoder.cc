@@ -32,6 +32,7 @@ Result<VOID, Error> ChaCha20Encoder::Initialize(Span<const UINT8, POLY1305_KEYLE
 {
 	UINT32 counter = 1;
 	this->ivLength = TLS_CHACHA20_IV_LENGTH;
+	LOG_DEBUG("Initializing ChaCha20 encoder with key length: %d bits", (INT32)localKey.Size() * 8);
 	auto localSetup = this->localCipher.KeySetup(localKey);
 	if (!localSetup)
 		return Result<VOID, Error>::Err(localSetup, Error::ChaCha20_KeySetupFailed);

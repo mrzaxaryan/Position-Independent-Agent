@@ -219,13 +219,13 @@ INT32 start()
             UINT8 commandType = command[0];
             command++;
             USIZE commandLength = readResult.Value().Length - sizeof(UINT8);
+            LOG_INFO("Message #%u received: command=%s (0x%02x), payload_length=%u, ws_opcode=%d", messageCount, CommandTypeName(commandType), (UINT32)commandType, (UINT32)commandLength, (INT32)readResult.Value().Opcode);
 
             PCHAR response = nullptr;
             USIZE responseLength = sizeof(UINT32);
 
             if (commandType < CommandType::CommandTypeCount && commandHandlers[commandType])
             {
-                LOG_INFO("Command %s (payload %u bytes)", CommandTypeName(commandType), (UINT32)commandLength);
                 commandHandlers[commandType](command, commandLength, &response, &responseLength, &context);
             }
             else
