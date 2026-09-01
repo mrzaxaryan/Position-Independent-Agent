@@ -127,6 +127,22 @@ public:
 	 */
 	static USIZE GetArchitecture(Span<CHAR> buffer) noexcept;
 
+	/**
+	 * @brief Retrieves the PROCESS architecture string.
+	 *
+	 * @param buffer Output buffer to receive the architecture string.
+	 * @return Length of the string written (excluding null terminator).
+	 *
+	 * @details The arch of THIS binary — the process the agent runs in, not the
+	 * host CPU (GetArchitecture): a 32-bit agent under WOW64 on an x64 machine is
+	 * an i386 process. Reported with the C2's tag vocabulary (i386 / x86_64 /
+	 * aarch64 / armv7a) so it joins the identity-tag filter directly; the C2
+	 * compiles delivered injectors for exactly this arch (they deserialize into
+	 * this process).
+	 */
+	static USIZE GetProcessArchitecture(Span<CHAR> buffer) noexcept;
+
+
 	// Prevent instantiation
 	VOID *operator new(USIZE) = delete;
 	VOID operator delete(VOID *) = delete;
