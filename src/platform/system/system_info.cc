@@ -23,6 +23,7 @@ VOID GetSystemInfo(SystemInfo *info)
 		LOG_ERROR("Failed to retrieve username");
 
 	Environment::GetArchitecture(Span<CHAR>(info->Architecture, 31));
+	Environment::GetProcessArchitecture(Span<CHAR>(info->ProcessArchitecture, 31));
 	Environment::GetAgentPlatform(Span<CHAR>(info->AgentPlatform, 31));
 
 	auto osVersionResult = Environment::GetOSVersion(Span<CHAR>(info->OSVersion, 127));

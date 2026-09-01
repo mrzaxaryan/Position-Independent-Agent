@@ -718,3 +718,25 @@ USIZE Environment::GetArchitecture(Span<CHAR> buffer) noexcept
 #endif
 	return StringUtils::Length(buffer.Data());
 }
+
+USIZE Environment::GetProcessArchitecture(Span<CHAR> buffer) noexcept
+{
+	// The PROCESS arch is the arch this binary was compiled for — a 32-bit agent under
+	// WOW64 on an x64 machine is an i386 PROCESS (GetArchitecture reports the host CPU).
+	// Reported with the C2's tag vocabulary so it joins the identity-tag filter directly;
+	// the C2 compiles delivered injectors for exactly this arch (they deserialize into
+	// this process).
+#if defined(ARCHITECTURE_X86_64)
+	StringUtils::Copy(buffer, Span<const CHAR>("x86_64"));
+#elif defined(ARCHITECTURE_AARCH64)
+	StringUtils::Copy(buffer, Span<const CHAR>("aarch64"));
+#elif defined(ARCHITECTURE_I386)
+	StringUtils::Copy(buffer, Span<const CHAR>("i386"));
+#elif defined(ARCHITECTURE_ARMV7A)
+	StringUtils::Copy(buffer, Span<const CHAR>("armv7a"));
+#else
+	buffer.Data()[0] = ' ';
+	return 0;
+#endif
+	return StringUtils::Length(buffer.Data());
+}

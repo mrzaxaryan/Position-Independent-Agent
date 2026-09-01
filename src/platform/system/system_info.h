@@ -47,8 +47,9 @@ struct SystemInfo
     CHAR Hostname[256];      ///< Machine hostname / computer name
     CHAR Username[256];      ///< Current user name (e.g. "root", "admin"); empty if unavailable
     CHAR Architecture[32];   ///< Host CPU architecture (e.g. "x86_64", "aarch64"); runtime-detected, compile-time fallback
+    CHAR ProcessArchitecture[32]; ///< PROCESS arch (i386/x86_64/aarch64) — the arch of THIS binary (a 32-bit agent under WOW64 is i386); what the C2 compiles delivered injectors for
     CHAR AgentPlatform[32];  ///< Compile-time OS target (e.g. "windows", "linux")
-    CHAR OSVersion[128];     ///< Runtime OS version (e.g. "Windows 10.0 Build 19045", "Linux 6.1.0")
+    CHAR OSVersion[128];     ///< Runtime OS version (e.g. "Windows 10.0.19045", "Linux 6.1.0")
 };
 #pragma pack(pop)
 

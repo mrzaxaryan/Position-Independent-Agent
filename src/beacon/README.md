@@ -61,7 +61,7 @@ Full protocol stack, all implemented in-process:
       Full handshake: ClientHello → ServerHello → encrypted traffic
 
 4. HTTP/1.1 upgrade
-   └─ GET /agent with Upgrade: websocket header
+   └─ GET / with Upgrade: websocket header (agent leg at the root)
       Sec-WebSocket-Key + SHA-1 challenge-response
 
 5. WebSocket message loop

