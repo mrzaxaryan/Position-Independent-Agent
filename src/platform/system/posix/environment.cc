@@ -65,7 +65,6 @@ static BOOL CompareEnvName(const CHAR *envEntry, const CHAR *name) noexcept
 		name++;
 	}
 
-	// After name, should be '='
 	return *envEntry == '=';
 }
 
@@ -76,7 +75,6 @@ USIZE Environment::GetVariable(const CHAR *name, Span<CHAR> buffer) noexcept
 		return 0;
 	}
 
-	// Open /proc/self/environ
 	const CHAR *procEnvPath = "/proc/self/environ";
 #if defined(ARCHITECTURE_AARCH64) || defined(ARCHITECTURE_RISCV64) || defined(ARCHITECTURE_RISCV32)
 	// aarch64/riscv only has openat syscall
@@ -113,7 +111,6 @@ USIZE Environment::GetVariable(const CHAR *name, Span<CHAR> buffer) noexcept
 
 	envBuf[bytesRead] = '\0';
 
-	// Search for the variable
 	const CHAR *ptr = envBuf;
 	const CHAR *end = envBuf + bytesRead;
 
@@ -129,9 +126,8 @@ USIZE Environment::GetVariable(const CHAR *name, Span<CHAR> buffer) noexcept
 			}
 			if (*value == '=')
 			{
-				value++; // Skip the '='
+				value++;
 
-				// Copy value to buffer
 				USIZE len = 0;
 				while (*value != '\0' && len < buffer.Size() - 1)
 				{
@@ -142,15 +138,13 @@ USIZE Environment::GetVariable(const CHAR *name, Span<CHAR> buffer) noexcept
 			}
 		}
 
-		// Skip to next entry (after null terminator)
 		while (ptr < end && *ptr != '\0')
 		{
 			ptr++;
 		}
-		ptr++; // Skip the null terminator
+		ptr++;
 	}
 
-	// Variable not found
 	buffer[0] = '\0';
 	return 0;
 }
@@ -238,7 +232,6 @@ Result<USIZE, Error> Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 			System::Call(SYS_CLOSE, (USIZE)fd);
 			if (bytesRead > 0)
 			{
-				// Trim trailing newline
 				if (buffer.Data()[bytesRead - 1] == '\n')
 					buffer.Data()[bytesRead - 1] = '\0';
 				else
@@ -338,7 +331,6 @@ Result<USIZE, Error> Environment::GetOSVersion(Span<CHAR> buffer) noexcept
 				while (*p != '\0' && *p != '\n' && pos < buffer.Size() - 1)
 					buffer.Data()[pos++] = *p++;
 
-				// Trim trailing whitespace
 				while (pos > 0 && (buffer.Data()[pos - 1] == ' ' || buffer.Data()[pos - 1] == '\t'))
 					pos--;
 
@@ -546,7 +538,6 @@ Result<USIZE, Error> Environment::GetHostname(Span<CHAR> buffer) noexcept
 			System::Call(SYS_CLOSE, (USIZE)fd);
 			if (bytesRead > 0)
 			{
-				// Trim trailing newline
 				if (buffer.Data()[bytesRead - 1] == '\n')
 					buffer.Data()[bytesRead - 1] = '\0';
 				else
@@ -597,7 +588,6 @@ Result<USIZE, Error> Environment::GetHostname(Span<CHAR> buffer) noexcept
 				System::Call(SYS_CLOSE, (USIZE)fd);
 				if (bytesRead > 0)
 				{
-					// Trim trailing newline
 					if (buffer.Data()[bytesRead - 1] == '\n')
 						buffer.Data()[bytesRead - 1] = '\0';
 					else

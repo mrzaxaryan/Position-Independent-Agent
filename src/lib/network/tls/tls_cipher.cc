@@ -52,7 +52,6 @@ PINT8 TlsCipher::CreateClientRand()
 	{
 		data12.clientRandom[i] = random.Get() & 0xff;
 	}
-	LOG_DEBUG("Client random data created: %p", data12.clientRandom);
 	return (PINT8)data12.clientRandom;
 }
 
@@ -269,7 +268,6 @@ Result<VOID, Error> TlsCipher::ComputeKey(ECC_GROUP ecc, Span<const CHAR> server
 		return Result<VOID, Error>::Err(initResult, Error::TlsCipher_ComputeKeyFailed);
 	}
 
-	LOG_DEBUG("Encoder initialized successfully");
 	return Result<VOID, Error>::Ok();
 }
 
@@ -322,7 +320,6 @@ Result<VOID, Error> TlsCipher::ComputeVerify(TlsBuffer &out, INT32 verifySize, I
 	Memory::Zero(hash, sizeof(hash));
 	Memory::Zero(finished_key, sizeof(finished_key));
 
-	LOG_DEBUG("tls_cipher_compute_verify: Finished verify computation");
 	return Result<VOID, Error>::Ok();
 }
 

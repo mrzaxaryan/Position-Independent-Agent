@@ -43,9 +43,9 @@ struct JpegBuffer
 
 struct Graphics
 {
-    PRGB currentScreenshot; // Pointer to the current screenshot
-    PRGB screenshot;        // Pointer to the screenshot of the display
-    PUCHAR bidiff;          // Pointer to the binary difference data
+    PRGB currentScreenshot;
+    PRGB screenshot;
+    PUCHAR bidiff;
     PRGB rectBuffer;        // Reusable buffer for rectangle extraction
     JpegBuffer jpegBuffer;  // Reusable JPEG encoding buffer (persists across frames)
 
@@ -109,8 +109,8 @@ struct Graphics
 
 struct GraphicsList
 {
-    Graphics *graphicsArray; // Array of Graphics structures
-    UINT32 count;            // Number of Graphics structures in the array
+    Graphics *graphicsArray;
+    UINT32 count;
 
     GraphicsList() : graphicsArray(nullptr), count(0) {}
 
@@ -180,7 +180,7 @@ struct Rectangle
     UINT32 x;
     UINT32 y;
     UINT32 sizeOfData; // Size of the jpeg data in bytes
-    UINT8 *data;       // Pointer to hold the JPEG data.
+    UINT8 *data;
 
     Rectangle(UINT32 x, UINT32 y, UINT32 sizeOfData, UINT8 *data)
         : x(x), y(y), sizeOfData(sizeOfData), data(data) {}

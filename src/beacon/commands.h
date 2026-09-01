@@ -4,7 +4,6 @@
 #include "shell.h"
 #include "screen_capture.h"
 
-// Enum to represent the different command types that can be handled by the agent.
 // Values are wire opcodes — shell commands first, then FileSystem, then Display,
 // Exit last.
 enum CommandType : UINT8
@@ -127,7 +126,6 @@ inline constexpr CapabilityMask BuildCapabilityMask() noexcept
     return mask;
 }
 
-// Status codes for command handling results
 enum StatusCode : UINT32
 {
     StatusSuccess = 0,
@@ -135,7 +133,6 @@ enum StatusCode : UINT32
     StatusUnknownCommand = 2
 };
 
-// Context structure to hold state information for command handlers, such as shell and screen capture context instances
 struct Context
 {
     ShellManager shellManager;
@@ -155,7 +152,6 @@ struct Context
     }
 };
 
-// Type definition for command handler function pointers
 using CommandHandler = VOID (*)(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context);
 
 // Command handler function declarations
