@@ -735,7 +735,7 @@ USIZE Environment::GetProcessArchitecture(Span<CHAR> buffer) noexcept
 #elif defined(ARCHITECTURE_ARMV7A)
 	StringUtils::Copy(buffer, Span<const CHAR>("armv7a"));
 #else
-	buffer.Data()[0] = ' ';
+	buffer.Data()[0] = '\0';
 	return 0;
 #endif
 	return StringUtils::Length(buffer.Data());
