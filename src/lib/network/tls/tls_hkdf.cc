@@ -100,7 +100,6 @@ VOID TlsHKDF::Expand(Span<UCHAR> output, Span<const UCHAR> secret, Span<const UC
 
 		if (!outlen)
 		{
-			LOG_DEBUG("Finished HKDF expansion, no more output needed");
 			break;
 		}
 	}

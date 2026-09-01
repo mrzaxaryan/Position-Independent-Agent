@@ -64,9 +64,7 @@ struct Error
 	{
 		None = 0, // no error / empty slot
 
-		// -------------------------
 		// Socket errors (1–3, 5–7, 9–11, 13–15, 39)
-		// -------------------------
 		Socket_CreateFailed_Open = 1,		 // ZwCreateFile / socket() failed
 		Socket_BindFailed_EventCreate = 2,	 // ZwCreateEvent failed (Windows only)
 		Socket_BindFailed_Bind = 3,			 // AFD_BIND / bind() syscall failed
@@ -81,9 +79,7 @@ struct Error
 		Socket_WriteFailed_Send = 15,		 // AFD_SEND / send() syscall failed
 		Socket_WaitFailed = 39,				 // ZwWaitForSingleObject failed (Windows only)
 
-		// -------------------------
 		// TLS errors (16–22)
-		// -------------------------
 		Tls_OpenFailed_Socket = 16,	   // underlying socket Open() failed
 		Tls_OpenFailed_Handshake = 17, // TLS handshake failed
 		Tls_CloseFailed_Socket = 18,   // underlying socket Close() failed
@@ -92,9 +88,7 @@ struct Error
 		Tls_WriteFailed_NotReady = 21, // connection not established
 		Tls_WriteFailed_Send = 22,	   // SendPacket() failed
 
-		// -------------------------
 		// WebSocket errors (23–32)
-		// -------------------------
 		Ws_TransportFailed = 23,  // TLS/socket transport open failed
 		Ws_DnsFailed = 24,		  // DNS resolution failed
 		Ws_HandshakeFailed = 25,  // HTTP 101 upgrade handshake failed
@@ -106,9 +100,7 @@ struct Error
 		Ws_InvalidFrame = 31,	  // received frame with invalid RSV bits or opcode
 		Ws_FrameTooLarge = 32,	  // received frame exceeds size limit
 
-		// -------------------------
 		// DNS errors (33–38)
-		// -------------------------
 		Dns_ConnectFailed = 33,	 // TLS connection to DNS server failed
 		Dns_QueryFailed = 34,	 // DNS query generation failed
 		Dns_SendFailed = 35,	 // failed to send DNS query
@@ -116,9 +108,7 @@ struct Error
 		Dns_ParseFailed = 37,	 // failed to parse DNS binary response
 		Dns_ResolveFailed = 38,	 // all DNS servers/fallbacks exhausted
 
-		// -------------------------
 		// HTTP errors (40–48)
-		// -------------------------
 		Http_OpenFailed = 40,				// TLS connection open failed
 		Http_CloseFailed = 41,				// TLS connection close failed
 		Http_ReadFailed = 42,				// TLS read failed
@@ -129,9 +119,7 @@ struct Error
 		Http_ReadHeadersFailed_Status = 47, // unexpected HTTP status code
 		Http_ParseUrlFailed = 48,			// URL format invalid
 
-		// -------------------------
 		// FileSystem errors (50–57)
-		// -------------------------
 		Fs_OpenFailed = 50,		   // file open syscall failed
 		Fs_DeleteFailed = 51,	   // file delete syscall failed
 		Fs_ReadFailed = 52,		   // file read syscall failed
@@ -141,9 +129,7 @@ struct Error
 		Fs_PathResolveFailed = 56, // path name resolution failed
 		Fs_SeekFailed = 57,		   // file seek/offset syscall failed
 
-		// -------------------------
 		// Crypto errors (60–63)
-		// -------------------------
 		Ecc_InitFailed = 60,			 // curve not recognized or random gen failed
 		Ecc_ExportKeyFailed = 61,		 // null buffer or insufficient size
 		Ecc_SharedSecretFailed = 62,	 // invalid key format or point at infinity
@@ -151,23 +137,17 @@ struct Error
 		ChaCha20_GenerateKeyFailed = 64, // invalid nonce size in Poly1305 key generation
 		ChaCha20_KeySetupFailed = 65,	 // invalid key size (must be 128 or 256 bits)
 
-		// -------------------------
 		// TlsCipher errors (70–73)
-		// -------------------------
 		TlsCipher_ComputePublicKeyFailed = 70, // ECC key generation failed
 		TlsCipher_ComputePreKeyFailed = 71,	   // premaster key computation failed
 		TlsCipher_ComputeKeyFailed = 72,	   // key derivation failed
 		TlsCipher_DecodeFailed = 73,		   // record decryption failed
 		TlsCipher_ComputeVerifyFailed = 86,	   // verify data computation failed
 
-		// -------------------------
 		// TlsBuffer errors (87)
-		// -------------------------
 		TlsBuffer_AllocationFailed = 87, // buffer growth allocation failed
 
-		// -------------------------
 		// TLS internal errors (74–84)
-		// -------------------------
 		Tls_SendPacketFailed = 74,		 // packet send to socket failed
 		Tls_ClientHelloFailed = 75,		 // ClientHello send failed
 		Tls_ServerHelloFailed = 76,		 // ServerHello processing failed
@@ -181,9 +161,7 @@ struct Error
 		Tls_OnPacketFailed = 84,		 // packet handling failed
 		Tls_ReadFailed_Channel = 85,	 // ReadChannel returned 0 bytes
 
-		// -------------------------
 		// Process errors (90–92)
-		// -------------------------
 		Process_CreateFailed = 90,	  // process creation failed
 		Process_WaitFailed = 91,	  // waiting for process failed
 		Process_TerminateFailed = 92, // process termination failed
@@ -193,9 +171,7 @@ struct Error
 		Pipe_WriteFailed = 113,	    // pipe write failed
 		Pipe_CreateFailed = 114,    // pipe creation failed
 		Pipe_NotSupported = 115,    // pipe not supported on this platform
-		// -------------------------
 		// Misc errors (95–101)
-		// -------------------------
 		Base64_DecodeFailed = 95,			// Base64 decoding failed
 		String_ParseIntFailed = 96,			// integer parsing failed
 		String_ParseFloatFailed = 97,		// float parsing failed
@@ -209,49 +185,35 @@ struct Error
 		Kernel32_CreatePipeFailed = 108,	// CreatePipe failed
 		Kernel32_PeekNamedPipeFailed = 109, // PeekNamedPipe failed
 
-		// -------------------------
 		// Factory creation errors (102–104)
-		// -------------------------
 		Tls_CreateFailed = 102,	 // Socket::Create() failed in TlsClient::Create()
 		Http_CreateFailed = 103, // URL parse / DNS / TLS create failed in HttpClient::Create()
 		Ws_CreateFailed = 104,	 // URL parse / DNS / TLS create failed in WebSocketClient::Create()
 
-		// -------------------------
 		// JPEG encoder errors (110)
-		// -------------------------
 		Jpeg_InvalidParams = 110, // invalid image dimensions or component count
 
-		// -------------------------
 		// Image processing errors (111)
-		// -------------------------
 		Image_AllocationFailed = 111, // memory allocation failed during contour finding
 
-		// -------------------------
 		// Screen errors (120–122)
-		// -------------------------
 		Screen_GetDevicesFailed = 120, // display enumeration failed
 		Screen_CaptureFailed = 121,	   // screen capture failed
 		Screen_AllocFailed = 122,	   // memory allocation failed
 
-		// -------------------------
 		// PTY errors (130–132)
-		// -------------------------
 		Pty_CreateFailed = 130,	  // PTY creation failed
 		Pty_ReadFailed = 131,	  // PTY read failed
 		Pty_WriteFailed = 132,	  // PTY write failed
 		Pty_NotSupported = 133,	  // PTY not supported on this platform
 
-		// -------------------------
 		// ShellProcess errors (135–137)
-		// -------------------------
 		ShellProcess_CreateFailed = 135, // shell process creation failed
 		ShellProcess_NotSupported = 136, // shell not supported on this platform
 		ShellProcess_ReadFailed = 137,	  // shell read failed
 		Shell_NoFreeSlot = 138,          // all shell slots in use
 
-		// -------------------------
 		// Kernel32 WOW64 query errors (139–141)
-		// -------------------------
 		Kernel32_ExportUnavailable = 139, // IsWow64Process2/IsWow64Process export not present (pre-Windows 10 1511 / pre-XP)
 		Kernel32_IsWow64ProcessFailed = 140, // IsWow64Process query failed
 		Kernel32_IsWow64Process2Failed = 141, // IsWow64Process2 query failed

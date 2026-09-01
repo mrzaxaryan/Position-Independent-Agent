@@ -93,10 +93,7 @@ static BOOL IsDotEntry(const DirectoryEntry &entry)
 
 VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
-    LOG_INFO("Handling GetDirectoryContentCommand.");
-    // Buffer to hold the path from command
     WCHAR directoryPath[1024];
-    // Decoding path from command
     DecodeWirePath(command, commandLength, directoryPath, 1024);
     LOG_INFO("GetDirectoryContent: %ws", directoryPath);
 
@@ -149,13 +146,10 @@ VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHA
 // Reads a chunk of file content
 VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
-    LOG_INFO("Handling GetFileContentCommand.");
-    // Getting parameters from command buffer: read count, offset and file path
     UINT64 readCount = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
     LOG_INFO("Reading file content with offset: %llu and count: %llu.", offset, readCount);
 
-    // Decoding file path from command buffer
     USIZE pathOffset = sizeof(UINT64) + sizeof(UINT64);
     WCHAR filePath[1024];
     DecodeWirePath(command + pathOffset, commandLength > pathOffset ? commandLength - pathOffset : 0, filePath, 1024);
@@ -195,14 +189,11 @@ VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR res
 // Computes the SHA-256 hash of a file chunk
 VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, [[maybe_unused]] Context *context)
 {
-    LOG_INFO("Handling GetFileChunkHashCommand.");
-    // Getting parameters from command buffer: chunk size, offset and file path
     UINT64 chunkSize = *(PUINT64)(command);
     UINT64 offset = *(PUINT64)(command + sizeof(UINT64));
 
     LOG_INFO("Computing file chunk hash with offset: %llu and chunk size: %llu.", offset, chunkSize);
 
-    // Decoding file path from command buffer
     USIZE hashPathOffset = sizeof(UINT64) + sizeof(UINT64);
     WCHAR filePath[1024];
     DecodeWirePath(command + hashPathOffset, commandLength > hashPathOffset ? commandLength - hashPathOffset : 0, filePath, 1024);
@@ -264,7 +255,6 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
 // reuse it for Read/Write/Close.
 VOID Handle_OpenShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    LOG_INFO("Handling OpenShellCommand.");
 
     auto openResult = context->shellManager.Open();
     if (!openResult)
@@ -285,7 +275,6 @@ VOID Handle_OpenShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
 // Writes a command to a shell. Payload: [shellId:8][UTF-8 input + '\0']
 VOID Handle_WriteShellCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    LOG_INFO("Handling WriteShellCommand.");
 
     if (commandLength < sizeof(ShellId))
     {
@@ -328,7 +317,6 @@ VOID Handle_WriteShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
 // Reads a chunk of data from a shell's stdout. Payload: [shellId:8]
 VOID Handle_ReadShellCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    LOG_INFO("Handling ReadShellCommand.");
 
     if (commandLength < sizeof(ShellId))
     {
@@ -368,7 +356,6 @@ VOID Handle_ReadShellCommand(PCHAR command, USIZE commandLength, PPCHAR response
 // Close a shell instance. Payload: [shellId:8]. Idempotent.
 VOID Handle_CloseShellCommand(PCHAR command, USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    LOG_INFO("Handling CloseShellCommand.");
 
     if (commandLength < sizeof(ShellId))
     {
@@ -412,7 +399,6 @@ VOID Handle_ExitCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE c
 // Gets the list of display devices and their information
 VOID Handle_GetDisplaysCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    LOG_INFO("Handling GetDisplaysCommand.");
 
     if (context->screenCaptureContext == nullptr)
         context->screenCaptureContext = new ScreenCaptureContext();
@@ -465,7 +451,6 @@ VOID JpegCallback(PVOID context, PVOID data, INT32 size)
 // Gets a screenshot of the specified display device
 VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
-    // Retrieve parameters from command buffer
     auto displayIndex = *(PUINT32)(command);
     auto quality = *(PUINT32)(command + sizeof(UINT32));
     auto isFullScreen = *(PUINT32)(command + sizeof(UINT32) + sizeof(UINT32));
@@ -475,7 +460,6 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
     if (context->screenCaptureContext == nullptr)
         context->screenCaptureContext = new ScreenCaptureContext();
 
-    // Getting the device list
     if (context->screenCaptureContext->DeviceList.Count == 0)
     {
         auto displays = Screen::GetDevices();
@@ -526,7 +510,6 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
         // We are sending the full JPEG data in one segment, so the segment count is 1
         UINT32 countOfSegments = 1;
 
-        // Write response
         *responseLength += sizeof(countOfSegments) + sizeof(rect.x) + sizeof(rect.y) + sizeof(rect.sizeOfData) + graphics.jpegBuffer.offset;
         *response = new CHAR[*responseLength];
         *(PUINT32)*response = StatusCode::StatusSuccess;
@@ -605,7 +588,6 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
     // Copy the current screenshot to the screenshot buffer for the next comparison
     Memory::Copy(graphics.screenshot, graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB));
 
-    // Construct the response
     *(PUINT32)(packet + sizeof(UINT32)) = countOfRects;
     *response = packet;
     *responseLength = offset;

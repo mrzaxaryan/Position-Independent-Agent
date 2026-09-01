@@ -44,7 +44,6 @@ static VOID EFIAPI EmptyNotify([[maybe_unused]] EFI_EVENT Event, [[maybe_unused]
 	if (ctx.NetworkInitialized)
 		return Result<VOID, Error>::Ok();
 
-	LOG_DEBUG("Socket: InitializeNetworkInterface starting...");
 
 	EFI_BOOT_SERVICES *bs = ctx.SystemTable->BootServices;
 	// Initialize GUID field-by-field to avoid .rdata section on aarch64
@@ -117,7 +116,6 @@ static VOID EFIAPI EmptyNotify([[maybe_unused]] EFI_EVENT Event, [[maybe_unused]
 	if (ctx.DhcpConfigured)
 		return Result<VOID, Error>::Ok();
 
-	LOG_DEBUG("Socket: InitializeDhcp starting...");
 
 	EFI_BOOT_SERVICES *bs = ctx.SystemTable->BootServices;
 	// Initialize GUID field-by-field to avoid .rdata section on aarch64
@@ -178,7 +176,6 @@ static VOID EFIAPI EmptyNotify([[maybe_unused]] EFI_EVENT Event, [[maybe_unused]
 		}
 
 		// Wait for DHCP to complete - check for gateway assignment
-		LOG_DEBUG("Socket: Waiting for DHCP (up to 5s)...");
 		for (UINT32 retry = 0; retry < 50; retry++)
 		{
 			DataSize = 0;
@@ -205,7 +202,6 @@ static VOID EFIAPI EmptyNotify([[maybe_unused]] EFI_EVENT Event, [[maybe_unused]
 	// One-time delay for TCP stack readiness on first network init
 	if (ctx.DhcpConfigured && !ctx.TcpStackReady)
 	{
-		LOG_DEBUG("Socket: First connection - waiting 500ms for TCP stack readiness...");
 		bs->Stall(500000); // 500ms
 		ctx.TcpStackReady = true;
 	}
@@ -255,7 +251,6 @@ Result<Socket, Error> Socket::Create(const IPAddress &ipAddress, UINT16 portNum)
 	EFI_BOOT_SERVICES *bs = ctx->SystemTable->BootServices;
 	UefiSocketContext *sockCtx = nullptr;
 
-	LOG_DEBUG("Socket: Allocating socket context...");
 	EFI_STATUS allocStatus = bs->AllocatePool(EfiLoaderData, sizeof(UefiSocketContext), (PVOID *)&sockCtx);
 	if (EFI_ERROR_CHECK(allocStatus))
 	{
@@ -364,7 +359,6 @@ Result<Socket, Error> Socket::Create(const IPAddress &ipAddress, UINT16 portNum)
 			Error::Socket_CreateFailed_Open);
 	}
 
-	LOG_DEBUG("Socket: CreateChild...");
 	sockCtx->TcpHandle = nullptr;
 	EFI_STATUS ccStatus = sockCtx->ServiceBinding->CreateChild(sockCtx->ServiceBinding, &sockCtx->TcpHandle);
 	if (EFI_ERROR_CHECK(ccStatus))
@@ -375,7 +369,6 @@ Result<Socket, Error> Socket::Create(const IPAddress &ipAddress, UINT16 portNum)
 		return Result<Socket, Error>::Err(Error::Uefi((UINT32)ccStatus), Error::Socket_CreateFailed_Open);
 	}
 
-	LOG_DEBUG("Socket: OpenProtocol TCP interface...");
 	PVOID TcpInterface = nullptr;
 	EFI_STATUS opStatus = bs->OpenProtocol(sockCtx->TcpHandle, &ProtocolGuid, &TcpInterface, ctx->ImageHandle, nullptr, EFI_OPEN_PROTOCOL_GET_PROTOCOL);
 	if (EFI_ERROR_CHECK(opStatus))
@@ -394,7 +387,6 @@ Result<Socket, Error> Socket::Create(const IPAddress &ipAddress, UINT16 portNum)
 
 	Socket sock(ipAddress, portNum);
 	sock.handle = sockCtx;
-	LOG_DEBUG("Socket: Create completed successfully");
 	return Result<Socket, Error>::Ok(static_cast<Socket &&>(sock));
 }
 
@@ -404,7 +396,6 @@ Result<Socket, Error> Socket::Create(const IPAddress &ipAddress, UINT16 portNum)
 
 Result<VOID, Error> Socket::Open()
 {
-	LOG_DEBUG("Socket: Open() starting...");
 
 	UefiSocketContext *sockCtx = (UefiSocketContext *)handle;
 	if (sockCtx->IsConnected)
@@ -424,7 +415,6 @@ Result<VOID, Error> Socket::Open()
 	if (!dhcpResult)
 		return Result<VOID, Error>::Err(dhcpResult, Error::Socket_OpenFailed_Connect);
 
-	LOG_DEBUG("Socket: Creating connect event...");
 	EFI_EVENT ConnectEvent;
 	EFI_STATUS efiStatus = bs->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, EmptyNotify, nullptr, &ConnectEvent);
 	if (EFI_ERROR_CHECK(efiStatus))
@@ -440,7 +430,6 @@ Result<VOID, Error> Socket::Open()
 
 	if (sockCtx->IsIPv6)
 	{
-		LOG_DEBUG("Socket: Configuring TCP6...");
 		EFI_TCP6_CONFIG_DATA ConfigData;
 		Memory::Zero(&ConfigData, sizeof(ConfigData));
 		ConfigData.HopLimit = 64;
@@ -460,7 +449,6 @@ Result<VOID, Error> Socket::Open()
 				Error::Socket_OpenFailed_Connect);
 		}
 		sockCtx->IsConfigured = true;
-		LOG_DEBUG("Socket: TCP6 configured, connecting...");
 
 		EFI_TCP6_CONNECTION_TOKEN ConnectToken;
 		Memory::Zero(&ConnectToken, sizeof(ConnectToken));
@@ -487,7 +475,6 @@ Result<VOID, Error> Socket::Open()
 	}
 	else
 	{
-		LOG_DEBUG("Socket: Configuring TCP4...");
 		EFI_TCP4_CONFIG_DATA ConfigData;
 		Memory::Zero(&ConfigData, sizeof(ConfigData));
 		ConfigData.TimeToLive = 64;
@@ -518,7 +505,6 @@ Result<VOID, Error> Socket::Open()
 				Error::Socket_OpenFailed_Connect);
 		}
 		sockCtx->IsConfigured = true;
-		LOG_DEBUG("Socket: TCP4 configured, connecting...");
 
 		EFI_TCP4_CONNECTION_TOKEN ConnectToken;
 		Memory::Zero(&ConnectToken, sizeof(ConnectToken));
@@ -596,7 +582,6 @@ Result<VOID, Error> Socket::Close()
 
 		if (sockCtx->IsConfigured)
 		{
-			LOG_DEBUG("Socket: TCP6 unconfiguring...");
 			[[maybe_unused]] EFI_STATUS cfgStatus = sockCtx->Tcp6->Configure(sockCtx->Tcp6, nullptr);
 			LOG_DEBUG("Socket: TCP6 Configure(nullptr) returned 0x%lx", (UINT64)cfgStatus);
 		}
@@ -629,13 +614,11 @@ Result<VOID, Error> Socket::Close()
 
 		if (sockCtx->IsConfigured)
 		{
-			LOG_DEBUG("Socket: TCP4 unconfiguring...");
 			[[maybe_unused]] EFI_STATUS cfgStatus = sockCtx->Tcp4->Configure(sockCtx->Tcp4, nullptr);
 			LOG_DEBUG("Socket: TCP4 Configure(nullptr) returned 0x%lx", (UINT64)cfgStatus);
 		}
 	}
 
-	LOG_DEBUG("Socket: CloseProtocol on TcpHandle...");
 	// Initialize GUIDs field-by-field to avoid .rdata section
 	EFI_GUID ProtocolGuid;
 	EFI_GUID ServiceBindingGuid;
@@ -696,7 +679,6 @@ Result<VOID, Error> Socket::Close()
 	[[maybe_unused]] EFI_STATUS closeStatus = bs->CloseProtocol(sockCtx->TcpHandle, &ProtocolGuid, ctx->ImageHandle, nullptr);
 	LOG_DEBUG("Socket: CloseProtocol returned 0x%lx", (UINT64)closeStatus);
 
-	LOG_DEBUG("Socket: DestroyChild...");
 	[[maybe_unused]] EFI_STATUS destroyStatus = sockCtx->ServiceBinding->DestroyChild(sockCtx->ServiceBinding, sockCtx->TcpHandle);
 	LOG_DEBUG("Socket: DestroyChild returned 0x%lx", (UINT64)destroyStatus);
 
@@ -706,7 +688,6 @@ Result<VOID, Error> Socket::Close()
 	LOG_DEBUG("Socket: FreePool...");
 	bs->FreePool(sockCtx);
 	handle = nullptr;
-	LOG_DEBUG("Socket: Close() completed");
 	return Result<VOID, Error>::Ok();
 }
 

@@ -268,7 +268,6 @@ Result<VOID, Error> Socket::Open()
 			Error::Socket_OpenFailed_Connect);
 	}
 
-	LOG_DEBUG("Open: connected successfully\n");
 	return Result<VOID, Error>::Ok();
 }
 

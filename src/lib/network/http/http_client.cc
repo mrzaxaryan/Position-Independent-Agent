@@ -145,7 +145,6 @@ Result<VOID, Error> HttpClient::SendPostRequest(PCCHAR host, PCCHAR path, Span<c
 	pos = AppendStr(requestSpan, pos, host);
 	pos = AppendStr(requestSpan, pos, "\r\nContent-Length: ");
 
-	// Convert data.Size() to string
 	CHAR lenStr[16];
 	StringUtils::UIntToStr((UINT32)data.Size(), Span<CHAR>(lenStr));
 

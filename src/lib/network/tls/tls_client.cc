@@ -371,14 +371,12 @@ Result<VOID, Error> TlsClient::OnServerHelloDone()
 		LOG_DEBUG("Failed to send Client Key Exchange for client: %p", this);
 		return Result<VOID, Error>::Err(r, Error::Tls_ServerHelloDoneFailed);
 	}
-	LOG_DEBUG("Client Key Exchange sent successfully for client: %p", this);
 	r = SendChangeCipherSpec();
 	if (!r)
 	{
 		LOG_DEBUG("Failed to send Change Cipher Spec for client: %p", this);
 		return Result<VOID, Error>::Err(r, Error::Tls_ServerHelloDoneFailed);
 	}
-	LOG_DEBUG("Change Cipher Spec sent successfully for client: %p", this);
 	crypto.SetEncoding(true);
 	r = SendClientFinished();
 	if (!r)
@@ -386,7 +384,6 @@ Result<VOID, Error> TlsClient::OnServerHelloDone()
 		LOG_DEBUG("Failed to send Client Finished for client: %p", this);
 		return Result<VOID, Error>::Err(r, Error::Tls_ServerHelloDoneFailed);
 	}
-	LOG_DEBUG("Client Finished sent successfully for client: %p", this);
 
 	return Result<VOID, Error>::Ok();
 }
@@ -411,7 +408,6 @@ Result<VOID, Error> TlsClient::VerifyFinished(TlsBuffer &reader)
 		LOG_DEBUG("Finished verification failed for client: %p, expected size: %d, actual size: %d", this, verify.GetSize(), server_finished_size);
 		return Result<VOID, Error>::Err(Error::Tls_VerifyFinishedFailed);
 	}
-	LOG_DEBUG("Finished verification succeeded for client: %p", this);
 	return Result<VOID, Error>::Ok();
 }
 
@@ -429,14 +425,12 @@ Result<VOID, Error> TlsClient::OnServerFinished()
 		LOG_DEBUG("Failed to send Change Cipher Spec for client: %p", this);
 		return Result<VOID, Error>::Err(ret, Error::Tls_ServerFinishedFailed);
 	}
-	LOG_DEBUG("Change Cipher Spec sent successfully for client: %p", this);
 	auto r = SendClientFinished();
 	if (!r)
 	{
 		LOG_DEBUG("Failed to send Client Finished for client: %p", this);
 		return Result<VOID, Error>::Err(r, Error::Tls_ServerFinishedFailed);
 	}
-	LOG_DEBUG("Client Finished sent successfully for client: %p", this);
 	crypto.ResetSequenceNumber();
 	auto r2 = crypto.ComputeKey(ECC_NONE, Span<const CHAR>(), Span<CHAR>(finished_hash, CIPHER_HASH_SIZE));
 	if (!r2)
@@ -445,7 +439,6 @@ Result<VOID, Error> TlsClient::OnServerFinished()
 		return Result<VOID, Error>::Err(r2, Error::Tls_ServerFinishedFailed);
 	}
 
-	LOG_DEBUG("Server Finished processed successfully for client: %p", this);
 	return Result<VOID, Error>::Ok();
 }
 
@@ -565,7 +558,6 @@ Result<VOID, Error> TlsClient::OnPacket(INT32 packetType, INT32 version, TlsBuff
 					LOG_DEBUG("Failed to verify Finished for client: %p", this);
 					return Result<VOID, Error>::Err(r, Error::Tls_OnPacketFailed);
 				}
-				LOG_DEBUG("Server Finished verified successfully for client: %p", this);
 				crypto.UpdateHash(Span<const CHAR>(reader_sig.GetBuffer(), reader_sig.GetSize()));
 				auto r2 = OnServerFinished();
 				if (!r2)
@@ -573,7 +565,6 @@ Result<VOID, Error> TlsClient::OnPacket(INT32 packetType, INT32 version, TlsBuff
 					LOG_DEBUG("Failed to process Server Finished for client: %p", this);
 					return Result<VOID, Error>::Err(r2, Error::Tls_OnPacketFailed);
 				}
-				LOG_DEBUG("Server Finished processed successfully for client: %p", this);
 			}
 		}
 		else if (packetType == CONTENT_CHANGECIPHERSPEC)
@@ -721,7 +712,6 @@ Result<VOID, Error> TlsClient::Open()
 		LOG_DEBUG("Failed to send Client Hello for client: %p", this);
 		return Result<VOID, Error>::Err(helloResult, Error::Tls_OpenFailed_Handshake);
 	}
-	LOG_DEBUG("Client Hello sent successfully for client: %p", this);
 
 	while (stateIndex < 6)
 	{

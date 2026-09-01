@@ -219,7 +219,6 @@ Result<Process, Error> Process::Create(
 
 	if (pid == 0)
 	{
-		// Child process
 		BOOL hasRedirect = (stdinFd != -1 || stdoutFd != -1 || stderrFd != -1);
 
 		if (hasRedirect)
@@ -232,7 +231,6 @@ Result<Process, Error> Process::Create(
 				(VOID)System::Call(SYS_IOCTL, (USIZE)stdinFd, TIOCSCTTY, 0);
 #endif
 
-			// Redirect each fd that was specified
 			if (stdinFd != -1 && PosixDup2(stdinFd, STDIN_FILENO) < 0)
 				System::Call(SYS_EXIT, 1);
 			if (stdoutFd != -1 && PosixDup2(stdoutFd, STDOUT_FILENO) < 0)
@@ -263,18 +261,15 @@ Result<Process, Error> Process::Create(
 			}
 		}
 
-		// Build envp (empty environment)
 		USIZE envp[1];
 		envp[0] = 0;
 
 		// Execute — does not return on success
 		System::Call(SYS_EXECVE, (USIZE)path, (USIZE)args, (USIZE)envp);
 
-		// If execve returned, exit child
 		System::Call(SYS_EXIT, 1);
 	}
 
-	// Parent — return Process with child PID
 	return Result<Process, Error>::Ok(Process(pid));
 }
 

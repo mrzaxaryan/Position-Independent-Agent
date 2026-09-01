@@ -58,7 +58,6 @@ static BOOL CompareEnvName(const WCHAR *wide, const CHAR *narrow) noexcept
 		narrow++;
 	}
 
-	// After name, should be '='
 	return *wide == L'=';
 }
 
@@ -69,14 +68,12 @@ USIZE Environment::GetVariable(const CHAR *name, Span<CHAR> buffer) noexcept
 		return 0;
 	}
 
-	// Get PEB
 	PPEB peb = GetCurrentPEB();
 	if (peb == nullptr || peb->ProcessParameters == nullptr)
 	{
 		return 0;
 	}
 
-	// Get extended process parameters with Environment field
 	RTL_USER_PROCESS_PARAMETERS_EX *params = (RTL_USER_PROCESS_PARAMETERS_EX *)peb->ProcessParameters;
 	PWCHAR envBlock = params->Environment;
 
@@ -89,7 +86,6 @@ USIZE Environment::GetVariable(const CHAR *name, Span<CHAR> buffer) noexcept
 	// Format: NAME=VALUE\0NAME=VALUE\0...\0\0
 	while (*envBlock != L'\0')
 	{
-		// Check if this is the variable we're looking for
 		if (CompareEnvName(envBlock, name))
 		{
 			// Find the '=' and skip past it
@@ -100,9 +96,8 @@ USIZE Environment::GetVariable(const CHAR *name, Span<CHAR> buffer) noexcept
 			}
 			if (*value == L'=')
 			{
-				value++; // Skip the '='
+				value++;
 
-				// Copy value to buffer (convert wide to narrow)
 				USIZE len = 0;
 				while (*value != L'\0' && len < buffer.Size() - 1)
 				{
@@ -114,15 +109,13 @@ USIZE Environment::GetVariable(const CHAR *name, Span<CHAR> buffer) noexcept
 			}
 		}
 
-		// Skip to next variable
 		while (*envBlock != L'\0')
 		{
 			envBlock++;
 		}
-		envBlock++; // Skip the null terminator
+		envBlock++;
 	}
 
-	// Variable not found
 	buffer[0] = '\0';
 	return 0;
 }
