@@ -673,6 +673,7 @@ Result<IPAddress, Error> DnsClient::GoogleResolve(Span<const CHAR> host, DnsReco
  */
 Result<IPAddress, Error> DnsClient::Resolve(Span<const CHAR> host, DnsRecordType dnstype)
 {
+	LOG_DEBUG("Resolve(host: %s) called", host.Data());
 
 	auto result = CloudflareResolve(host, dnstype);
 	if (!result)

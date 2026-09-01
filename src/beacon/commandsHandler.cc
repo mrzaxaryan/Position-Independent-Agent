@@ -93,6 +93,7 @@ VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHA
 {
     WCHAR directoryPath[1024];
     DecodeWirePath(command, commandLength, directoryPath, 1024);
+    LOG_INFO("GetDirectoryContent: %ws", directoryPath);
 
     auto result = DirectoryIterator::Create(directoryPath);
     if (!result)
@@ -143,6 +144,7 @@ VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR res
     USIZE pathOffset = sizeof(UINT64) + sizeof(UINT64);
     WCHAR filePath[1024];
     DecodeWirePath(command + pathOffset, commandLength > pathOffset ? commandLength - pathOffset : 0, filePath, 1024);
+    LOG_INFO("GetFileContent: %ws offset=%llu count=%llu", filePath, offset, readCount);
 
     auto openResult = File::Open(filePath, File::ModeRead);
     if (!openResult)
@@ -180,6 +182,7 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
     USIZE hashPathOffset = sizeof(UINT64) + sizeof(UINT64);
     WCHAR filePath[1024];
     DecodeWirePath(command + hashPathOffset, commandLength > hashPathOffset ? commandLength - hashPathOffset : 0, filePath, 1024);
+    LOG_INFO("GetFileChunkHash: %ws chunkSize=%llu offset=%llu", filePath, chunkSize, offset);
 
     auto openResult = File::Open(filePath, File::ModeRead);
     if (!openResult)
@@ -260,6 +263,7 @@ VOID Handle_WriteShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
     Memory::Copy(&shellId, command, sizeof(shellId));
     PCHAR input = command + sizeof(ShellId);
     USIZE inputLength = commandLength - sizeof(ShellId);
+    LOG_INFO("WriteShell: id=%llu bytes=%llu", shellId, (UINT64)inputLength);
 
     Shell *shell = context->shellManager.Get(shellId);
     if (shell == nullptr)
@@ -352,6 +356,7 @@ VOID Handle_CloseShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
 // targets (on UEFI, ExitProcess() maps to EfiResetShutdown and powers off).
 VOID Handle_ExitCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE commandLength, PPCHAR response, PUSIZE responseLength, Context *context)
 {
+    LOG_INFO("Exit: operator requested agent termination");
     // Acknowledge so the operator knows the exit was received and will be honored.
     *responseLength = sizeof(UINT32);
     *response = new CHAR[*responseLength];
@@ -412,6 +417,7 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
     auto displayIndex = *(PUINT32)(command);
     auto quality = *(PUINT32)(command + sizeof(UINT32));
     auto isFullScreen = *(PUINT32)(command + sizeof(UINT32) + sizeof(UINT32));
+    LOG_INFO("GetScreenshot: display=%u quality=%u fullScreen=%u", displayIndex, quality, isFullScreen);
 
     if (context->screenCaptureContext == nullptr)
         context->screenCaptureContext = new ScreenCaptureContext();

@@ -265,6 +265,7 @@ static BOOL PtyOpenPair(SSIZE &masterFd, SSIZE &slaveFd)
 	}
 #endif
 
+	LOG_DEBUG("PTY: opening slave %s", slavePath);
 	slaveFd = PtyOpen(slavePath, O_RDWR | O_NOCTTY);
 	if (slaveFd < 0)
 	{

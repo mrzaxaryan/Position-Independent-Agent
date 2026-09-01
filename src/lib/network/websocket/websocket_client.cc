@@ -18,6 +18,7 @@
 Result<VOID, Error> WebSocketClient::Open(PCCHAR path, Span<const CHAR> extraHeaders)
 {
 	BOOL isSecure = tlsContext.IsSecure();
+	LOG_DEBUG("Opening WebSocket client to %s:%u%s (secure: %s)", hostName, port, path, isSecure ? "true" : "false");
 
 	auto openResult = tlsContext.Open();
 

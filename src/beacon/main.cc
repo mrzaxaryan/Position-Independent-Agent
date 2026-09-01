@@ -225,6 +225,7 @@ INT32 start()
 
             if (commandType < CommandType::CommandTypeCount && commandHandlers[commandType])
             {
+                LOG_INFO("Command %s (payload %u bytes)", CommandTypeName(commandType), (UINT32)commandLength);
                 commandHandlers[commandType](command, commandLength, &response, &responseLength, &context);
             }
             else
@@ -235,6 +236,8 @@ INT32 start()
                 *(PUINT32)response = StatusCode::StatusUnknownCommand;
             }
 
+            LOG_INFO("Command %s completed: status=%u response=%u bytes",
+                      CommandTypeName(commandType), *(PUINT32)response, (UINT32)responseLength);
             auto writeResult = wsClient.Write(Span<const CHAR>(response, responseLength), WebSocketOpcode::Binary);
             delete[] response;
 
