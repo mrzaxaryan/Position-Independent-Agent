@@ -110,6 +110,7 @@ Result<VOID, Error> DirectoryIterator::Next()
 	currentEntry.Size = fileInfo->FileSize;
 	currentEntry.IsDirectory = (fileInfo->Attribute & EFI_FILE_DIRECTORY) != 0;
 	currentEntry.IsDrive = false;
+	currentEntry.VolumeSerial = 0;
 	currentEntry.IsHidden = (fileInfo->Attribute & EFI_FILE_HIDDEN) != 0;
 	currentEntry.IsSystem = (fileInfo->Attribute & EFI_FILE_SYSTEM) != 0;
 	currentEntry.IsReadOnly = (fileInfo->Attribute & EFI_FILE_READ_ONLY) != 0;

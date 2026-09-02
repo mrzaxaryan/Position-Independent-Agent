@@ -141,7 +141,15 @@ ZwQueryDirectoryFile(FileHandle, Event, ApcRoutine, ApcContext, IoStatusBlock,
 
 ### ZwQueryVolumeInformationFile
 
-Query volume/device information for a file handle. **5 arguments.** Used to determine the device type (disk, network, CD-ROM, etc.).
+Query volume/device information for a file handle. **5 arguments:**
+
+```
+ZwQueryVolumeInformationFile(FileHandle, IoStatusBlock, FsInformation, Length, FsInformationClass)
+```
+
+- `FsInformationClass` — an `FS_INFORMATION_CLASS` value (distinct from `FILE_INFORMATION_CLASS_DIR`):
+  - `FileFsVolumeInformation` (1) — volume serial, label, creation time (`FILE_FS_VOLUME_INFORMATION`; variable-length label, pass a buffer larger than the struct and expect `STATUS_BUFFER_OVERFLOW` when the label does not fit — the fixed header is still filled)
+  - `FileFsDeviceInformation` (4) — device type (disk, network, CD-ROM, etc.; `FILE_FS_DEVICE_INFORMATION`)
 
 ---
 

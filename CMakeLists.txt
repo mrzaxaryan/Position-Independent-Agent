@@ -40,10 +40,16 @@ include(${CMAKE_SOURCE_DIR}/cmake/Common.cmake)
 # =============================================================================
 # Build metadata
 # =============================================================================
+# BUILD_NUMBER / COMMIT_HASH stay CACHE variables: CI injects real values.
+# API_VERSION / NAME_ID are normal variables: they are protocol constants that
+# must track the wire structs in this source tree, so a stale CMakeCache.txt in
+# an old build tree (or an external -D override) must not pin a wrong value —
+# an X-Agent-Api-Version header reporting a mismatched version silently
+# desyncs the C2 parser.
 set(BUILD_NUMBER "0" CACHE STRING "Agent build number")
 set(COMMIT_HASH "00000000" CACHE STRING "Agent commit hash")
-set(API_VERSION "1" CACHE STRING "Agent API version")
-set(NAME_ID "0" CACHE STRING "Agent name identifier")
+set(API_VERSION "2")
+set(NAME_ID "0")
 list(APPEND PIR_DEFINES
     AGENT_BUILD_NUMBER=${BUILD_NUMBER}
     AGENT_COMMIT_HASH="${COMMIT_HASH}"

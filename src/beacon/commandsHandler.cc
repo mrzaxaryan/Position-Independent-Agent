@@ -29,6 +29,7 @@ struct WireDirectoryEntry
     BOOL IsHidden;
     BOOL IsSystem;
     BOOL IsReadOnly;
+    UINT64 VolumeSerial;
 };
 #pragma pack(pop)
 
@@ -46,6 +47,7 @@ static VOID ToWireEntry(const DirectoryEntry &src, WireDirectoryEntry &dst)
     dst.IsHidden = src.IsHidden;
     dst.IsSystem = src.IsSystem;
     dst.IsReadOnly = src.IsReadOnly;
+    dst.VolumeSerial = src.VolumeSerial;
 }
 
 static USIZE DecodeWirePath(PCHAR command, USIZE commandLength, WCHAR *widePath, USIZE widePathSize)

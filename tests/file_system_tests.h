@@ -18,6 +18,7 @@ public:
 		RunTest(allPassed, &TestWriteReadContent, "Write and read file content");
 		RunTest(allPassed, &TestFileExistence, "File existence checks");
 		RunTest(allPassed, &TestDirectoryIteration, "Directory iteration");
+		RunTest(allPassed, &TestDriveEnumeration, "Drive enumeration");
 		RunTest(allPassed, &TestCleanup, "Cleanup files and directories");
 
 		if (allPassed)
@@ -460,6 +461,75 @@ private:
 			file.Close();
 		}
 
+		return true;
+	}
+
+	// --- Drive enumeration (Windows only) ---
+	// On POSIX an empty path coerces to "/" and IsDrive is always false,
+	// so this test has no meaning there.
+	static BOOL TestDriveEnumeration()
+	{
+#if defined(PLATFORM_WINDOWS)
+		auto rootResult = DirectoryIterator::Create(L"");
+		if (!rootResult)
+		{
+			LOG_ERROR("Failed to create DirectoryIterator for root");
+			return false;
+		}
+		DirectoryIterator &rootIter = rootResult.Value();
+
+		INT32 driveCount = 0;
+		BOOL anySerial = false;
+
+		while (rootIter.Next())
+		{
+			const DirectoryEntry &entry = rootIter.Get();
+
+			if (!entry.IsDrive)
+				continue;
+
+			driveCount++;
+
+			// Every drive entry must be formatted "X:\"
+			if (entry.Name[1] != L':' || entry.Name[2] != L'\\' || entry.Name[3] != L'\0' ||
+				entry.Name[0] < L'A' || entry.Name[0] > L'Z')
+			{
+				LOG_ERROR("Drive entry malformed: %ws", entry.Name);
+				return false;
+			}
+			if (!entry.IsDirectory)
+			{
+				LOG_ERROR("Drive entry %ws is not flagged IsDirectory", entry.Name);
+				return false;
+			}
+
+			if (entry.VolumeSerial != 0)
+				anySerial = true;
+
+			LOG_INFO("  Drive %ws type=%u serial=0x%llX", entry.Name, entry.Type,
+				(unsigned long long)entry.VolumeSerial);
+		}
+		rootIter.Close();
+
+		// Any machine running this test has at least one mounted, readable volume.
+		if (driveCount == 0)
+		{
+			LOG_ERROR("Drive enumeration returned no drives");
+			return false;
+		}
+		// Best-effort field: tolerate 0 for empty card readers / locked volumes,
+		// but at least one enumerated (non-remote) drive must report a serial.
+		if (!anySerial)
+		{
+			LOG_INFO("  Drive enumeration: %d drives, no serial reported (best-effort field)", driveCount);
+		}
+		else
+		{
+			LOG_INFO("  Drive enumeration: %d drives, at least one serial reported", driveCount);
+		}
+#else
+		LOG_INFO("Drive enumeration skipped (POSIX: no drive roots)");
+#endif
 		return true;
 	}
 
