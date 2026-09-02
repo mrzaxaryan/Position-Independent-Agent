@@ -163,6 +163,20 @@ private:
 					LOG_ERROR("Post-consume live bytes incorrect");
 					passed = false;
 				}
+				// Over-consuming must clamp to a reset, not wrap: with
+				// ReadPos > 0, a count near the USIZE maximum would overflow
+				// the ReadPos + bytes sum and corrupt the cursor instead of
+				// resetting the queue.
+				if (passed)
+				{
+					q.Consume(~(USIZE)0);
+					if (q.GetSize() != 0 || q.ReadPos != 0 || q.Size != 0)
+					{
+						LOG_ERROR("Over-consume did not reset (live=%u ReadPos=%u Size=%u)",
+							(UINT32)q.GetSize(), (UINT32)q.ReadPos, (UINT32)q.Size);
+						passed = false;
+					}
+				}
 			}
 
 			if (passed)

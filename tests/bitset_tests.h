@@ -92,6 +92,22 @@ private:
 				LOG_ERROR("Init() on initialized bitset returned true");
 				passed = false;
 			}
+			// A bit count near the USIZE maximum must fail allocation, not wrap
+			// the Ceil(bitCount / 8) computation down to zero and report Ok with
+			// no backing bytes (any Set() would then write out of bounds)
+			{
+				Bitset huge;
+				if (huge.Init(~(USIZE)0))
+				{
+					LOG_ERROR("Init(USIZE max) reported Ok — byte count wrapped");
+					passed = false;
+				}
+				else if (huge.Data != nullptr || huge.BitCount != 0)
+				{
+					LOG_ERROR("Failed Init(USIZE max) left state dirty");
+					passed = false;
+				}
+			}
 
 			if (passed)
 				LOG_INFO("  PASSED: Init allocates zeroed storage");
