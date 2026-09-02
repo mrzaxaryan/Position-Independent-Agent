@@ -77,12 +77,15 @@ Result<VOID, Error> TlsBuffer::CheckSize(INT32 appendSize)
 
 	// Delegate the grow-and-copy to the core container: the new capacity keeps
 	// TlsBuffer's original sizing (4x the request, floored at 256 bytes).
-	// Only the live bytes are carried over — the dead prefix is dropped.
-	UINT32 newLen = (UINT32)(size + appendSize) * 4;
+	// Only the live bytes are carried over, and the sizing uses the
+	// post-compaction footprint so the dead prefix does not inflate the
+	// new allocation.
+	UINT32 liveNeed = (UINT32)(size - startPos) + (UINT32)appendSize;
+	UINT32 newLen = liveNeed * 4;
 	if (newLen < 256)
 		newLen = 256;
-	if (newLen < (UINT32)(size + appendSize))
-		newLen = (UINT32)(size + appendSize); // INT32 overflow guard
+	if (newLen < liveNeed)
+		newLen = liveNeed; // *4 overflow guard
 
 	Buffer<CHAR> grown;
 	if (!grown.Init(newLen) || !grown.Append(Span<const CHAR>(buffer + startPos, (USIZE)(size - startPos))))
