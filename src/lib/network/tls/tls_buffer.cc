@@ -114,7 +114,11 @@ VOID TlsBuffer::Consume(INT32 bytes)
 {
 	if (bytes <= 0)
 		return;
-	if (startPos + bytes >= size)
+	// Compare against the live size, not startPos + bytes: with startPos > 0
+	// the sum can overflow INT32 for a large byte count (signed overflow is UB,
+	// and a wrapped value would skip the reset below), while size - startPos
+	// cannot overflow because startPos <= size always holds.
+	if (bytes >= size - startPos)
 	{
 		// Everything consumed: reset to an empty buffer, keep the allocation
 		size = 0;
