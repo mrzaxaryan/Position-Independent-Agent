@@ -111,10 +111,13 @@ struct Bitset
 	{
 		if (Data)
 			return Result<VOID, Error>::Err(Error::Bitset_InvalidState);
-		Data = new UINT8[(bitCount + 7) / 8];
+		if (bitCount > ((USIZE)-1) - 7)
+			return Result<VOID, Error>::Err(Error::Bitset_InvalidState); // overflow
+		USIZE byteCount = (bitCount + 7) / 8;
+		Data = new UINT8[byteCount];
 		if (!Data)
 			return Result<VOID, Error>::Err(Error::Bitset_AllocationFailed);
-		Memory::Zero(Data, (bitCount + 7) / 8);
+		Memory::Zero(Data, byteCount);
 		BitCount = bitCount;
 		return Result<VOID, Error>::Ok();
 	}
