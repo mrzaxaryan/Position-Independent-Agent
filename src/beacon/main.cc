@@ -213,6 +213,19 @@ INT32 start()
             UINT8 commandType = command[0];
             command++;
             USIZE commandLength = readResult.Value().Length - sizeof(UINT8);
+
+            // Correlation id: every command arrives as [opcode][corrId:u32le][payload...].
+            // Strip it here (handlers see only their historical payload) and echo it in the
+            // reply after the status: [status:u32le][corrId:u32le][body...]. Id 0 means
+            // unmatched/absent — echoed verbatim.
+            UINT32 correlationId = 0;
+            if (commandLength >= sizeof(UINT32))
+            {
+                Memory::Copy(&correlationId, command, sizeof(correlationId));
+                command += sizeof(UINT32);
+                commandLength -= sizeof(UINT32);
+            }
+
             LOG_INFO("Message #%u received: command=%s (0x%02x), payload_length=%u, ws_opcode=%d",
                      messageCount, CommandTypeName(commandType), (UINT32)commandType,
                      (UINT32)commandLength, (INT32)readResult.Value().Opcode);
@@ -234,6 +247,20 @@ INT32 start()
                           (UINT32)commandType, (UINT32)(CommandType::CommandTypeCount - 1));
                 response = new CHAR[responseLength];
                 *(PUINT32)response = StatusCode::StatusUnknownCommand;
+            }
+
+            // Splice the echoed correlation id between status and body so every handler's
+            // response layout stays untouched.
+            {
+                PCHAR wire = new CHAR[responseLength + sizeof(UINT32)];
+                Memory::Copy(wire, response, sizeof(UINT32));
+                Memory::Copy(wire + sizeof(UINT32), &correlationId, sizeof(correlationId));
+                if (responseLength > sizeof(UINT32))
+                    Memory::Copy(wire + sizeof(UINT32) + sizeof(UINT32),
+                                 response + sizeof(UINT32), responseLength - sizeof(UINT32));
+                delete[] response;
+                response = wire;
+                responseLength += sizeof(UINT32);
             }
 
             LOG_DEBUG("Sending response (%u bytes) to server", (UINT32)responseLength);
