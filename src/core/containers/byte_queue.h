@@ -302,6 +302,8 @@ struct ByteQueue
 	 */
 	constexpr Span<CHAR> GetLiveBuffer() const
 	{
+		if (!Data)
+			return Span<CHAR>();
 		return Span<CHAR>(Data + ReadPos, Size - ReadPos);
 	}
 };
