@@ -238,6 +238,8 @@ public:
 	{
 		if (str == nullptr)
 			return nullptr;
+		if (offset > maxSize)
+			return nullptr;
 
 		USIZE length = 0;
 		while (str[length] != '\0')
@@ -246,9 +248,7 @@ public:
 		if (length > maxSize - offset)
 			return nullptr;
 
-		for (USIZE i = 0; i < length; i++)
-			*(address + offset + i) = (UINT8)str[i];
-
+		Memory::Copy(address + offset, str, length);
 		offset += length;
 		return address;
 	}
