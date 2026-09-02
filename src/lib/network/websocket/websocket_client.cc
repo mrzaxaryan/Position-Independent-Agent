@@ -429,8 +429,13 @@ Result<WebSocketMessage, Error> WebSocketClient::Read()
 			{
 				if (message.Data)
 				{
-					USIZE newLength = message.Length + (USIZE)frame.Length;
-					if (newLength < message.Length)
+					// Reassemble the fragments into a growable buffer, then hand
+					// ownership of the exact accumulated array to the message's
+					// out-param fields (the caller deletes[] message.Data).
+					Buffer<CHAR> assembled;
+					if (!assembled.Init(message.Length) ||
+						!assembled.Append(Span<const CHAR>(message.Data, message.Length)) ||
+						!assembled.Append(Span<const CHAR>(frame.Data, (USIZE)frame.Length)))
 					{
 						delete[] frame.Data;
 						frame.Data = nullptr;
@@ -438,20 +443,10 @@ Result<WebSocketMessage, Error> WebSocketClient::Read()
 						message.Data = nullptr;
 						break;
 					}
-					PCHAR tempBuffer = new CHAR[newLength];
-					if (!tempBuffer)
-					{
-						delete[] frame.Data;
-						frame.Data = nullptr;
-						delete[] message.Data;
-						message.Data = nullptr;
-						break;
-					}
-					Memory::Copy(tempBuffer, message.Data, message.Length);
-					Memory::Copy(tempBuffer + message.Length, frame.Data, (USIZE)frame.Length);
+					USIZE assembledLength = assembled.Size;
 					delete[] message.Data;
-					message.Data = tempBuffer;
-					message.Length = newLength;
+					message.Data = assembled.Release();
+					message.Length = assembledLength;
 					delete[] frame.Data;
 					frame.Data = nullptr;
 				}

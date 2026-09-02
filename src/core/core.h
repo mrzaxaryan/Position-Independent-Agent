@@ -18,6 +18,7 @@
  * - Hash algorithms (DJB2, Base64)
  * - Encoding utilities (UTF-16)
  * - Network types (IP address, UUID)
+ * - Owning containers (Vector, Buffer, Bitset, ByteQueue)
  *
  * @note All components in the Core layer are designed to be position-independent
  * and do not generate .rdata section dependencies.
@@ -82,6 +83,14 @@
 /// @{
 #include "core/binary/binary_reader.h"
 #include "core/binary/binary_writer.h"
+/// @}
+
+/// @name Containers
+/// @{
+#include "core/containers/vector.h"
+#include "core/containers/buffer.h"
+#include "core/containers/bitset.h"
+#include "core/containers/byte_queue.h"
 /// @}
 
 /** @} */ // end of core group

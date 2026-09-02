@@ -16,7 +16,10 @@
 
 /// @name Containers
 /// @{
-#include "lib/vector.h"
+#include "core/containers/vector.h"
+#include "core/containers/buffer.h"
+#include "core/containers/bitset.h"
+#include "core/containers/byte_queue.h"
 /// @}
 
 /// @name Cryptography

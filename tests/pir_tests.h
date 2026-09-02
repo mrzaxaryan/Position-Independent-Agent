@@ -8,6 +8,9 @@
  *   ArrayStorageTests      - Compile-time array storage tests
  *   Base64Tests            - Base64 encoding/decoding tests
  *   BinaryIOTests          - Binary reader/writer tests
+ *   BitsetTests            - Bitset container tests
+ *   BufferTests            - Buffer container tests
+ *   ByteQueueTests         - ByteQueue container tests
  *   Djb2Tests              - Hash function tests
  *   DnsTests               - DNS resolution tests (DoT, DoH JSON, DoH binary)
  *   DoubleTests            - Floating-point tests
@@ -59,6 +62,9 @@
 #include "array_storage_tests.h"
 #include "base64_tests.h"
 #include "binary_io_tests.h"
+#include "bitset_tests.h"
+#include "buffer_tests.h"
+#include "byte_queue_tests.h"
 #include "djb2_tests.h"
 #include "dns_tests.h"
 #include "double_tests.h"
@@ -80,6 +86,7 @@
 #include "string_formatter_tests.h"
 #include "string_tests.h"
 #include "tls_tests.h"
+#include "tls_buffer_tests.h"
 #include "uuid_tests.h"
 #include "vector_tests.h"
 #include "websocket_tests.h"
@@ -95,6 +102,10 @@ static BOOL RunPIRTests()
 	LOG_INFO("");
 
 	// CORE - Types
+	RunTestSuite<BinaryIOTests>(allPassed);
+	RunTestSuite<BitsetTests>(allPassed);
+	RunTestSuite<BufferTests>(allPassed);
+	RunTestSuite<ByteQueueTests>(allPassed);
 	RunTestSuite<DoubleTests>(allPassed);
 	RunTestSuite<IPAddressTests>(allPassed);
 	RunTestSuite<ResultTests>(allPassed);
@@ -105,7 +116,6 @@ static BOOL RunPIRTests()
 	// CORE - Strings and Algorithms
 	RunTestSuite<ArrayStorageTests>(allPassed);
 	RunTestSuite<Base64Tests>(allPassed);
-	RunTestSuite<BinaryIOTests>(allPassed);
 	RunTestSuite<Djb2Tests>(allPassed);
 	RunTestSuite<PrngTests>(allPassed);
 	RunTestSuite<StringFormatterTests>(allPassed);
@@ -126,6 +136,10 @@ static BOOL RunPIRTests()
 #endif
 	RunTestSuite<RandomTests>(allPassed);
 	RunTestSuite<ScreenTests>(allPassed);
+
+	// RUNTIME - TLS buffer mechanics (pure memory logic, no sockets involved,
+	// so it also runs on MIPS)
+	RunTestSuite<TlsBufferTests>(allPassed);
 
 	// RUNTIME - Cryptography
 	RunTestSuite<EccTests>(allPassed);

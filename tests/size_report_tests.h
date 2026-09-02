@@ -44,7 +44,7 @@ private:
 
 	static BOOL TestPrintSortedSizes()
 	{
-		constexpr INT32 MAX_ENTRIES = 40;
+		constexpr INT32 MAX_ENTRIES = 45;
 		SizeEntry entries[MAX_ENTRIES];
 		INT32 count = 0;
 
@@ -56,6 +56,11 @@ private:
 		{ auto n = "BinaryReader";    CopyName(entries[count++], (PCCHAR)n, sizeof(BinaryReader)); }
 		{ auto n = "BinaryWriter";    CopyName(entries[count++], (PCCHAR)n, sizeof(BinaryWriter)); }
 		{ auto n = "StringFormatter::Arg"; CopyName(entries[count++], (PCCHAR)n, sizeof(StringFormatter::Argument)); }
+		{ auto n = "Vector<INT32>";   CopyName(entries[count++], (PCCHAR)n, sizeof(Vector<INT32>)); }
+		{ auto n = "Buffer<UINT8>";   CopyName(entries[count++], (PCCHAR)n, sizeof(Buffer<UINT8>)); }
+		{ auto n = "Buffer<CHAR>";    CopyName(entries[count++], (PCCHAR)n, sizeof(Buffer<CHAR>)); }
+		{ auto n = "Bitset";          CopyName(entries[count++], (PCCHAR)n, sizeof(Bitset)); }
+		{ auto n = "ByteQueue";       CopyName(entries[count++], (PCCHAR)n, sizeof(ByteQueue)); }
 
 		// ── PLATFORM layer ──
 		{ auto n = "SockAddr";        CopyName(entries[count++], (PCCHAR)n, sizeof(SockAddr)); }

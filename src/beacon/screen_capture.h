@@ -6,12 +6,18 @@ struct JpegBuffer
     PUINT8 outputBuffer = nullptr;
     UINT32 size = 0;
     UINT32 offset = 0;
+    // Set when an allocation failed mid-encode. JpegCallback cannot report an
+    // error (JpegEncoder::Encode takes a void callback), so the flag carries
+    // the failure to the caller, which must check it after Encode() and
+    // discard the truncated output.
+    BOOL allocationFailed = false;
 
     /// @brief Reset offset for reuse without freeing the underlying buffer
     /// @return void
     VOID Reset()
     {
         offset = 0;
+        allocationFailed = false;
     }
 
     /// @brief Check if the buffer is initialized and ready for use
@@ -25,7 +31,13 @@ struct JpegBuffer
     /// @return void
     VOID Initialize(UINT32 initSize){
         if(!isInitialized()){
-            outputBuffer = new UINT8[initSize];
+            PUINT8 buffer = new UINT8[initSize];
+            if (buffer == nullptr)
+            {
+                allocationFailed = true;
+                return;
+            }
+            outputBuffer = buffer;
             size = initSize;
             offset = 0;
         }
