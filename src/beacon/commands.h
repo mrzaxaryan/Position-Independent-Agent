@@ -63,9 +63,9 @@ enum CommandType : UINT8
 #define AGENT_NAME_ID 0
 #endif
 
-// NOTE: build metadata (ApiVersion, AgentNameId, CommitHash, BuildNumber,
-// Is64Bit) is no longer a wire struct — it travels on the WebSocket upgrade
-// request as X-Agent-* HTTP headers, built in main.cc (BuildIdentityHeaders).
+// NOTE: build metadata (ApiVersion, AgentNameId, CommitHash, BuildNumber)
+// is no longer a wire struct — it travels on the WebSocket upgrade request
+// as X-Agent-* HTTP headers, built in main.cc (BuildIdentityHeaders).
 
 /**
  * @brief Feature categories advertised in the identity capability mask header.

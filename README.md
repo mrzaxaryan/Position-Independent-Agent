@@ -391,15 +391,8 @@ beacon supports.
 | `AgentPlatform` | `CHAR[32]`   | OS target (`windows`, `linux`, `macos`, etc.) — compile-time        |
 | `OSVersion`     | `CHAR[128]`  | Runtime OS version (`Windows 10.0 Build 19045`, `Linux 6.1.0`)     |
 
-`AgentBuildInfo` layout (packed) — sent first so the C2 can identify the agent and packet structure immediately:
 
-| Field          | Type        | Description                                      |
-|----------------|-------------|--------------------------------------------------|
-| `ApiVersion`   | `UINT32`    | Agent API version (currently `2`; bumped on breaking protocol changes) |
-| `AgentNameId`  | `UINT32`    | Agent implementation identifier (`AGENT_NAME_ID`, currently `0` = PIA) |
-| `CommitHash`   | `CHAR[9]`   | Short git commit hash (8 hex chars + null)        |
-| `BuildNumber`  | `UINT32`    | Auto-incrementing build number (git commit count) |
-| `Is64Bit`      | `BOOL`      | `true` iff this agent binary is 64-bit (`sizeof(void*) == 8`); agent pointer width, not OS |
+`AgentBuildInfo` is **gone** — build metadata (ApiVersion, AgentNameId, CommitHash, BuildNumber) now travels on the WebSocket upgrade as `X-Agent-*` HTTP headers (built in `main.cc BuildIdentityHeaders`; there is no bitness header — the process arch carries the full width, `x86_64`/`aarch64` both being 64-bit). The `SystemInfo` fields above feed those headers too.
 
 `CapabilityMask` layout (packed, 8 bytes = 64 bits, LSB-first per byte):
 
