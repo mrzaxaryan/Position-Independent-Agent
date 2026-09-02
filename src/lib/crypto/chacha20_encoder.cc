@@ -55,7 +55,13 @@ VOID ChaCha20Encoder::Encode(TlsBuffer &out, Span<const CHAR> packet, Span<const
 	const UCHAR *sequence = aad.Data() + TLS_RECORD_HEADER_SIZE;
 
 	UINT32 counter = 1;
-	out.AppendSize((INT32)packet.Size() + POLY1305_TAGLEN);
+	// Grow the output first: AppendSize failure (allocation) must abort before
+	// the tag write below, whose pointer arithmetic assumes the bytes are there
+	if (out.AppendSize((INT32)packet.Size() + POLY1305_TAGLEN) < 0)
+	{
+		LOG_ERROR("ChaCha20 Encode: output buffer growth failed for %llu-byte packet", (UINT64)packet.Size());
+		return;
+	}
 	UCHAR polyKey[POLY1305_KEYLEN];
 	this->localCipher.IVUpdate(this->localNonce, Span<const UINT8, 8>(sequence), (UINT8 *)&counter);
 	this->localCipher.Poly1305Key(polyKey);

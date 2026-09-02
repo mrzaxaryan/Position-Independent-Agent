@@ -7,7 +7,7 @@
  */
 
 #include "lib/image/image_processor.h"
-#include "lib/vector.h"
+#include "core/containers/vector.h"
 
 // ============================================================
 //  Absolute value helper (no CRT dependency)
@@ -124,42 +124,37 @@ static BOOL IsTileDirty(
 	UINT32 tilesX = (width + tileSize - 1) / tileSize;
 	UINT32 tilesY = (height + tileSize - 1) / tileSize;
 
-	// Build a dirty tile grid
+	// Build a dirty tile grid (1 bit per tile instead of a heap BOOL[])
 	UINT32 tileCount = tilesX * tilesY;
-	BOOL *dirty = new BOOL[tileCount];
-	if (dirty == nullptr)
+	Bitset dirty;
+	if (!dirty.Init(tileCount))
 		return Result<DirtyRectResult, Error>::Err(Error::Image_AllocationFailed);
 
 	for (UINT32 ty = 0; ty < tilesY; ++ty)
 		for (UINT32 tx = 0; tx < tilesX; ++tx)
-			dirty[ty * tilesX + tx] = IsTileDirty(biDiff.Data(), width, height, tx, ty, tileSize);
+		{
+			if (IsTileDirty(biDiff.Data(), width, height, tx, ty, tileSize))
+				dirty.Set(ty * tilesX + tx);
+		}
 
 	// Merge dirty tiles into rectangles using a greedy row-span approach:
 	// 1. For each tile row, find horizontal runs of dirty tiles
 	// 2. Try to extend each run downward through consecutive tile rows with matching X span
 	Vector<DirtyRect> rects;
 	if (!rects.Init())
-	{
-		delete[] dirty;
 		return Result<DirtyRectResult, Error>::Err(Error::Image_AllocationFailed);
-	}
 
-	// visited[ty * tilesX + tx] = true means this tile is already part of a rect
-	BOOL *visited = new BOOL[tileCount];
-	if (visited == nullptr)
-	{
-		delete[] dirty;
+	// visited bit (ty * tilesX + tx) set means this tile is already part of a rect
+	Bitset visited;
+	if (!visited.Init(tileCount))
 		return Result<DirtyRectResult, Error>::Err(Error::Image_AllocationFailed);
-	}
-	for (UINT32 i = 0; i < tileCount; ++i)
-		visited[i] = false;
 
 	for (UINT32 ty = 0; ty < tilesY; ++ty)
 	{
 		UINT32 tx = 0;
 		while (tx < tilesX)
 		{
-			if (!dirty[ty * tilesX + tx] || visited[ty * tilesX + tx])
+			if (!dirty.Test(ty * tilesX + tx) || visited.Test(ty * tilesX + tx))
 			{
 				++tx;
 				continue;
@@ -167,7 +162,7 @@ static BOOL IsTileDirty(
 
 			// Find the end of the horizontal run of dirty tiles
 			UINT32 runStart = tx;
-			while (tx < tilesX && dirty[ty * tilesX + tx] && !visited[ty * tilesX + tx])
+			while (tx < tilesX && dirty.Test(ty * tilesX + tx) && !visited.Test(ty * tilesX + tx))
 				++tx;
 			UINT32 runEnd = tx; // exclusive
 
@@ -178,7 +173,7 @@ static BOOL IsTileDirty(
 				BOOL canExtend = true;
 				for (UINT32 cx = runStart; cx < runEnd; ++cx)
 				{
-					if (!dirty[rowEnd * tilesX + cx] || visited[rowEnd * tilesX + cx])
+					if (!dirty.Test(rowEnd * tilesX + cx) || visited.Test(rowEnd * tilesX + cx))
 					{
 						canExtend = false;
 						break;
@@ -192,7 +187,7 @@ static BOOL IsTileDirty(
 			// Mark all tiles in this rectangle as visited
 			for (UINT32 ry = ty; ry < rowEnd; ++ry)
 				for (UINT32 cx = runStart; cx < runEnd; ++cx)
-					visited[ry * tilesX + cx] = true;
+					visited.Set(ry * tilesX + cx);
 
 			// Convert tile coordinates to pixel coordinates
 			UINT32 pixelX = runStart * tileSize;
@@ -216,17 +211,10 @@ static BOOL IsTileDirty(
 				rect.Width = pixelW;
 				rect.Height = pixelH;
 				if (!rects.Add(rect))
-				{
-					delete[] dirty;
-					delete[] visited;
 					return Result<DirtyRectResult, Error>::Err(Error::Image_AllocationFailed);
-				}
 			}
 		}
 	}
-
-	delete[] dirty;
-	delete[] visited;
 
 	DirtyRectResult result;
 	result.Count = (UINT32)rects.Count;

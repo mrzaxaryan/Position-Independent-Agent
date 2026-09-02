@@ -610,6 +610,8 @@ Result<VOID, Error> TlsClient::ProcessReceive()
 	auto checkResult = recvBuffer.CheckSize(4096 * 4);
 	if (!checkResult)
 		return Result<VOID, Error>::Err(checkResult, Error::Tls_ProcessReceiveFailed);
+	// GetBuffer() + GetSize() is the end of the live region, so the socket read
+	// appends after any unconsumed bytes (which CheckSize just made room for)
 	auto readResult = context.Read(Span<CHAR>(recvBuffer.GetBuffer() + recvBuffer.GetSize(), 4096 * 4));
 	if (!readResult)
 	{
@@ -675,13 +677,13 @@ Result<INT32, Error> TlsClient::ReadChannel(Span<CHAR> output)
 			  this, (INT32)output.Size(), channelBuffer.GetSize() - channelBytesRead, channelBytesRead);
 	Memory::Copy(output.Data(), channelBuffer.GetBuffer() + channelBytesRead, movesize);
 	channelBytesRead += movesize;
-	if (((channelBytesRead > (channelBuffer.GetSize() >> 2) * 3) && (channelBuffer.GetSize() > 1024 * 1024)) || (channelBytesRead >= channelBuffer.GetSize()))
-	{
-		LOG_DEBUG("Clearing recv channel for client: %p, readed size: %d, total size: %d",
-				  this, channelBytesRead, channelBuffer.GetSize());
-		channelBuffer.Consume(channelBytesRead);
-		channelBytesRead = 0;
-	}
+	// The channel buffer holds decrypted application data. Consume() is O(1)
+	// and defers the compaction, so a large buffer is not memmoved on every
+	// read; the dead prefix is reclaimed once it exceeds capacity / 2. This
+	// keeps the original watermark's memory/latency trade-off (a 1 MB buffer
+	// must not memmove per record) with the same peak memory.
+	channelBuffer.Consume(channelBytesRead);
+	channelBytesRead = 0;
 	LOG_DEBUG("Read %d bytes from channel for client: %p, new readed size: %d, total size: %d",
 			  movesize, this, channelBytesRead, channelBuffer.GetSize());
 	if (movesize == 0)

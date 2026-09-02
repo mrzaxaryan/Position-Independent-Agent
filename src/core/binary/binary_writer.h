@@ -224,6 +224,35 @@ public:
 		return address;
 	}
 
+	/**
+	 * @brief Write a null-terminated string's bytes (no terminator) and advance
+	 * @param str Null-terminated string to write
+	 * @return Base address on success, nullptr if insufficient space remains
+	 *
+	 * @details Copies characters up to but not including the terminating null,
+	 * so callers control whether a terminator follows. The full length is
+	 * measured first; on overflow nothing is written and the cursor does not
+	 * move, matching the all-or-nothing behaviour of WriteBytes.
+	 */
+	constexpr FORCE_INLINE PVOID WriteString(const CHAR *str)
+	{
+		if (str == nullptr)
+			return nullptr;
+		if (offset > maxSize)
+			return nullptr;
+
+		USIZE length = 0;
+		while (str[length] != '\0')
+			length += 1;
+
+		if (length > maxSize - offset)
+			return nullptr;
+
+		Memory::Copy(address + offset, str, length);
+		offset += length;
+		return address;
+	}
+
 	/// @}
 	/// @name Cursor Control
 	/// @{

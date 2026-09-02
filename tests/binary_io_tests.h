@@ -324,6 +324,101 @@ private:
 			}
 		}
 
+		// --- WriteString ---
+		{
+			UINT8 buf[16];
+			Memory::Zero(buf, sizeof(buf));
+			BinaryWriter writer{Span<UINT8>(buf)};
+
+			writer.WriteString("GET");
+
+			// Bytes only — the terminator must NOT be written
+			BOOL passed = buf[0] == 'G' && buf[1] == 'E' && buf[2] == 'T' && buf[3] == 0x00 &&
+			              writer.GetOffset() == 3;
+
+			if (passed)
+				LOG_INFO("  PASSED: BinaryWriter WriteString");
+			else
+			{
+				LOG_ERROR("  FAILED: BinaryWriter WriteString");
+				allPassed = false;
+			}
+		}
+
+		// --- WriteString empty and interleave ---
+		{
+			UINT8 buf[16];
+			Memory::Zero(buf, sizeof(buf));
+			BinaryWriter writer{Span<UINT8>(buf)};
+
+			// Empty string writes nothing and does not advance
+			writer.WriteString("");
+			BOOL passed = writer.GetOffset() == 0;
+
+			// Interleaving strings and integers keeps the cursor consistent
+			if (passed)
+			{
+				writer.WriteString("HTTP/");
+				writer.WriteU8('.');
+				writer.WriteString("1");
+
+				passed = writer.GetOffset() == 7 &&
+				         buf[0] == 'H' && buf[4] == '/' && buf[5] == '.' && buf[6] == '1';
+			}
+
+			if (passed)
+				LOG_INFO("  PASSED: BinaryWriter WriteString empty and interleave");
+			else
+			{
+				LOG_ERROR("  FAILED: BinaryWriter WriteString empty and interleave");
+				allPassed = false;
+			}
+		}
+
+		// --- WriteString bounds check ---
+		{
+			UINT8 buf[4];
+			Memory::Zero(buf, sizeof(buf));
+			BinaryWriter writer{Span<UINT8>(buf)};
+
+			BOOL passed = true;
+
+			// Exactly 4 bytes fits
+			if (writer.WriteString("abcd") == nullptr)
+				passed = false;
+			if (passed && writer.GetOffset() != 4)
+				passed = false;
+
+			// A 5th byte cannot fit: fails and leaves the cursor untouched
+			if (passed && writer.WriteString("e") != nullptr)
+				passed = false;
+			if (passed && writer.GetOffset() != 4)
+				passed = false;
+
+			// Overflow on a longer string fails without partial writes
+			UINT8 buf2[4];
+			Memory::Zero(buf2, sizeof(buf2));
+			BinaryWriter writer2{Span<UINT8>(buf2)};
+			if (passed && writer2.WriteString("toolong") != nullptr)
+				passed = false;
+			if (passed && writer2.GetOffset() != 0)
+				passed = false;
+			if (passed && !IsAllZeros(Span<const UINT8>(buf2)))
+				passed = false;
+
+			// Null pointer is rejected
+			if (passed && writer2.WriteString(nullptr) != nullptr)
+				passed = false;
+
+			if (passed)
+				LOG_INFO("  PASSED: BinaryWriter WriteString bounds checking");
+			else
+			{
+				LOG_ERROR("  FAILED: BinaryWriter WriteString bounds checking");
+				allPassed = false;
+			}
+		}
+
 		return allPassed;
 	}
 

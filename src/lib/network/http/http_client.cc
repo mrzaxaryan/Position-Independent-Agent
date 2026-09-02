@@ -1,16 +1,7 @@
 #include "lib/network/http/http_client.h"
 #include "lib/network/dns/dns_client.h"
+#include "core/binary/binary_writer.h"
 #include "platform/console/logger.h"
-
-// Helper to append a null-terminated string to a buffer
-static USIZE AppendStr(Span<CHAR> buf, USIZE pos, const CHAR *str) noexcept
-{
-	for (USIZE i = 0; str[i] != '\0' && pos < buf.Size(); i++)
-	{
-		buf[pos++] = str[i];
-	}
-	return pos;
-}
 
 /// @brief Factory method for HttpClient — creates from URL with DNS resolution
 /// @param url URL of the server to connect to (IP address will be resolved from the hostname)
@@ -106,16 +97,20 @@ Result<UINT32, Error> HttpClient::Write(Span<const CHAR> buffer)
 Result<VOID, Error> HttpClient::SendGetRequest(PCCHAR host, PCCHAR path)
 {
 	// Build GET request: "GET <path> HTTP/1.1\r\nHost: <host>\r\nConnection: close\r\n\r\n"
+	// WriteString returns nullptr (cursor unchanged) when it does not fit — a truncated
+	// request must fail loudly, not be sent half-formed.
 	CHAR request[2048];
-	Span<CHAR> requestSpan(request, 2000);
-	USIZE pos = 0;
+	BinaryWriter writer{Span<UINT8>((UINT8 *)request, 2000)};
 
-	pos = AppendStr(requestSpan, pos, "GET ");
-	pos = AppendStr(requestSpan, pos, path);
-	pos = AppendStr(requestSpan, pos, " HTTP/1.1\r\nHost: ");
-	pos = AppendStr(requestSpan, pos, host);
-	pos = AppendStr(requestSpan, pos, "\r\nConnection: close\r\n\r\n");
+	BOOL ok = writer.WriteString("GET ") != nullptr;
+	ok = ok && writer.WriteString(path) != nullptr;
+	ok = ok && writer.WriteString(" HTTP/1.1\r\nHost: ") != nullptr;
+	ok = ok && writer.WriteString(host) != nullptr;
+	ok = ok && writer.WriteString("\r\nConnection: close\r\n\r\n") != nullptr;
+	if (!ok)
+		return Result<VOID, Error>::Err(Error::Http_SendGetFailed);
 
+	USIZE pos = writer.GetOffset();
 	request[pos] = '\0';
 
 	auto r = Write(Span<const CHAR>(request, (UINT32)pos));
@@ -134,24 +129,27 @@ Result<VOID, Error> HttpClient::SendGetRequest(PCCHAR host, PCCHAR path)
 
 Result<VOID, Error> HttpClient::SendPostRequest(PCCHAR host, PCCHAR path, Span<const CHAR> data)
 {
-	// Build POST request with Content-Length
+	// Build POST request with Content-Length.
+	// WriteString returns nullptr (cursor unchanged) when it does not fit — a truncated
+	// request must fail loudly, not be sent half-formed.
 	CHAR request[2048];
-	Span<CHAR> requestSpan(request, 1900);
-	USIZE pos = 0;
+	BinaryWriter writer{Span<UINT8>((UINT8 *)request, 1900)};
 
-	pos = AppendStr(requestSpan, pos, "POST ");
-	pos = AppendStr(requestSpan, pos, path);
-	pos = AppendStr(requestSpan, pos, " HTTP/1.1\r\nHost: ");
-	pos = AppendStr(requestSpan, pos, host);
-	pos = AppendStr(requestSpan, pos, "\r\nContent-Length: ");
+	BOOL ok = writer.WriteString("POST ") != nullptr;
+	ok = ok && writer.WriteString(path) != nullptr;
+	ok = ok && writer.WriteString(" HTTP/1.1\r\nHost: ") != nullptr;
+	ok = ok && writer.WriteString(host) != nullptr;
+	ok = ok && writer.WriteString("\r\nContent-Length: ") != nullptr;
 
 	// Convert data.Size() to string
 	CHAR lenStr[16];
 	StringUtils::UIntToStr((UINT32)data.Size(), Span<CHAR>(lenStr));
+	ok = ok && writer.WriteString(lenStr) != nullptr;
+	ok = ok && writer.WriteString("\r\nConnection: close\r\n\r\n") != nullptr;
+	if (!ok)
+		return Result<VOID, Error>::Err(Error::Http_SendPostFailed);
 
-	pos = AppendStr(requestSpan, pos, lenStr);
-	pos = AppendStr(requestSpan, pos, "\r\nConnection: close\r\n\r\n");
-
+	USIZE pos = writer.GetOffset();
 	request[pos] = '\0';
 
 	// Send headers

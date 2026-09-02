@@ -187,7 +187,7 @@ High-level functionality built on Platform.
 
 **Image** (`src/lib/image/`): 4 files — Baseline JPEG encoder. Binary image differencing and dirty-rectangle detection for incremental screenshots.
 
-**Containers** (`src/lib/`): `vector.h` — Move-only dynamic array. `runtime.h` — Aggregate include.
+**Containers** (`src/core/containers/`): `vector.h` — Move-only dynamic array; `buffer.h` — USIZE-sized dynamic buffer; `bitset.h` — heap bit array; `byte_queue.h` — linear byte queue with deferred compaction. `runtime.h` — Aggregate include.
 
 ---
 

