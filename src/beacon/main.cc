@@ -239,6 +239,12 @@ INT32 start()
             {
                 LOG_DEBUG("Dispatching command %s to handler", CommandTypeName(commandType));
                 commandHandlers[commandType](command, commandLength, &response, &responseLength, &context);
+                if (response == nullptr)
+                {
+                    LOG_ERROR("Command %s produced no response buffer (allocation failure), reconnecting...",
+                              CommandTypeName(commandType));
+                    break;
+                }
                 UINT32 statusCode = *(PUINT32)response;
                 LOG_INFO("Command %s completed: status=%u, response_length=%u",
                          CommandTypeName(commandType), statusCode, (UINT32)responseLength);
@@ -248,6 +254,11 @@ INT32 start()
                 LOG_ERROR("Unknown command type 0x%02x received (max valid: 0x%02x), returning StatusUnknownCommand",
                           (UINT32)commandType, (UINT32)(CommandType::CommandTypeCount - 1));
                 response = new CHAR[responseLength];
+                if (response == nullptr)
+                {
+                    LOG_ERROR("Failed to allocate the unknown-command response, reconnecting...");
+                    break;
+                }
                 *(PUINT32)response = StatusCode::StatusUnknownCommand;
             }
 
@@ -255,6 +266,13 @@ INT32 start()
             // response layout stays untouched.
             {
                 PCHAR wire = new CHAR[responseLength + sizeof(UINT32)];
+                if (wire == nullptr)
+                {
+                    LOG_ERROR("Failed to allocate the wire buffer for %s response, reconnecting...",
+                              CommandTypeName(commandType));
+                    delete[] response;
+                    break;
+                }
                 Memory::Copy(wire, response, sizeof(UINT32));
                 Memory::Copy(wire + sizeof(UINT32), &correlationId, sizeof(correlationId));
                 if (responseLength > sizeof(UINT32))

@@ -97,16 +97,19 @@ public:
 	[[nodiscard]] Result<VOID, Error> CheckSize(INT32 appendSize);
 
 	// Read operations
+	// The read cursor is an offset into the live region [GetBuffer(),
+	// GetBuffer() + GetSize()), so `GetBuffer() + GetReadPosition()` is valid
+	// no matter how large the dead prefix left by Consume() has grown.
 	template <typename T>
 	T Read()
 	{
-		if (readPos + (INT32)sizeof(T) > size)
+		if (readPos + (INT32)sizeof(T) > size - startPos)
 		{
-			readPos = size;
+			readPos = size - startPos;
 			return T{};
 		}
 		T value;
-		Memory::Copy(&value, buffer + readPos, sizeof(T));
+		Memory::Copy(&value, buffer + startPos + readPos, sizeof(T));
 		readPos += sizeof(T);
 		return value;
 	}
@@ -128,7 +131,10 @@ public:
 	// GetBuffer() points at the first LIVE byte, so GetBuffer()+GetSize() is the
 	// append position and GetBuffer()-startPos is the raw allocation.
 	PCHAR GetBuffer() const { return buffer + startPos; }
+	// GetReadPosition() is relative to GetBuffer() (the live start), matching
+	// GetSize(); both are live-region quantities, so GetReadPosition() ==
+	// GetSize() means exhausted.
 	INT32 GetReadPosition() const { return readPos; }
 	VOID AdvanceReadPosition(INT32 sz) { readPos += sz; }
-	VOID ResetReadPos() { readPos = startPos; }
+	VOID ResetReadPos() { readPos = 0; }
 };

@@ -75,6 +75,16 @@ Result<VOID, Error> TlsBuffer::CheckSize(INT32 appendSize)
 	if (!ownsMemory)
 		return Result<VOID, Error>::Err(Error::TlsBuffer_AllocationFailed);
 
+	// The dead prefix may be all that blocks the fit: reclaim it before
+	// deciding to grow, mirroring ByteQueue::CheckSize. Compact() moves the
+	// live bytes within the same allocation; pointers into this buffer must
+	// not be held across this call either way — growth would reallocate them.
+	if ((size - startPos) + appendSize <= capacity)
+	{
+		Compact();
+		return Result<VOID, Error>::Ok();
+	}
+
 	// Delegate the grow-and-copy to the core container: the new capacity keeps
 	// TlsBuffer's original sizing (4x the request, floored at 256 bytes).
 	// Only the live bytes are carried over, and the sizing uses the
@@ -96,9 +106,8 @@ Result<VOID, Error> TlsBuffer::CheckSize(INT32 appendSize)
 	delete[] buffer;
 	buffer = grown.Release();
 	capacity = (INT32)newLen;
-	// The dead prefix is gone: size shrinks to the live byte count and the read
-	// cursor — an absolute index — shifts down with it, exactly like Compact().
-	readPos = (readPos > startPos) ? (readPos - startPos) : 0;
+	// The dead prefix is gone: size shrinks to the live byte count. readPos
+	// needs no adjustment — it is live-relative, exactly like Compact().
 	size -= startPos;
 	startPos = 0;
 	ownsMemory = true;
@@ -127,9 +136,9 @@ VOID TlsBuffer::Consume(INT32 bytes)
 		return;
 	}
 	startPos += bytes;
-	// The read cursor previously reset to 0 because Consume moved data down;
-	// it now resets to the live start instead
-	readPos = startPos;
+	// The consumed bytes are done with, so the read cursor restarts at the
+	// new live start (readPos is live-relative)
+	readPos = 0;
 	if (startPos > (capacity >> 1))
 		Compact();
 }
@@ -146,8 +155,8 @@ VOID TlsBuffer::Compact()
 		Memory::Move(buffer, buffer + dead, live);
 	size = live;
 	startPos = 0;
-	// readPos is an absolute index, so it shifts down by the reclaimed prefix
-	readPos = (readPos > dead) ? (readPos - dead) : 0;
+	// readPos needs no adjustment: it is live-relative, so it still addresses
+	// the same logical byte after the move
 }
 
 /// @brief Read a block of data from the TLS buffer
@@ -155,13 +164,13 @@ VOID TlsBuffer::Compact()
 /// @return void
 VOID TlsBuffer::Read(Span<CHAR> buf)
 {
-	INT32 available = size - readPos;
+	INT32 available = (size - startPos) - readPos;
 	INT32 count = (INT32)buf.Size();
 	// Adjust count if it exceeds available data
 	if (count > available)
 		count = available;
 	if (count > 0)
-		Memory::Copy(buf.Data(), buffer + readPos, count);
+		Memory::Copy(buf.Data(), buffer + startPos + readPos, count);
 	readPos += count;
 }
 
@@ -170,14 +179,15 @@ VOID TlsBuffer::Read(Span<CHAR> buf)
 UINT32 TlsBuffer::ReadU24BE()
 {
 	// Ensure there are at least 3 bytes available to read (24 bits)
-	if (readPos + 3 > size)
+	if (readPos + 3 > size - startPos)
 	{
-		readPos = size;
+		readPos = size - startPos;
 		return 0;
 	}
-	UINT8 b0 = (UINT8)buffer[readPos];
-	UINT8 b1 = (UINT8)buffer[readPos + 1];
-	UINT8 b2 = (UINT8)buffer[readPos + 2];
+	PCHAR p = buffer + startPos + readPos;
+	UINT8 b0 = (UINT8)p[0];
+	UINT8 b1 = (UINT8)p[1];
+	UINT8 b2 = (UINT8)p[2];
 	readPos += 3;
 	return ((UINT32)b0 << 16) | ((UINT32)b1 << 8) | (UINT32)b2;
 }

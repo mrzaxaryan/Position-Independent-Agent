@@ -86,6 +86,7 @@
 #include "string_formatter_tests.h"
 #include "string_tests.h"
 #include "tls_tests.h"
+#include "tls_buffer_tests.h"
 #include "uuid_tests.h"
 #include "vector_tests.h"
 #include "websocket_tests.h"
@@ -135,6 +136,10 @@ static BOOL RunPIRTests()
 #endif
 	RunTestSuite<RandomTests>(allPassed);
 	RunTestSuite<ScreenTests>(allPassed);
+
+	// RUNTIME - TLS buffer mechanics (pure memory logic, no sockets involved,
+	// so it also runs on MIPS)
+	RunTestSuite<TlsBufferTests>(allPassed);
 
 	// RUNTIME - Cryptography
 	RunTestSuite<EccTests>(allPassed);
