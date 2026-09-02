@@ -257,7 +257,8 @@ struct ByteQueue
 	 */
 	VOID Consume(USIZE bytes)
 	{
-		if (ReadPos + bytes >= Size)
+		USIZE live = Size - ReadPos;
+		if (bytes >= live)
 		{
 			ReadPos = 0;
 			Size = 0;
