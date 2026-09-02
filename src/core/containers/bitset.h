@@ -10,7 +10,8 @@
  * Key properties:
  * - RAII: destructor frees the backing array
  * - Move-only: copy is deleted, move transfers ownership
- * - Fallible: Init() returns BOOL (false on allocation failure)
+ * - Fallible: Init() returns Result<VOID, Error> (Err on allocation failure
+ *   or invalid state)
  * - Stack-only: heap allocation of the Bitset itself is deleted
  *
  * @ingroup core
@@ -24,6 +25,7 @@
 
 #include "core/memory/memory.h"
 #include "core/types/primitives.h"
+#include "core/types/result.h"
 
 /**
  * @brief Dynamically sized bit array over a heap UINT8[] backing store
@@ -101,19 +103,20 @@ struct Bitset
 	/**
 	 * @brief Allocate zeroed storage for a number of bits
 	 * @param bitCount Number of bits the set must address
-	 * @return true on success, false on allocation failure or re-init of an initialized set
+	 * @return Ok on success; Err(Bitset_InvalidState) on re-init of an
+	 *         initialized set, Err(Bitset_AllocationFailed) when allocation fails
 	 * @note Allocates Ceil(bitCount / 8) bytes; all bits start cleared
 	 */
-	[[nodiscard]] BOOL Init(USIZE bitCount)
+	[[nodiscard]] Result<VOID, Error> Init(USIZE bitCount)
 	{
 		if (Data)
-			return false;
+			return Result<VOID, Error>::Err(Error::Bitset_InvalidState);
 		Data = new UINT8[(bitCount + 7) / 8];
 		if (!Data)
-			return false;
+			return Result<VOID, Error>::Err(Error::Bitset_AllocationFailed);
 		Memory::Zero(Data, (bitCount + 7) / 8);
 		BitCount = bitCount;
-		return true;
+		return Result<VOID, Error>::Ok();
 	}
 
 	/**

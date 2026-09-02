@@ -17,7 +17,8 @@
  * Key properties:
  * - RAII: destructor frees the backing array (when owned)
  * - Move-only: copy is deleted, move transfers ownership
- * - Fallible: growth members return BOOL (false on allocation failure)
+ * - Fallible: growth members return Result<VOID, Error> (Err on allocation
+ *   failure or invalid state)
  * - Stack-only: heap allocation of the queue itself is deleted
  *
  * Growth and API shape model TlsBuffer so adopting it there is a thin change.
@@ -33,6 +34,7 @@
 
 #include "core/memory/memory.h"
 #include "core/types/primitives.h"
+#include "core/types/result.h"
 #include "core/types/span.h"
 
 /// Minimum capacity the queue grows to (matches TlsBuffer::CheckSize)
@@ -139,59 +141,61 @@ struct ByteQueue
 	/**
 	 * @brief Allocate a backing array of the requested capacity
 	 * @param capacity Byte count to allocate
-	 * @return true on success, false on allocation failure or re-init of a non-empty queue
+	 * @return Ok on success; Err(ByteQueue_InvalidState) on re-init of a non-empty
+	 *         queue, Err(ByteQueue_AllocationFailed) when allocation fails
 	 * @note Size and ReadPos are left at 0 — the queue starts logically empty
 	 */
-	[[nodiscard]] BOOL Init(USIZE capacity)
+	[[nodiscard]] Result<VOID, Error> Init(USIZE capacity)
 	{
 		if (Data)
-			return false;
+			return Result<VOID, Error>::Err(Error::ByteQueue_InvalidState);
 		Data = new CHAR[capacity];
 		if (!Data)
-			return false;
+			return Result<VOID, Error>::Err(Error::ByteQueue_AllocationFailed);
 		Capacity = capacity;
 		Size = 0;
 		ReadPos = 0;
 		OwnsMemory = true;
-		return true;
+		return Result<VOID, Error>::Ok();
 	}
 
 	/**
 	 * @brief Wrap caller-owned storage without taking ownership (read mode)
 	 * @param data Existing bytes to expose as the live region
-	 * @return true on success, false if the queue already holds memory
+	 * @return Ok on success; Err(ByteQueue_InvalidState) if the queue already holds memory
 	 * @note The caller must keep the storage alive; the queue never frees it
 	 */
-	[[nodiscard]] BOOL Wrap(Span<CHAR> data)
+	[[nodiscard]] Result<VOID, Error> Wrap(Span<CHAR> data)
 	{
 		if (Data)
-			return false;
+			return Result<VOID, Error>::Err(Error::ByteQueue_InvalidState);
 		Data = data.Data();
 		Capacity = data.Size();
 		Size = data.Size();
 		ReadPos = 0;
 		OwnsMemory = false;
-		return true;
+		return Result<VOID, Error>::Ok();
 	}
 
 	/**
 	 * @brief Ensure capacity for a number of additional bytes
 	 * @param appendSize Byte count that must fit beyond Size
-	 * @return true on success, false on allocation failure
+	 * @return Ok on success; Err(ByteQueue_InvalidState) on USIZE overflow or on
+	 *         queues that do not own their memory (cannot grow a wrap),
+	 *         Err(ByteQueue_AllocationFailed) when allocation fails
 	 * @note Growth doubles Capacity (minimum 256) until the request fits;
 	 *       the live region is compacted first so growth never copies dead bytes
-	 * @note Fails on queues that do not own their memory (cannot grow a wrap)
 	 */
-	[[nodiscard]] BOOL CheckSize(USIZE appendSize)
+	[[nodiscard]] Result<VOID, Error> CheckSize(USIZE appendSize)
 	{
 		USIZE required = Size + appendSize;
 		if (required < Size)
-			return false; // overflow
+			return Result<VOID, Error>::Err(Error::ByteQueue_InvalidState); // overflow
 		if (required <= Capacity)
-			return true;
+			return Result<VOID, Error>::Ok();
 
 		if (!OwnsMemory)
-			return false;
+			return Result<VOID, Error>::Err(Error::ByteQueue_InvalidState);
 
 		// Drop the dead prefix so the reallocation only carries live bytes, then
 		// re-check: compaction frees the prefix, so growth is sized to what is
@@ -199,48 +203,50 @@ struct ByteQueue
 		Compact();
 		required = Size + appendSize;
 		if (required < Size)
-			return false; // overflow
+			return Result<VOID, Error>::Err(Error::ByteQueue_InvalidState); // overflow
 		if (required <= Capacity)
-			return true;
+			return Result<VOID, Error>::Ok();
 
 		// Seed at the minimum capacity, then double until the request fits.
 		// The floor applies only to the first allocation so a caller that
 		// deliberately Init()ed a small queue keeps its sizing intent.
 		USIZE newCapacity = Capacity ? Capacity * 2 : ByteQueueMinCapacity;
 		if (newCapacity < Capacity)
-			return false; // overflow
+			return Result<VOID, Error>::Err(Error::ByteQueue_InvalidState); // overflow
 		while (newCapacity < required)
 		{
 			USIZE doubled = newCapacity * 2;
 			if (doubled < newCapacity)
-				return false; // overflow
+				return Result<VOID, Error>::Err(Error::ByteQueue_InvalidState); // overflow
 			newCapacity = doubled;
 		}
 
 		CHAR *newData = new CHAR[newCapacity];
 		if (!newData)
-			return false;
+			return Result<VOID, Error>::Err(Error::ByteQueue_AllocationFailed);
 		Memory::Copy(newData, Data, Size);
 		delete[] Data;
 		Data = newData;
 		Capacity = newCapacity;
-		return true;
+		return Result<VOID, Error>::Ok();
 	}
 
 	/**
 	 * @brief Append bytes to the tail, growing if needed
 	 * @param data Bytes to append
-	 * @return true on success, false on allocation failure
+	 * @return Ok on success; Err(ByteQueue_InvalidState) or
+	 *         Err(ByteQueue_AllocationFailed) from growth
 	 */
-	[[nodiscard]] BOOL Append(Span<const CHAR> data)
+	[[nodiscard]] Result<VOID, Error> Append(Span<const CHAR> data)
 	{
 		if (data.Size() == 0)
-			return true;
-		if (!CheckSize(data.Size()))
-			return false;
+			return Result<VOID, Error>::Ok();
+		Result<VOID, Error> check = CheckSize(data.Size());
+		if (!check)
+			return Result<VOID, Error>::Err(check.Error());
 		Memory::Copy(Data + Size, data.Data(), data.Size());
 		Size += data.Size();
-		return true;
+		return Result<VOID, Error>::Ok();
 	}
 
 	/**

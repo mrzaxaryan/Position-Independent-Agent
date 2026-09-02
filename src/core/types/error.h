@@ -255,6 +255,16 @@ struct Error
 		Kernel32_ExportUnavailable = 139, // IsWow64Process2/IsWow64Process export not present (pre-Windows 10 1511 / pre-XP)
 		Kernel32_IsWow64ProcessFailed = 140, // IsWow64Process query failed
 		Kernel32_IsWow64Process2Failed = 141, // IsWow64Process2 query failed
+
+		// -------------------------
+		// Core container errors (142–147)
+		// -------------------------
+		Buffer_AllocationFailed = 142,	 // Buffer backing array allocation failed
+		Buffer_InvalidState = 143,		 // Buffer re-initialized or USIZE size overflow
+		ByteQueue_AllocationFailed = 144,	 // ByteQueue backing array allocation failed
+		ByteQueue_InvalidState = 145,		 // ByteQueue re-initialized, grew a wrapped queue, or USIZE overflow
+		Bitset_AllocationFailed = 146,	 // Bitset backing array allocation failed
+		Bitset_InvalidState = 147,		 // Bitset re-initialized
 	};
 
 	/**
