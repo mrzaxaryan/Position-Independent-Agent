@@ -459,8 +459,12 @@ VOID JpegCallback(PVOID context, PVOID data, INT32 size)
 {
     JpegBuffer *jpegBuffer = (JpegBuffer *)context;
 
-    if (data == nullptr)
-        jpegBuffer->Initialize(size);
+	if (data == nullptr)
+	{
+		jpegBuffer->Initialize(size);
+		if (jpegBuffer->outputBuffer == nullptr)
+			return;
+	}
 
     // Grow the reusable JPEG buffer when this chunk no longer fits.
     // New capacity is max(size * 2, size + needed) so a single large chunk
