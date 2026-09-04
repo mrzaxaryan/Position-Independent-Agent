@@ -236,9 +236,9 @@ USIZE StringUtils::Utf8ToWideLossless(Span<const CHAR> utf8, Span<WCHAR> wide)
 	USIZE wideLen = 0;
 	USIZE i = 0;
 
-	// A 4-byte sequence can expand to two WCHAR (UTF-16 surrogate pair), so
-	// keep two spare slots like Utf8ToWide does.
-	while (i < utf8.Size() && utf8[i] != '\0' && wideLen + 2 < wide.Size())
+	// One slot per unit (plus the NUL); only a UTF-16 surrogate pair needs two,
+	// checked in that branch — a blanket +2 guard truncated 255-char names.
+	while (i < utf8.Size() && utf8[i] != '\0' && wideLen + 1 < wide.Size())
 	{
 		UINT8 byte = (UINT8)utf8[i];
 		UINT32 ch;
@@ -313,12 +313,12 @@ USIZE StringUtils::Utf8ToWideLossless(Span<const CHAR> utf8, Span<WCHAR> wide)
 		{
 			if constexpr (sizeof(WCHAR) >= 4)
 			{
-				// UCS-4: store full codepoint directly
-				wide[wideLen++] = (WCHAR)ch;
+				wide[wideLen++] = (WCHAR)ch; // UCS-4: one unit
 			}
 			else
 			{
-				// UTF-16: encode as surrogate pair
+				if (wideLen + 2 >= wide.Size())
+					break; // no room for a UTF-16 surrogate pair
 				ch -= 0x10000;
 				wide[wideLen++] = (WCHAR)(0xD800 + (ch >> 10));
 				wide[wideLen++] = (WCHAR)(0xDC00 + (ch & 0x3FF));
