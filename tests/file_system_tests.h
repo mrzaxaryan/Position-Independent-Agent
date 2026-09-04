@@ -5,6 +5,9 @@
 #if defined(PLATFORM_LINUX)
 #include "platform/kernel/linux/syscall.h"
 #include "platform/kernel/linux/system.h"
+// Not in the kernel header; x86_64 numbers
+constexpr USIZE SYS_SYMLINK_T = 88;
+constexpr USIZE SYS_MKNOD_T = 133;
 #endif
 
 
@@ -26,6 +29,8 @@ public:
 		RunTest(allPassed, &TestIterationErrorSeparation, "Iteration error separation");
 		RunTest(allPassed, &TestUtf8RoundTripConversion, "UTF-8 lossless conversion round-trip");
 		RunTest(allPassed, &TestLosslessFilenames, "Lossless filename round-trip");
+		RunTest(allPassed, &TestEnumerationCornerCases, "Enumeration corner cases");
+		RunTest(allPassed, &TestLargeDirectory, "Large directory exact count");
 		RunTest(allPassed, &TestDriveEnumeration, "Drive enumeration");
 		RunTest(allPassed, &TestCleanup, "Cleanup files and directories");
 
@@ -934,6 +939,194 @@ private:
 		return (BOOL)RmDir(L"lossless_dir");
 #else
 		LOG_INFO("TestLosslessFilenames skipped on this platform (POSIX-only semantics)");
+		return true;
+#endif
+	}
+
+	// POSIX corner cases: symlinks, special files, odd names, EOF idempotence.
+	static BOOL TestEnumerationCornerCases()
+	{
+#if defined(PLATFORM_LINUX)
+		if (!MkDir(L"corner_dir")) return false;
+		const CHAR base[] = "test_io_root/corner_dir/";
+		constexpr USIZE baseLen = sizeof(base) - 1;
+		CHAR p[512];
+
+		// p = base + tail
+		auto mkpath = [&](PCCHAR tail)
+		{
+			Memory::Copy(p, base, sizeof(base));
+			if (tail == nullptr) return;
+			USIZE n = 0;
+			while (tail[n]) n++;
+			Memory::Copy(p + baseLen, tail, n + 1);
+		};
+
+		BOOL ok = true;
+
+		// Symlink to a directory: must be listed as a non-directory (lstat via NOFOLLOW).
+		mkpath("target"); SSIZE tf = System::Call(SYS_OPENAT, (USIZE)-100, (USIZE)p, 0x40 | 1, 0600);
+		if (tf >= 0) (VOID)System::Call(SYS_CLOSE, (USIZE)tf);
+		mkpath("dirlink"); (VOID)System::Call(SYS_SYMLINK_T, (USIZE)"target", (USIZE)p);
+		// Broken symlink: entry must survive.
+		mkpath("deadlink"); (VOID)System::Call(SYS_SYMLINK_T, (USIZE)"nowhere", (USIZE)p);
+		// FIFO: listed, not a directory, no crash.
+		mkpath("apipe"); (VOID)System::Call(SYS_MKNOD_T, (USIZE)p, 0010000 /* S_IFIFO */, 0666);
+		// Drive-lookalike name: never flagged as a drive on POSIX.
+		mkpath("C:"); auto f = System::Call(SYS_OPENAT, (USIZE)-100, (USIZE)p, 0x40 /* O_CREAT */ | 1 /* O_WRONLY */, 0600);
+		if (f >= 0) (VOID)System::Call(SYS_CLOSE, (USIZE)f);
+		// Hidden file.
+		mkpath(".hidden"); f = System::Call(SYS_OPENAT, (USIZE)-100, (USIZE)p, 0x40 | 1, 0600);
+		if (f >= 0) (VOID)System::Call(SYS_CLOSE, (USIZE)f);
+		// Max-length name (255 bytes).
+		CHAR longName[256];
+		for (INT32 i = 0; i < 255; i++) longName[i] = 'a' + (i % 26);
+		longName[255] = 0;
+		mkpath(longName);
+		f = System::Call(SYS_OPENAT, (USIZE)-100, (USIZE)p, 0x40 | 1, 0600);
+		if (f >= 0) (VOID)System::Call(SYS_CLOSE, (USIZE)f);
+
+		WCHAR dirPath[128];
+		BuildTestPath(L"corner_dir", Span<WCHAR>(dirPath));
+		auto createResult = DirectoryIterator::Create(dirPath);
+		if (!createResult) { (VOID)RmDir(L"corner_dir"); return false; }
+
+		BOOL sawDirlink = false, sawDeadlink = false, sawFifo = false, sawDrive = false;
+		BOOL sawHidden = false, sawLong = false, sawAstral = false;
+		DirectoryIterator &iter = createResult.Value();
+		BOOL eofTwice = false;
+		while (true)
+		{
+			auto next = iter.Next();
+			if (!next)
+			{
+				if (!(next.Error().Platform == Error::PlatformKind::Runtime && next.Error().Code == Error::Fs_NoMoreEntries))
+				{
+					LOG_ERROR("corner_dir ended with %e", next.Error());
+					ok = false;
+				}
+				// EOF must be idempotent: a second call returns the sentinel again.
+				auto again = iter.Next();
+				eofTwice = !again && again.Error().Code == Error::Fs_NoMoreEntries;
+				break;
+			}
+			const DirectoryEntry &e = iter.Get();
+			if (StringUtils::Equals((PWCHAR)e.Name, (const WCHAR *)L"dirlink")) { sawDirlink = true; if (e.IsDirectory) { LOG_ERROR("dirlink listed as directory"); ok = false; } }
+			else if (StringUtils::Equals((PWCHAR)e.Name, (const WCHAR *)L"deadlink")) sawDeadlink = true;
+			else if (StringUtils::Equals((PWCHAR)e.Name, (const WCHAR *)L"apipe")) { sawFifo = true; if (e.IsDirectory) { LOG_ERROR("fifo listed as directory"); ok = false; } }
+			else if (StringUtils::Equals((PWCHAR)e.Name, (const WCHAR *)L"C:")) { sawDrive = true; if (e.IsDrive) { LOG_ERROR("C: flagged as drive on POSIX"); ok = false; } }
+			else if (StringUtils::Equals((PWCHAR)e.Name, (const WCHAR *)L".hidden")) sawHidden = true;
+			else if (StringUtils::Length((PWCHAR)e.Name) == 255) sawLong = true;
+		}
+		if (!sawDirlink || !sawDeadlink || !sawFifo || !sawDrive || !sawHidden || !sawLong || !eofTwice || !ok)
+		{
+			LOG_ERROR("corner cases: dirlink=%d deadlink=%d fifo=%d drive=%d hidden=%d long=%d eofTwice=%d",
+					  sawDirlink, sawDeadlink, sawFifo, sawDrive, sawHidden, sawLong, eofTwice);
+			ok = false;
+		}
+
+		// An astral (4-byte UTF-8) filename must NOT be escaped — exact name match.
+		const WCHAR astral[] = {0x1F600, L'.', L't', L'x', L't', 0};
+		{
+			WCHAR ap[160];
+			BuildTestPath(L"corner_dir", Span<WCHAR>(ap));
+			USIZE dl = StringUtils::Length((PWCHAR)ap);
+			Memory::Copy(ap + dl, (const WCHAR *)L"/", 2);
+			Memory::Copy(ap + dl + 1, astral, 6 * sizeof(WCHAR));
+			ap[dl + 6] = 0;
+			auto fo = File::Open((PCWCHAR)ap, File::ModeCreate | File::ModeWrite);
+			if (fo) fo.Value().Close();
+		}
+		createResult = DirectoryIterator::Create(dirPath);
+		if (createResult)
+		{
+			DirectoryIterator &it2 = createResult.Value();
+			while (it2.Next())
+				if (StringUtils::Equals((PWCHAR)it2.Get().Name, (PWCHAR)astral)) { sawAstral = true; break; }
+		}
+		if (!sawAstral) { LOG_ERROR("astral filename not found unescaped"); ok = false; }
+
+		// Cleanup (rm the fifo/links/file first, then dirs).
+		const CHAR *names[] = {"dirlink", "deadlink", "apipe", "C:", ".hidden", longName, nullptr};
+		for (USIZE i = 0; names[i]; i++)
+		{
+			mkpath(names[i]);
+			(VOID)System::Call(SYS_UNLINK, (USIZE)p);
+		}
+		const WCHAR aw[] = {0x1F600, L'.', L't', L'x', L't', 0};
+		{
+			WCHAR ap[160];
+			BuildTestPath(L"corner_dir", Span<WCHAR>(ap));
+			USIZE dl = StringUtils::Length((PWCHAR)ap);
+			Memory::Copy(ap + dl, (const WCHAR *)L"/", 2);
+			Memory::Copy(ap + dl + 1, aw, 6 * sizeof(WCHAR));
+			ap[dl + 6] = 0;
+			(VOID)File::Delete((PCWCHAR)ap);
+		}
+		mkpath("target"); (VOID)System::Call(SYS_UNLINK, (USIZE)p);
+		return (BOOL)RmDir(L"corner_dir") && ok;
+#else
+		LOG_INFO("TestEnumerationCornerCases skipped (POSIX-only)");
+		return true;
+#endif
+	}
+
+	// Exact-count listing across many getdents buffer refills.
+	static BOOL TestLargeDirectory()
+	{
+#if defined(PLATFORM_LINUX)
+		if (!MkDir(L"bulk_dir")) return false;
+		const CHAR base[] = "test_io_root/bulk_dir/f";
+		CHAR p[64];
+		constexpr INT32 COUNT = 500;
+		for (INT32 i = 0; i < COUNT; i++)
+		{
+			Memory::Copy(p, base, sizeof(base));
+			// append decimal i
+			CHAR num[12]; INT32 n = 0;
+			INT32 v = i; if (v == 0) num[n++] = '0';
+			while (v > 0) { num[n++] = '0' + v % 10; v /= 10; }
+			USIZE bl = sizeof(base) - 1;
+			for (INT32 k = 0; k < n; k++) p[bl + k] = num[n - 1 - k];
+			p[bl + n] = 0;
+			SSIZE fd = System::Call(SYS_OPENAT, (USIZE)-100, (USIZE)p, 0x40 | 1, 0600);
+			if (fd < 0) { LOG_ERROR("bulk create failed at %d", i); return false; }
+			(VOID)System::Call(SYS_CLOSE, (USIZE)fd);
+		}
+
+		WCHAR dirPath[128];
+		BuildTestPath(L"bulk_dir", Span<WCHAR>(dirPath));
+		auto createResult = DirectoryIterator::Create(dirPath);
+		if (!createResult) return false;
+		INT32 seen = 0;
+		DirectoryIterator &iter = createResult.Value();
+		while (iter.Next())
+		{
+			const WCHAR *n = (PWCHAR)iter.Get().Name;
+			if (n[0] == L'.' && (n[1] == 0 || (n[1] == L'.' && n[2] == 0))) continue;
+			seen++;
+		}
+		if (seen != COUNT)
+		{
+			LOG_ERROR("large dir: expected %d entries, saw %d", COUNT, seen);
+			// cleanup best-effort below still runs
+		}
+		// Cleanup
+		for (INT32 i = 0; i < COUNT; i++)
+		{
+			Memory::Copy(p, base, sizeof(base));
+			CHAR num[12]; INT32 n = 0;
+			INT32 v = i; if (v == 0) num[n++] = '0';
+			while (v > 0) { num[n++] = '0' + v % 10; v /= 10; }
+			USIZE bl = sizeof(base) - 1;
+			for (INT32 k = 0; k < n; k++) p[bl + k] = num[n - 1 - k];
+			p[bl + n] = 0;
+			(VOID)System::Call(SYS_UNLINK, (USIZE)p);
+		}
+		BOOL removed = (BOOL)RmDir(L"bulk_dir");
+		return removed && seen == COUNT;
+#else
+		LOG_INFO("TestLargeDirectory skipped (POSIX-only)");
 		return true;
 #endif
 	}
