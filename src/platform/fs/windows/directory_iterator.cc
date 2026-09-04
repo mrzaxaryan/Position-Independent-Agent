@@ -418,11 +418,10 @@ VOID DirectoryIterator::Close()
 // Check if the iterator is valid
 BOOL DirectoryIterator::IsValid() const
 {
-	// Bitmask (drive-enumeration) iterators are always valid — a zero mask is
-	// the legitimate "no drives" state, and handle carries the mask (0 here),
-	// which the null/invalid-handle checks below would otherwise reject.
+	// Bitmask iterators: a zero mask is the valid "no drives" state, but the
+	// closed/moved sentinel must still read invalid.
 	if (isBitMaskMode)
-		return true;
+		return handle != (PVOID)(SSIZE)-1;
 	// Windows returns (HANDLE)-1 (0xFFFFFFFF) on failure for FindFirstFile
 	return handle != nullptr && handle != (PVOID)(SSIZE)-1;
 }

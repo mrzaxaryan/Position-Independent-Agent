@@ -784,6 +784,14 @@ VOID Handle_GetScreenshotCommand(PCHAR command, USIZE commandLength, PPCHAR resp
         LOG_INFO("Display devices enumerated successfully with %u display(s)", context->screenCaptureContext->DeviceList.Count);
     }
 
+    // displayIndex is wire-supplied: bound it before indexing Devices[]
+    if (displayIndex >= context->screenCaptureContext->DeviceList.Count)
+    {
+        LOG_ERROR("Display index %u out of range (%u displays)", displayIndex, context->screenCaptureContext->DeviceList.Count);
+        WriteErrorDetailResponse(response, responseLength, Error(Error::Command_Invalid));
+        return;
+    }
+
     const ScreenDevice &device = context->screenCaptureContext->DeviceList.Devices[displayIndex];
 
     if (context->screenCaptureContext->GraphicsList.count == 0)

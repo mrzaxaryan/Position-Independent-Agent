@@ -833,7 +833,7 @@ private:
 	// creation needs direct syscalls.
 	static BOOL TestLosslessFilenames()
 	{
-#if defined(PLATFORM_LINUX)
+#if defined(PLATFORM_LINUX) && defined(TEST_HAS_DIR_SYSCALLS)
 		if (!MkDir(L"lossless_dir"))
 		{
 			LOG_ERROR("Failed to create lossless_dir");
@@ -1081,6 +1081,7 @@ private:
 	{
 #if defined(PLATFORM_LINUX) && defined(TEST_HAS_DIR_SYSCALLS)
 		if (!MkDir(L"bulk_dir")) return false;
+		BOOL created = true;
 		const CHAR base[] = "test_io_root/bulk_dir/f";
 		CHAR p[64];
 		constexpr INT32 COUNT = 500;
@@ -1095,7 +1096,7 @@ private:
 			for (INT32 k = 0; k < n; k++) p[bl + k] = num[n - 1 - k];
 			p[bl + n] = 0;
 			SSIZE fd = System::Call(SYS_OPENAT, (USIZE)-100, (USIZE)p, 0x40 | 1, 0600);
-			if (fd < 0) { LOG_ERROR("bulk create failed at %d", i); return false; }
+			if (fd < 0) { LOG_ERROR("bulk create failed at %d", i); created = false; break; }
 			(VOID)System::Call(SYS_CLOSE, (USIZE)fd);
 		}
 
@@ -1129,7 +1130,7 @@ private:
 			(VOID)System::Call(TEST_SYS_UNLINKAT, (USIZE)-100, (USIZE)p, 0);
 		}
 		BOOL removed = (BOOL)RmDir(L"bulk_dir");
-		return removed && seen == COUNT;
+		return removed && created && seen == COUNT;
 #else
 		LOG_INFO("TestLargeDirectory skipped (POSIX-only)");
 		return true;

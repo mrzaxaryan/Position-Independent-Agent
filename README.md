@@ -441,14 +441,14 @@ The volume serial is the value `vol X:` reports (`FileFsVolumeInformation.Volume
 
 **Filenames that are not valid UTF-8** (POSIX agents): each undecodable byte (0x80–0xFF) is mapped to the lone low surrogate `U+DC00 + byte` (i.e. U+DC80..U+DCFF) instead of being dropped, so no entry name is mangled or lost; the mapping is reversed exactly when the path is handed back to the OS. C# strings hold lone surrogates, so the C2 round-trips such names transparently.
 
-### `GetFileContent` (0x02)
+### `GetFileContent` (0x06)
 
 Reads file content at a specified offset.
 
 - **Request**: `UINT64 readCount` + `UINT64 offset` + `CHAR16[] filePath` (readCount is clamped to 16 MiB — a heap guard; reads may always return fewer bytes than requested)
 - **Response**: `UINT32 status` + `UINT64 bytesRead` + `UINT8[bytesRead]` (file data — the frame carries exactly the bytes read; a read failure is an error response, never a short success)
 
-### `GetFileChunkHash` (0x03)
+### `GetFileChunkHash` (0x07)
 
 Computes a SHA-256 hash of a file chunk.
 
