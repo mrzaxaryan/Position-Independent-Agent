@@ -95,17 +95,77 @@ static BOOL DecodeWirePath(PCHAR command, USIZE commandLength, WCHAR *widePath, 
     return true;
 }
 
-// Writes an error response carrying the failure's platform detail:
-// [status:u32 = StatusError][platformKind:u32][errorCode:u32] (12 bytes).
-// The platform kind mirrors Error::PlatformKind; the code is the ROOT cause
-// of the chain (the raw NTSTATUS/errno/EFI_STATUS when an OS call failed, or
-// the PIR ErrorCodes enumerator otherwise). Success responses are unaffected;
-// older C2 parsers read the status word first and stop, so the extra tail is
-// ignored by them — new C2s use it to classify the failure (access denied vs
-// device removed vs path too long) instead of guessing.
+// Maps an Error to the platform-INDEPENDENT code carried on the wire. Runtime
+// errors already are platform-independent — their ErrorCodes value passes
+// through unchanged. OS errors (the chain's root) are classified HERE, the
+// only layer that knows which OS produced them, into the Fs_* CAUSE codes:
+// consumers branch on a stable enum and never mirror per-OS code tables.
+// Unmapped OS errors degrade to the chain's outer failure-site code (e.g.
+// Fs_OpenFailed) — still platform-independent, just less specific.
+static UINT32 ClassifyError(const Error &error)
+{
+    switch (error.RootPlatform())
+    {
+    case Error::PlatformKind::Windows:
+        switch (error.RootCode())
+        {
+        case 0xC0000022u: // STATUS_ACCESS_DENIED
+            return Error::Fs_AccessDenied;
+        case 0xC0000034u: // STATUS_OBJECT_NAME_NOT_FOUND
+        case 0xC000003Au: // STATUS_OBJECT_PATH_NOT_FOUND
+            return Error::Fs_PathNotFound;
+        case 0xC00000E6u: // STATUS_NO_SUCH_DEVICE
+        case 0xC00000C0u: // STATUS_DEVICE_DOES_NOT_EXIST
+        case 0xC00002B6u: // STATUS_DEVICE_REMOVED
+        case 0xC000026Eu: // STATUS_VOLUME_DISMOUNTED
+            return Error::Fs_DeviceGone;
+        default:
+            break;
+        }
+        break;
+    case Error::PlatformKind::Posix:
+        switch (error.RootCode())
+        {
+        case 1:  // EPERM
+        case 13: // EACCES
+            return Error::Fs_AccessDenied;
+        case 2:  // ENOENT
+        case 20: // ENOTDIR
+            return Error::Fs_PathNotFound;
+        case 6:  // ENXIO
+        case 19: // ENODEV
+            return Error::Fs_DeviceGone;
+        default:
+            break;
+        }
+        break;
+    case Error::PlatformKind::Uefi:
+        switch (error.RootCode() & 0xFFFFu) // Error::Uefi truncates to the low 32 bits; EFI codes are EFI_ERROR(n)
+        {
+        case 15: // EFI_ACCESS_DENIED
+            return Error::Fs_AccessDenied;
+        case 14: // EFI_NOT_FOUND
+            return Error::Fs_PathNotFound;
+        default:
+            break;
+        }
+        break;
+    default:
+        break;
+    }
+    return error.Code; // runtime failure-site code (platform-independent)
+}
+
+// Writes an error response carrying the failure's classification:
+// [status:u32 = StatusError][errorCode:u32] (8 bytes), where errorCode is a
+// platform-INDEPENDENT ErrorCodes value — an Fs_* cause code when the OS
+// error is recognized, otherwise the failure-site code. Success responses
+// are unaffected; older C2 parsers read the status word first and stop, so
+// the extra tail is ignored by them — new C2s use it to classify the failure
+// (access denied vs device removed vs path too long) instead of guessing.
 static VOID WriteErrorDetailResponse(PPCHAR response, PUSIZE responseLength, const Error &error)
 {
-    PCHAR buffer = new CHAR[12];
+    PCHAR buffer = new CHAR[8];
     if (buffer == nullptr)
     {
         *response = nullptr;
@@ -113,11 +173,10 @@ static VOID WriteErrorDetailResponse(PPCHAR response, PUSIZE responseLength, con
         return;
     }
     *response = buffer;
-    *responseLength = 12;
-    BinaryWriter writer{Span<UINT8>((UINT8 *)buffer, 12)};
+    *responseLength = 8;
+    BinaryWriter writer{Span<UINT8>((UINT8 *)buffer, 8)};
     writer.Write<UINT32>(StatusCode::StatusError);
-    writer.Write<UINT32>((UINT32)error.RootPlatform());
-    writer.Write<UINT32>(error.RootCode());
+    writer.Write<UINT32>(ClassifyError(error));
 }
 
 // Writes a simple error response with the given status code. Always leaves

@@ -150,6 +150,18 @@ struct Error
 		Command_Invalid = 66,
 
 		// -------------------------
+		// FileSystem CAUSE codes (67–69) — platform-independent failure
+		// classifications the beacon derives from the raw OS error at the
+		// failure site (errno / NTSTATUS / EFI status → cause). These are what
+		// error responses carry on the wire: consumers branch on a stable
+		// enum instead of mirroring per-OS code tables. Block placement is a
+		// gap fill — the 50s range is exhausted.
+		// -------------------------
+		Fs_AccessDenied = 67,  // permission denied (EACCES/EPERM, STATUS_ACCESS_DENIED, EFI_ACCESS_DENIED)
+		Fs_PathNotFound = 68,  // the path no longer exists (ENOENT/ENOTDIR, STATUS_OBJECT_*_NOT_FOUND, EFI_NOT_FOUND)
+		Fs_DeviceGone = 69,	// volume/device removed or dismounted mid-operation
+
+		// -------------------------
 		// Crypto errors (60–63)
 		// -------------------------
 		Ecc_InitFailed = 60,			 // curve not recognized or random gen failed
