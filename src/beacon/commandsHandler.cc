@@ -16,9 +16,12 @@
 // Wire helpers
 // =============================================================================
 
-/// Upper bound the beacon will read for one GetFileContent command (the C2
-/// streams in 1 MiB chunks; anything larger is clamped to defend the heap).
-constexpr UINT64 MAX_FILE_CHUNK_SIZE = 1024 * 1024;
+/// Upper bound the beacon will read for one GetFileContent command — a
+/// ceiling only (the beacon allocates exactly what is requested); it exists
+/// so a hostile/malformed wire request cannot demand a huge single heap
+/// allocation. A larger request is clamped, which the protocol
+/// already permits (reads may return fewer bytes than asked — EOF does).
+constexpr UINT64 MAX_FILE_CHUNK_SIZE = 16 * 1024 * 1024;
 
 #pragma pack(push, 1)
 struct WireDirectoryEntry

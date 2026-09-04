@@ -445,7 +445,7 @@ The volume serial is the value `vol X:` reports (`FileFsVolumeInformation.Volume
 
 Reads file content at a specified offset.
 
-- **Request**: `UINT64 readCount` + `UINT64 offset` + `CHAR16[] filePath` (readCount is clamped to 1 MiB)
+- **Request**: `UINT64 readCount` + `UINT64 offset` + `CHAR16[] filePath` (readCount is clamped to 16 MiB — a heap guard; reads may always return fewer bytes than requested)
 - **Response**: `UINT32 status` + `UINT64 bytesRead` + `UINT8[bytesRead]` (file data — the frame carries exactly the bytes read; a read failure is an error response, never a short success)
 
 ### `GetFileChunkHash` (0x03)
