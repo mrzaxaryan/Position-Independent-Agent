@@ -130,7 +130,7 @@ struct Error
 		Http_ParseUrlFailed = 48,			// URL format invalid
 
 		// -------------------------
-		// FileSystem errors (50–57)
+		// FileSystem errors (50–59)
 		// -------------------------
 		Fs_OpenFailed = 50,		   // file open syscall failed
 		Fs_DeleteFailed = 51,	   // file delete syscall failed
@@ -140,6 +140,14 @@ struct Error
 		Fs_DeleteDirFailed = 55,   // directory delete syscall failed
 		Fs_PathResolveFailed = 56, // path name resolution failed
 		Fs_SeekFailed = 57,		   // file seek/offset syscall failed
+		Fs_NoMoreEntries = 58,	   // clean end of directory iteration — sentinel, NOT a failure
+		Fs_PathTooLong = 59,	   // decoded command path exceeds the handler path buffer
+
+		/// Command-length validation failure — a command arrived without the
+		/// bytes its wire layout requires (truncated frame). Not FS-specific:
+		/// any handler that parses a fixed-size prefix uses it. Value sits
+		/// outside the FS block because 58/59 are the last free 50s slots.
+		Command_Invalid = 66,
 
 		// -------------------------
 		// Crypto errors (60–63)
