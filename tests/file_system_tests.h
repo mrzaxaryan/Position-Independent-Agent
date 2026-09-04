@@ -5,9 +5,20 @@
 #if defined(PLATFORM_LINUX)
 #include "platform/kernel/linux/syscall.h"
 #include "platform/kernel/linux/system.h"
-// Not in the kernel header; x86_64 numbers
-constexpr USIZE SYS_SYMLINK_T = 88;
-constexpr USIZE SYS_MKNOD_T = 133;
+// *at syscalls missing from some per-arch headers; numbers per ABI
+#if defined(ARCHITECTURE_X86_64)
+constexpr USIZE TEST_SYS_UNLINKAT = 263;
+constexpr USIZE TEST_SYS_MKDIRAT = 258;
+constexpr USIZE TEST_SYS_SYMLINKAT = 266;
+constexpr USIZE TEST_SYS_MKNODAT = 259;
+#define TEST_HAS_DIR_SYSCALLS 1
+#elif defined(ARCHITECTURE_AARCH64) || defined(ARCHITECTURE_RISCV64) || defined(ARCHITECTURE_RISCV32)
+constexpr USIZE TEST_SYS_SYMLINKAT = 36;
+constexpr USIZE TEST_SYS_MKNODAT = 33;
+constexpr USIZE TEST_SYS_UNLINKAT = SYS_UNLINKAT; // from the kernel header
+constexpr USIZE TEST_SYS_MKDIRAT = SYS_MKDIRAT;
+#define TEST_HAS_DIR_SYSCALLS 1
+#endif
 #endif
 
 
@@ -844,15 +855,9 @@ private:
 		(VOID)System::Call(SYS_CLOSE, (USIZE)fd);
 		// Best-effort residue cleanup for every failure path below (raw unlink —
 		// the escaped wide path is not always built yet at the failure site).
-		// Arch guard mirrors platform/fs/posix/file.cc: x86_64/i386/armv7a have
-		// SYS_UNLINK, the newer ABIs only SYS_UNLINKAT.
 		auto cleanup = [&]()
 		{
-#if defined(ARCHITECTURE_AARCH64) || defined(ARCHITECTURE_RISCV64) || defined(ARCHITECTURE_RISCV32) || defined(ARCHITECTURE_MIPS64)
-			(VOID)System::Call(SYS_UNLINKAT, (USIZE)-100, (USIZE)rawPath, 0);
-#else
-			(VOID)System::Call(SYS_UNLINK, (USIZE)rawPath);
-#endif
+			(VOID)System::Call(TEST_SYS_UNLINKAT, (USIZE)-100, (USIZE)rawPath, 0);
 			(VOID)RmDir(L"lossless_dir");
 		};
 
@@ -946,7 +951,7 @@ private:
 	// POSIX corner cases: symlinks, special files, odd names, EOF idempotence.
 	static BOOL TestEnumerationCornerCases()
 	{
-#if defined(PLATFORM_LINUX)
+#if defined(PLATFORM_LINUX) && defined(TEST_HAS_DIR_SYSCALLS)
 		if (!MkDir(L"corner_dir")) return false;
 		const CHAR base[] = "test_io_root/corner_dir/";
 		constexpr USIZE baseLen = sizeof(base) - 1;
@@ -967,11 +972,11 @@ private:
 		// Symlink to a directory: must be listed as a non-directory (lstat via NOFOLLOW).
 		mkpath("target"); SSIZE tf = System::Call(SYS_OPENAT, (USIZE)-100, (USIZE)p, 0x40 | 1, 0600);
 		if (tf >= 0) (VOID)System::Call(SYS_CLOSE, (USIZE)tf);
-		mkpath("dirlink"); (VOID)System::Call(SYS_SYMLINK_T, (USIZE)"target", (USIZE)p);
+		mkpath("dirlink"); (VOID)System::Call(TEST_SYS_SYMLINKAT, (USIZE)"target", (USIZE)-100, (USIZE)p);
 		// Broken symlink: entry must survive.
-		mkpath("deadlink"); (VOID)System::Call(SYS_SYMLINK_T, (USIZE)"nowhere", (USIZE)p);
+		mkpath("deadlink"); (VOID)System::Call(TEST_SYS_SYMLINKAT, (USIZE)"nowhere", (USIZE)-100, (USIZE)p);
 		// FIFO: listed, not a directory, no crash.
-		mkpath("apipe"); (VOID)System::Call(SYS_MKNOD_T, (USIZE)p, 0010000 /* S_IFIFO */, 0666);
+		mkpath("apipe"); (VOID)System::Call(TEST_SYS_MKNODAT, (USIZE)-100, (USIZE)p, 0010000 /* S_IFIFO */ | 0666);
 		// Drive-lookalike name: never flagged as a drive on POSIX.
 		mkpath("C:"); auto f = System::Call(SYS_OPENAT, (USIZE)-100, (USIZE)p, 0x40 /* O_CREAT */ | 1 /* O_WRONLY */, 0600);
 		if (f >= 0) (VOID)System::Call(SYS_CLOSE, (USIZE)f);
@@ -989,7 +994,7 @@ private:
 		WCHAR dirPath[128];
 		BuildTestPath(L"corner_dir", Span<WCHAR>(dirPath));
 		auto createResult = DirectoryIterator::Create(dirPath);
-		if (!createResult) { (VOID)RmDir(L"corner_dir"); return false; }
+		if (!createResult) { LOG_ERROR("corner Create failed: %e", createResult.Error()); (VOID)RmDir(L"corner_dir"); return false; }
 
 		BOOL sawDirlink = false, sawDeadlink = false, sawFifo = false, sawDrive = false;
 		BOOL sawHidden = false, sawLong = false, sawAstral = false;
@@ -1051,7 +1056,7 @@ private:
 		for (USIZE i = 0; names[i]; i++)
 		{
 			mkpath(names[i]);
-			(VOID)System::Call(SYS_UNLINK, (USIZE)p);
+			(VOID)System::Call(TEST_SYS_UNLINKAT, (USIZE)-100, (USIZE)p, 0);
 		}
 		const WCHAR aw[] = {0x1F600, L'.', L't', L'x', L't', 0};
 		{
@@ -1063,7 +1068,7 @@ private:
 			ap[dl + 6] = 0;
 			(VOID)File::Delete((PCWCHAR)ap);
 		}
-		mkpath("target"); (VOID)System::Call(SYS_UNLINK, (USIZE)p);
+		mkpath("target"); (VOID)System::Call(TEST_SYS_UNLINKAT, (USIZE)-100, (USIZE)p, 0);
 		return (BOOL)RmDir(L"corner_dir") && ok;
 #else
 		LOG_INFO("TestEnumerationCornerCases skipped (POSIX-only)");
@@ -1074,7 +1079,7 @@ private:
 	// Exact-count listing across many getdents buffer refills.
 	static BOOL TestLargeDirectory()
 	{
-#if defined(PLATFORM_LINUX)
+#if defined(PLATFORM_LINUX) && defined(TEST_HAS_DIR_SYSCALLS)
 		if (!MkDir(L"bulk_dir")) return false;
 		const CHAR base[] = "test_io_root/bulk_dir/f";
 		CHAR p[64];
@@ -1121,7 +1126,7 @@ private:
 			USIZE bl = sizeof(base) - 1;
 			for (INT32 k = 0; k < n; k++) p[bl + k] = num[n - 1 - k];
 			p[bl + n] = 0;
-			(VOID)System::Call(SYS_UNLINK, (USIZE)p);
+			(VOID)System::Call(TEST_SYS_UNLINKAT, (USIZE)-100, (USIZE)p, 0);
 		}
 		BOOL removed = (BOOL)RmDir(L"bulk_dir");
 		return removed && seen == COUNT;
