@@ -5,11 +5,17 @@
 #include "platform/kernel/windows/ntdll.h"
 
 // NTSTATUS values used by the iterator but absent from ntdll.h
-constexpr UINT32 STATUS_NO_MORE_FILES_NT = 0x8000001Au;	 // clean end of a ZwQueryDirectoryFile enumeration (warning: fails NT_SUCCESS)
-constexpr UINT32 STATUS_NO_MORE_ENTRIES_NT = 0x80000018u;	 // same meaning, returned by some filesystems/providers
-constexpr UINT32 STATUS_NO_SUCH_FILE_NT = 0xC000000Fu;		 // clean end on empty directories (some filesystems)
-constexpr UINT32 STATUS_BUFFER_OVERFLOW_NT = 0x80000005u;	 // single entry did not fit the query buffer
+constexpr UINT32 STATUS_NO_MORE_FILES_NT = 0x80000006u;	  // clean end of enumeration (verified on Win10)
+constexpr UINT32 STATUS_NO_MORE_ENTRIES_NT = 0x8000001Au;	  // same meaning, some providers
+constexpr UINT32 STATUS_NO_SUCH_FILE_NT = 0xC000000Fu;		  // clean end on empty directories (FAT & friends)
+constexpr UINT32 STATUS_BUFFER_OVERFLOW_NT = 0x80000005u;	  // entry did not fit the query buffer
 constexpr UINT32 STATUS_INFO_LENGTH_MISMATCH_NT = 0xC0000004u; // query buffer hopelessly small
+
+// Clean end-of-enumeration statuses (any of them means EOF, not failure).
+static BOOL IsEndOfEnumeration(UINT32 status)
+{
+	return status == STATUS_NO_MORE_FILES_NT || status == STATUS_NO_MORE_ENTRIES_NT || status == STATUS_NO_SUCH_FILE_NT;
+}
 
 /// Longest filename the grow-retry will accommodate (NTFS caps components at
 /// 255 WCHARs; 512 leaves margin for odd reparse providers) — 64 KiB cap.
@@ -258,7 +264,7 @@ Result<DirectoryIterator, Error> DirectoryIterator::Create(PCWCHAR path)
 	else
 	{
 		UINT32 status = (UINT32)entryResult.Error().Code;
-		if (status == STATUS_NO_MORE_FILES_NT || status == STATUS_NO_MORE_ENTRIES_NT || status == STATUS_NO_SUCH_FILE_NT)
+		if (IsEndOfEnumeration(status))
 		{
 			delete[] heapBuffer;
 			// Empty directory: keep the handle, mark the pre-read entry as
@@ -368,7 +374,7 @@ Result<VOID, Error> DirectoryIterator::Next()
 	delete[] heapBuffer;
 
 	UINT32 status = (UINT32)entryResult.Error().Code;
-	if (status == STATUS_NO_MORE_FILES_NT || status == STATUS_NO_MORE_ENTRIES_NT || status == STATUS_NO_SUCH_FILE_NT)
+	if (IsEndOfEnumeration(status))
 		return Result<VOID, Error>::Err(Error::Fs_NoMoreEntries); // clean end of directory
 
 	// Real failure (volume dismounted, device removed, access revoked, ...):
