@@ -57,7 +57,7 @@ enum CommandType : UINT8
 #endif
 // v2: WireDirectoryEntry gained UINT64 VolumeSerial (appended; array stride changed)
 #ifndef AGENT_API_VERSION
-#define AGENT_API_VERSION 2
+#define AGENT_API_VERSION 1
 #endif
 #ifndef AGENT_NAME_ID
 #define AGENT_NAME_ID 0
