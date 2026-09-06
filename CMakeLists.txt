@@ -48,7 +48,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/Common.cmake)
 # desyncs the C2 parser.
 set(BUILD_NUMBER "0" CACHE STRING "Agent build number")
 set(COMMIT_HASH "00000000" CACHE STRING "Agent commit hash")
-set(API_VERSION "2")
+set(API_VERSION "1")
 set(NAME_ID "0")
 list(APPEND PIR_DEFINES
     AGENT_BUILD_NUMBER=${BUILD_NUMBER}
