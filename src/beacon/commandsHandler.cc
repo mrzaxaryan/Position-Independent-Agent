@@ -427,7 +427,7 @@ VOID Handle_GetFileChunkHashCommand(PCHAR command, USIZE commandLength, PPCHAR r
     }
 
     SHA256 sha256;
-    USIZE totalRead = 0;
+    UINT64 totalRead = 0;
     // Read file in small chunks and update the hash until we read the
     // requested count or reach the end of file. A read FAILURE is an error —
     // hashing what happened to be read so far would return a digest of a
