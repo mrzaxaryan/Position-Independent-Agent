@@ -2,7 +2,7 @@
 
 #include "lib/runtime.h"
 #include "tests.h"
-#if defined(PLATFORM_LINUX)
+#if defined(PLATFORM_LINUX) && defined(ARCHITECTURE_X86_64)
 #include "platform/kernel/linux/syscall.h"
 #include "platform/kernel/linux/system.h"
 // *at syscalls missing from some per-arch headers; numbers per ABI
