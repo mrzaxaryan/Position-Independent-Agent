@@ -402,6 +402,9 @@ public:
 	 * @details Resolves the path exactly like BeginObjectEnumeration, queries
 	 * WPD_OBJECT_SIZE, then IPortableDeviceResources::GetStream on
 	 * WPD_RESOURCE_DEFAULT (STGM_READ). The stream starts at offset 0.
+	 * Seekability is probed once with a Seek(0); drivers that reject Seek
+	 * (sequential-only MTP resource streams) still open — position is then
+	 * tracked internally and backward seeks re-open + discard (see StreamSeek).
 	 *
 	 * @param path Pseudo-path to a file object.
 	 * @param sizeOut Receives the object size in bytes.
@@ -411,6 +414,7 @@ public:
 
 	/**
 	 * @brief Reads sequentially from an open WPD stream at its position.
+	 * @details Advances the internally tracked position by the bytes read.
 	 * @param state State from OpenStream.
 	 * @param buffer Destination buffer (clamped to UINT32 per COM Read).
 	 * @return Bytes actually read (0 = end of stream), or an Error.
@@ -419,6 +423,11 @@ public:
 
 	/**
 	 * @brief Positions the stream at an absolute byte offset.
+	 * @details A no-op when already at @p absoluteOffset (the common
+	 * SetOffset(0)-then-read pattern makes no COM call). Seekable streams seek
+	 * directly; sequential-only device streams re-acquire the resource stream
+	 * from offset 0 and discard forward, failing with 0x80070026
+	 * (ERROR_HANDLE_EOF) when the offset is beyond the end of the object.
 	 * @param state State from OpenStream.
 	 * @param absoluteOffset Byte offset from the start of the object.
 	 * @return Ok on success, or an Error.
@@ -427,6 +436,7 @@ public:
 
 	/**
 	 * @brief Returns the current absolute stream position.
+	 * @details Reads the internally tracked position — never a COM call.
 	 * @param state State from OpenStream.
 	 * @return Position in bytes, or an Error.
 	 */

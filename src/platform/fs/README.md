@@ -136,6 +136,8 @@ Scope is **read-only**: `File::Open` with any write/create/truncate flag on a `:
 
 Known limitations (deliberate): object names containing `\` or `/` render in listings but are not addressable (the separator *is* the grammar); duplicate names resolve to the first match; an object whose properties cannot be read is still listed, under its raw object id as the name, but is not navigable (path resolution matches by name); a device removed mid-session classifies as `Fs_DeviceGone` on the next operation.
 
+Devices with non-seekable WPD resource streams are supported: the stream position is tracked internally, and a backward seek re-opens the resource stream and discards forward to the requested offset.
+
 ### Linux: GVFS/udisks mount roots (`fs/posix/portable_roots.cc`)
 
 The empty-path root listing appends portable mounts after the real `/` entries (drained one per `Next()` at the clean end):

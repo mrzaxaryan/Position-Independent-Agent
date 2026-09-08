@@ -207,9 +207,11 @@ struct WpdStreamState
 	IPortableDeviceContent *content;   ///< Content interface
 	IPortableDeviceProperties *properties; ///< Property reader
 	IPortableDeviceResources *resources;   ///< Resource/stream interface
+	WCHAR *objectId;                   ///< Resolved object id (CoTaskMem; null = DEVICE root)
 	IStream *stream;                   ///< The open data stream
 	UINT64 size;                       ///< Object size in bytes (WPD_OBJECT_SIZE)
-	UINT64 position;                   ///< Current absolute stream offset
+	UINT64 position;                   ///< Current absolute stream offset (tracked)
+	BOOL seekable;                     ///< FALSE for sequential-only device streams (Seek unsupported)
 };
 
 // Release helper: calls Release() through the vtable and nulls the pointer.
@@ -995,6 +997,14 @@ Result<WpdStreamState *, Error> WPD::OpenStream(PCWCHAR path, UINT64 &sizeOut)
 	}
 	SafeRelease(keys.Value());
 
+	// Probe seekability once: many MTP drivers expose sequential-only resource
+	// streams (Seek -> E_NOTIMPL); the stream still reads fine from offset 0.
+	LARGE_INTEGER zero;
+	zero.QuadPart = 0;
+	ULARGE_INTEGER probedPosition;
+	Memory::Zero(&probedPosition, sizeof(probedPosition));
+	state->seekable = !Failed(state->stream->lpVtbl->Seek(state->stream, zero, STREAM_SEEK_SET, &probedPosition));
+
 	state->comInitialized = session->comInitialized;
 	session->comInitialized = false;
 	state->device = session->device;
@@ -1004,6 +1014,8 @@ Result<WpdStreamState *, Error> WPD::OpenStream(PCWCHAR path, UINT64 &sizeOut)
 	state->properties = session->properties;
 	session->properties = nullptr;
 	state->resources = resources;
+	state->objectId = session->objectId;
+	session->objectId = nullptr;
 	state->size = size;
 	state->position = 0;
 	sizeOut = size;
@@ -1024,19 +1036,56 @@ Result<USIZE, Error> WPD::StreamRead(WpdStreamState *state, Span<UINT8> buffer)
 	return Result<USIZE, Error>::Ok((USIZE)fetched);
 }
 
+/// Sequential-only device streams: re-opens the resource stream (a fresh
+/// stream starts at 0) and discards forward to the target offset. Hitting EOF
+/// first means the offset is beyond the end of the object.
+static Result<VOID, Error> DiscardToOffset(WpdStreamState *state, UINT64 target)
+{
+	SafeRelease(state->stream);
+	UINT32 optimal = 0;
+	PROPERTYKEY keyResource = MakeKeyResourceDefault();
+	HRESULT hr = state->resources->lpVtbl->GetStream(state->resources, state->objectId != nullptr ? state->objectId : L"DEVICE", &keyResource, STGM_READ, &optimal, &state->stream);
+	if (Failed(hr) || state->stream == nullptr)
+	{
+		SafeRelease(state->stream); // defensive: out-param must be null on failure
+		return Result<VOID, Error>::Err(Error::Windows((UINT32)hr), Error::Fs_SeekFailed);
+	}
+	state->position = 0;
+	UINT8 discard[8192];
+	while (state->position < target)
+	{
+		UINT64 remaining = target - state->position;
+		UINT32 chunk = remaining > sizeof(discard) ? (UINT32)sizeof(discard) : (UINT32)remaining;
+		UINT32 fetched = 0;
+		hr = state->stream->lpVtbl->Read(state->stream, discard, chunk, &fetched);
+		if (Failed(hr))
+			return Result<VOID, Error>::Err(Error::Windows((UINT32)hr), Error::Fs_SeekFailed);
+		if (fetched == 0)
+			return Result<VOID, Error>::Err(Error::Windows(0x80070026u), Error::Fs_SeekFailed); // ERROR_HANDLE_EOF
+		state->position += fetched;
+	}
+	return Result<VOID, Error>::Ok();
+}
+
 Result<VOID, Error> WPD::StreamSeek(WpdStreamState *state, USIZE absoluteOffset)
 {
 	if (state == nullptr || state->stream == nullptr)
 		return Result<VOID, Error>::Err(Error::Fs_SeekFailed);
-	LARGE_INTEGER move;
-	move.QuadPart = (INT64)absoluteOffset;
-	ULARGE_INTEGER newPosition;
-	Memory::Zero(&newPosition, sizeof(newPosition));
-	HRESULT hr = state->stream->lpVtbl->Seek(state->stream, move, STREAM_SEEK_SET, &newPosition);
-	if (Failed(hr))
-		return Result<VOID, Error>::Err(Error::Windows((UINT32)hr), Error::Fs_SeekFailed);
-	state->position = newPosition.QuadPart;
-	return Result<VOID, Error>::Ok();
+	if ((UINT64)absoluteOffset == state->position)
+		return Result<VOID, Error>::Ok(); // SetOffset(0)-then-read makes no COM call
+	if (state->seekable)
+	{
+		LARGE_INTEGER move;
+		move.QuadPart = (INT64)absoluteOffset;
+		ULARGE_INTEGER newPosition;
+		Memory::Zero(&newPosition, sizeof(newPosition));
+		HRESULT hr = state->stream->lpVtbl->Seek(state->stream, move, STREAM_SEEK_SET, &newPosition);
+		if (Failed(hr))
+			return Result<VOID, Error>::Err(Error::Windows((UINT32)hr), Error::Fs_SeekFailed);
+		state->position = newPosition.QuadPart;
+		return Result<VOID, Error>::Ok();
+	}
+	return DiscardToOffset(state, (UINT64)absoluteOffset);
 }
 
 Result<USIZE, Error> WPD::StreamTell(WpdStreamState *state)
@@ -1058,6 +1107,11 @@ VOID WPD::CloseStream(WpdStreamState *state)
 	{
 		(VOID)state->device->lpVtbl->Close(state->device);
 		SafeRelease(state->device);
+	}
+	if (state->objectId != nullptr)
+	{
+		Com::FreeMemory(state->objectId);
+		state->objectId = nullptr;
 	}
 	if (state->comInitialized)
 	{
