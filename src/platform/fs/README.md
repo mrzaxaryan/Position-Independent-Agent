@@ -119,6 +119,7 @@ A device root entry is emitted as:
 - The 64-bit **token** is `Djb2::Hash` of the PnP device id. Navigation (`WPD::TryParsePath` → `BeginObjectEnumeration`) re-enumerates `GetDevices` and hash-matches the token — first match wins; no match classifies as `Fs_DeviceGone`.
 - The **friendly name** is display-only and never parsed (grammar-unsafe characters become `_`). Path parsing validates the hex strictly; anything else falls through to the NT layer and fails exactly as before.
 - Subpaths split on `\` only and are matched segment by segment (exact match first, then case-insensitive) from `WPD_DEVICE_OBJECT_ID` (`"DEVICE"`); an empty subpath lists the device's storages.
+- Entries classify as directories when their `WPD_OBJECT_CONTENT_TYPE` is `WPD_CONTENT_TYPE_FOLDER` **or** `WPD_CONTENT_TYPE_FUNCTIONAL_OBJECT`; device-root children (the storages) are always directories, with or without the property present.
 
 COM is hand-declared C-style (plain structs + full SDK-order vtables, the UEFI protocol idiom) — no SDK headers, no imports. Exports resolve per call via `Com` (`combase.dll` first, `ole32.dll` fallback). COM init/uninit is balanced per iterator/stream state object; device open sends neutral client values (`WPD_CLIENT_NAME/MAJOR/MINOR/REVISION`).
 

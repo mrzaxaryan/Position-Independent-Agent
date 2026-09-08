@@ -91,6 +91,12 @@ static NOINLINE GUID MakeContentTypeFolder()
 	return MakeGuid(0x27E2E392, 0xA111, 0x48E0, 0xAB, 0x0C, 0xE1, 0x77, 0x05, 0xA0, 0x5F, 0x85);
 }
 
+// {99ED0160-17FF-4C44-9D98-1D7A6F941921} — WPD_CONTENT_TYPE_FUNCTIONAL_OBJECT (storage category)
+static NOINLINE GUID MakeContentTypeFunctionalObject()
+{
+	return MakeGuid(0x99ED0160, 0x17FF, 0x4C44, 0x9D, 0x98, 0x1D, 0x7A, 0x6F, 0x94, 0x19, 0x21);
+}
+
 // {EF6B490D-5CD8-437A-AFFC-DA8B60EE4A3C} — WPD_OBJECT property set fmtid
 static NOINLINE GUID MakeObjectFmtid()
 {
@@ -191,6 +197,7 @@ struct WpdIteratorState
 	IPortableDeviceProperties *properties; ///< Object phase: property reader
 	IPortableDeviceKeyCollection *keys;    ///< Object phase: fetched property set
 	IEnumPortableDeviceObjectIDs *enumerator; ///< Object phase: child id cursor
+	BOOL atDeviceRoot;                 ///< Object phase: enumerating the device root (its storages)
 };
 
 struct WpdStreamState
@@ -219,6 +226,12 @@ static FORCE_INLINE VOID SafeRelease(T *&interfacePtr)
 static FORCE_INLINE BOOL Failed(HRESULT hr)
 {
 	return hr < 0;
+}
+
+/// Full GUID equality (Data1-3 plus all 8 Data4 bytes).
+static FORCE_INLINE BOOL SameGuid(const GUID &a, const GUID &b)
+{
+	return a.Data1 == b.Data1 && a.Data2 == b.Data2 && a.Data3 == b.Data3 && Memory::Compare(a.Data4, b.Data4, 8) == 0;
 }
 
 // =============================================================================
@@ -706,6 +719,7 @@ static Result<BOOL, Error> NextObjectEntry(WpdIteratorState *state, DirectoryEnt
 		const DirectoryEntry empty{};
 		out = empty;
 		StringUtils::Copy(Span<WCHAR>(out.Name), Span<const WCHAR>(objectId, StringUtils::Length(objectId)));
+		out.IsDirectory = state->atDeviceRoot;
 		Com::FreeMemory(objectId);
 		return Result<BOOL, Error>::Ok(true);
 	}
@@ -714,13 +728,17 @@ static Result<BOOL, Error> NextObjectEntry(WpdIteratorState *state, DirectoryEnt
 	out = empty;
 	ReadObjectName(values.Value(), objectId, Span<WCHAR>(out.Name));
 
-	GUID contentType;
-	Memory::Zero(&contentType, sizeof(contentType));
-	PROPERTYKEY keyContentType = MakeKeyContentType();
-	if (values.Value()->lpVtbl->GetGuidValue(values.Value(), &keyContentType, &contentType) == 0)
+	// Storages are FUNCTIONAL_OBJECT children of the device root, and some
+	// devices omit their content type: root children are always directories.
+	if (state->atDeviceRoot)
+		out.IsDirectory = true;
+	else
 	{
-		GUID folder = MakeContentTypeFolder();
-		out.IsDirectory = contentType.Data1 == folder.Data1 && contentType.Data2 == folder.Data2 && contentType.Data3 == folder.Data3 && Memory::Compare(contentType.Data4, folder.Data4, 8) == 0;
+		GUID contentType;
+		Memory::Zero(&contentType, sizeof(contentType));
+		PROPERTYKEY keyContentType = MakeKeyContentType();
+		if (values.Value()->lpVtbl->GetGuidValue(values.Value(), &keyContentType, &contentType) == 0)
+			out.IsDirectory = SameGuid(contentType, MakeContentTypeFolder()) || SameGuid(contentType, MakeContentTypeFunctionalObject());
 	}
 
 	UINT64 size = 0;
@@ -870,6 +888,7 @@ Result<WpdIteratorState *, Error> WPD::BeginObjectEnumeration(PCWCHAR path)
 	session->properties = nullptr;
 	state->keys = keys.Value();
 	state->enumerator = enumerator;
+	state->atDeviceRoot = session->objectId == nullptr;
 	FreeSession(session);
 	return Result<WpdIteratorState *, Error>::Ok(state);
 }
