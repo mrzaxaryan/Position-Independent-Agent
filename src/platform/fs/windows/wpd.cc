@@ -374,7 +374,7 @@ static Result<IPortableDeviceValues *, Error> GetObjectValues(IPortableDevicePro
 	HRESULT hr = properties->lpVtbl->GetValues(properties, objectId, keys, &values);
 	if (Failed(hr) || values == nullptr)
 	{
-		Com::FreeMemory(values);
+		SafeRelease(values);
 		return Result<IPortableDeviceValues *, Error>::Err(Error::Windows((UINT32)hr), Error::Fs_ReadFailed);
 	}
 	return Result<IPortableDeviceValues *, Error>::Ok(values);
